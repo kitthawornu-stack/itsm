@@ -13,4 +13,5 @@ import { WorkItemController } from './modules/workitem/workitem.controller';
   imports: [ConfigModule.forRoot({ isGlobal: true, envFilePath: ['../../.env'] })],
   controllers: [HealthController, WorkItemController],
 })
+// eslint-disable-next-line @typescript-eslint/no-extraneous-class -- NestJS ใช้ class เปล่าเป็น module descriptor
 export class AppModule {}

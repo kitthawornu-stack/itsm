@@ -106,7 +106,6 @@ describe('indexer · เกณฑ์สมรรถนะ (master-plan Part 09)'
     timings.sort((a, b) => a - b);
     const p95 = timings[Math.floor(timings.length * 0.95)] ?? 0;
     const median = timings[Math.floor(timings.length * 0.5)] ?? 0;
-    // eslint-disable-next-line no-console -- ตัวเลขนี้ต้องเห็นในผลรัน CI
     console.log(`    search: median ${median.toFixed(1)} ms · p95 ${p95.toFixed(1)} ms · n=${timings.length}`);
     expect(p95).toBeLessThan(400);
   }, 120_000);

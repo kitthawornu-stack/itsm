@@ -91,6 +91,7 @@ export const openSearch = {
     await request('POST', `/${index}/_refresh`);
   },
 
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-parameters -- T คือชนิดของ _source ที่ผู้เรียกกำหนด
   async search<T = unknown>(
     index: string,
     query: Record<string, unknown>,

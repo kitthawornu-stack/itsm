@@ -12,6 +12,7 @@
  *
  * รันด้วย: pnpm db:seed
  */
+import type { Prisma} from '@prisma/client';
 import { PrismaClient, ProjectType, RuleKind, StatusCategory, FieldType } from '@prisma/client';
 import { distribute } from '@itsm/lexorank';
 
@@ -369,8 +370,10 @@ async function main(): Promise<void> {
   const ranksSd = distribute(SD_COUNT);
   const ranksPlat = distribute(TOTAL - SD_COUNT);
 
-  type Row = Parameters<typeof prisma.workItem.createMany>[0]['data'];
-  const rows: Exclude<Row, undefined> extends readonly (infer R)[] ? R[] : never[] = [] as never[];
+  // ใช้ชนิดที่ Prisma สร้างให้ ไม่ต้องคำนวณเอง — เวอร์ชันแรกผมเขียนเป็น
+  // conditional type ที่ TypeScript resolve ไม่ออก ทำให้ทั้งบล็อกกลายเป็น any เงียบ ๆ
+  // และ type safety ทั้งก้อนหายไปโดยไม่มี error ให้เห็น
+  const rows: Prisma.WorkItemCreateManyInput[] = [];
 
   for (let i = 0; i < TOTAL; i += 1) {
     const isSd = i < SD_COUNT;
@@ -410,12 +413,12 @@ async function main(): Promise<void> {
       createdAt,
       updatedAt: resolvedAt ?? createdAt,
       resolvedAt,
-    } as never);
+    });
   }
 
   const BATCH = 1_000;
   for (let i = 0; i < rows.length; i += BATCH) {
-    await prisma.workItem.createMany({ data: rows.slice(i, i + BATCH) as never });
+    await prisma.workItem.createMany({ data: rows.slice(i, i + BATCH) });
     process.stdout.write(`\r  work item ${Math.min(i + BATCH, rows.length)}/${rows.length}`);
   }
   process.stdout.write('\n');

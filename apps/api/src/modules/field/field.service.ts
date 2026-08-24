@@ -14,11 +14,14 @@
  * ถ้าเก็บตัวเลขเป็น VARCHAR การเรียงจะได้ลำดับพจนานุกรม (9 มาหลัง 42)
  * และการเทียบช่วง (`> 100`) จะใช้ index ไม่ได้
  */
-import type { FieldType } from '@prisma/client';
+import type { FieldType, Prisma } from '@prisma/client';
 import type { TenantContext } from '@itsm/types';
 
-import { prismaClient } from '../../infrastructure/prisma/client';
-import { tenantScoped } from '../../infrastructure/prisma/tenant-scope';
+import {
+  tenantScoped,
+  tenantTransaction,
+  type TxScopedClient,
+} from '../../infrastructure/prisma/tenant-scope';
 
 export type ScalarValue = string | number | boolean | bigint | null;
 
@@ -49,6 +52,19 @@ interface ColumnValues {
   valueDate: Date | null;
   valueBool: boolean | null;
   valueRefId: bigint | null;
+}
+
+/**
+ * รูปแบบที่ **อ่านกลับมาจริง** จาก Prisma
+ *
+ * ต่างจาก ColumnValues ตรงที่คอลัมน์ DECIMAL คืนเป็น `Prisma.Decimal`
+ * ไม่ใช่ `number` — ประกาศผิดในตอนแรกทำให้ ESLint มองว่า `Number()` ซ้ำซ้อน
+ * พอเอาออกตามที่ lint บอก เทสต์พังทันทีเพราะได้ object กลับมาแทนตัวเลข
+ *
+ * บทเรียน: lint ตรวจตาม type ที่เราประกาศ ถ้า type โกหก lint ก็โกหกตาม
+ */
+interface RowValues extends Omit<ColumnValues, 'valueNumber'> {
+  valueNumber: Prisma.Decimal | number | null;
 }
 
 const EMPTY: ColumnValues = {
@@ -92,10 +108,11 @@ function toColumns(type: FieldType, value: ScalarValue): ColumnValues {
 }
 
 /** แปลงแถว EAV กลับเป็นค่าที่ใช้งานได้ */
-function fromRow(type: FieldType, row: ColumnValues): ScalarValue {
+function fromRow(type: FieldType, row: RowValues): ScalarValue {
   switch (type) {
     case 'NUMBER':
     case 'DECIMAL':
+      // Prisma.Decimal ต้องแปลงเป็น number — ไม่ใช่การแปลงซ้ำซ้อน
       return row.valueNumber === null ? null : Number(row.valueNumber);
     case 'DATE':
     case 'DATETIME':
@@ -126,7 +143,7 @@ export async function setFieldValues(
   workItemId: bigint,
   inputs: FieldValueInput[],
 ): Promise<void> {
-  await prismaClient.$transaction(async (tx) => {
+  await tenantTransaction(ctx, async (tx) => {
     const item = await tx.workItem.findFirst({
       where: { id: workItemId, tenantId: ctx.tenantId },
       select: { id: true },
@@ -157,7 +174,7 @@ export async function setFieldValues(
   });
 }
 
-type Tx = Parameters<Parameters<typeof prismaClient.$transaction>[0]>[0];
+type Tx = TxScopedClient;
 
 /** สร้าง snapshot จาก EAV แล้วเขียนลง work_item — ใช้ในทรานแซกชันเดียวกับการเขียน EAV */
 async function writeSnapshot(tx: Tx, ctx: TenantContext, workItemId: bigint): Promise<void> {
@@ -198,7 +215,7 @@ export async function readFieldValues(
   ctx: TenantContext,
   workItemId: bigint,
 ): Promise<Record<string, unknown>> {
-  return buildSnapshot(prismaClient as unknown as Tx, ctx, workItemId);
+  return tenantTransaction(ctx, async (tx) => buildSnapshot(tx, ctx, workItemId));
 }
 
 export interface ConsistencyReport {
@@ -225,7 +242,7 @@ export async function checkSnapshotConsistency(
 
   const mismatched: string[] = [];
   for (const item of items) {
-    const expected = await buildSnapshot(prismaClient as unknown as Tx, ctx, item.id);
+    const expected = await tenantTransaction(ctx, async (tx) => buildSnapshot(tx, ctx, item.id));
     const actual = (item.fieldSnapshot ?? {}) as Record<string, unknown>;
     if (JSON.stringify(expected) !== JSON.stringify(actual)) {
       mismatched.push(item.id.toString());
@@ -238,7 +255,7 @@ export async function checkSnapshotConsistency(
 export async function rebuildSnapshot(ctx: TenantContext, workItemIds: bigint[]): Promise<number> {
   let rebuilt = 0;
   for (const id of workItemIds) {
-    await prismaClient.$transaction(async (tx) => {
+    await tenantTransaction(ctx, async (tx) => {
       await writeSnapshot(tx, ctx, id);
     });
     rebuilt += 1;

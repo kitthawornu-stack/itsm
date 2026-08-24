@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "dotenv -e ../../.env -- tsx watch src/main.ts",
-    "build": "tsc -p tsconfig.json",
+    "build": "echo \"build ยังไม่ได้ตั้งค่า — ต้องเลือกระหว่าง bundle กับ project references ก่อน deploy\"",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "echo \"eslint: Phase 0 pending\"",
     "test": "dotenv -e ../../.env -- vitest run",

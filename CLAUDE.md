@@ -148,6 +148,22 @@ AI ผลิต PR 2,000 บรรทัดได้ง่ายมาก แต
 - [ ] a11y ผ่าน — keyboard navigation + contrast **ทั้งธีมสว่างและมืด**
 - [ ] ถ้าแตะ auth / permission / tenant → **Tech Lead อนุมัติ**
 
+### บทเรียนเรื่องเครื่องมือตรวจ
+
+- **กลไกที่ไม่มีอะไรเรียกใช้ ป้องกันอะไรไม่ได้เลย**
+  ESLint rule ทั้งชุดเขียนไว้ตั้งแต่ Phase 0 แต่ไม่เคยรันจริงเพราะ script `lint`
+  ของทุก package เป็น `echo` เปล่า พอต่อของจริงเข้าไปพบปัญหาสะสม 92 ข้อ
+  รวมถึงการละเมิด INVARIANT 1 และ 6 ที่เขียนเข้าไปเองโดยไม่รู้ตัว
+  → **ต้องรัน `pnpm ci` ให้ผ่านก่อนเปิด PR เสมอ**
+
+- **lint ตรวจตามชนิดที่เราประกาศ ถ้าชนิดโกหก lint ก็โกหกตาม**
+  เคยลบ `Number()` ออกตามที่ lint บอกว่าซ้ำซ้อน แล้วเทสต์พังทันที
+  เพราะ Prisma คืน `Prisma.Decimal` ไม่ใช่ `number` ตามที่ประกาศไว้
+  → เมื่อ lint ขัดกับพฤติกรรมจริง **ให้สงสัยชนิดที่ประกาศก่อน อย่าเชื่อ lint ทันที**
+
+- **เทสต์ผ่านไม่ได้แปลว่า typecheck ผ่าน** — `packages/lexorank` มีเทสต์ 19 ตัวเขียว
+  แต่ไม่เคยถูก `tsc` ตรวจเลย และมี type error ค้างอยู่จริง
+
 ### เอนจิน 4 ตัว — กลับลำดับการทำงาน
 
 `workflow` · `sla` · `hql` · LexoRank เป็นงานที่ AI ช่วยได้น้อยที่สุด (1.2–1.5×)
@@ -203,6 +219,9 @@ AI ผลิต PR 2,000 บรรทัดได้ง่ายมาก แต
 ## 7. คำสั่งที่ใช้บ่อย
 
 ```bash
+pnpm ci                       # lint + typecheck + test — รันก่อนเปิด PR ทุกครั้ง
+pnpm lint                     # eslint ทั้ง repo + stylelint ทุกไฟล์ CSS
+pnpm typecheck                # tsc --noEmit ทุก workspace
 pnpm dev                      # รัน web + api + worker พร้อมกัน
 pnpm --filter @itsm/api dev   # รันเฉพาะ api
 pnpm db:up                    # docker compose up -d (MySQL/Redis/OpenSearch/MinIO/Mailpit)

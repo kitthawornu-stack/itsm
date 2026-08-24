@@ -5,7 +5,7 @@
  * **ทุกการเปลี่ยนสถานะเขียน work_item_history ในทรานแซกชันเดียวกัน** (INVARIANT 2)
  * ซึ่งบังคับโดย `auditedTransaction` — ถ้าไม่คืน AuditEntry ฟังก์ชันจะโยน error
  */
-import type { TenantContext } from '@itsm/types';
+import { systemClock, type TenantContext } from '@itsm/types';
 
 import { auditedTransaction, change, type AuditEntry } from '../../infrastructure/audit/audited-transaction';
 import { tenantScoped } from '../../infrastructure/prisma/tenant-scope';
@@ -214,7 +214,9 @@ export async function applyTransition(
           case 'stop-sla':
             // สถานะ DONE ตั้ง resolvedAt ซึ่งเป็นฐานของ MTTR ทุกรายงาน
             if (toStatus.category === 'DONE') {
-              data['resolvedAt'] = new Date();
+              // clock.nowUtc() ไม่ใช่ new Date() — INVARIANT 6
+              // resolvedAt เป็นฐานของ MTTR ทุกรายงาน ถ้าเป็นเวลาท้องถิ่นจะเพี้ยนทั้งระบบ
+              data['resolvedAt'] = systemClock.nowUtc();
               audit.push(change(item.id, 'resolvedAt', null, 'set'));
             }
             break;

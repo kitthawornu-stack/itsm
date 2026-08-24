@@ -42,7 +42,7 @@ export default function RootLayout({ children }: { children: ReactNode }): React
           rel="stylesheet"
           href="https://fonts.googleapis.com/css2?family=Anuphan:wght@400;500;600;700&family=IBM+Plex+Sans+Thai:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap"
         />
-        {/* eslint-disable-next-line react/no-danger -- ต้อง inline ก่อน CSS เพื่อกันจอกระพริบ */}
+        {/* สคริปต์คงที่ที่เราเขียนเอง ไม่มี input จากผู้ใช้ — ต้อง inline ก่อน CSS เพื่อกันจอกระพริบ */}
         <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
       </head>
       <body>

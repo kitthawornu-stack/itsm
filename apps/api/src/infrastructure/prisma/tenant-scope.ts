@@ -78,6 +78,7 @@ export function tenantScoped(scope: QueryScope, base: PrismaClientRaw = prismaCl
   if (isSystemScope(scope)) return base;
   const { tenantId } = scope satisfies TenantContext;
 
+  /* eslint-disable @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unnecessary-condition -- signature ของ Prisma extension เป็น any โดยตัวมันเอง ไม่มีชนิดให้ยึด */
   return base.$extends({
     name: 'tenant-scope',
     query: {
@@ -97,7 +98,7 @@ export function tenantScoped(scope: QueryScope, base: PrismaClientRaw = prismaCl
             assertNoConflictingTenant(model, where, tenantId);
             next['where'] = { ...where, tenantId };
             const target = operation === 'findUnique' ? 'findFirst' : 'findFirstOrThrow';
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-explicit-any
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any -- ต้องเรียก model ตามชื่อที่เป็น string
             return (base as any)[model][target](next) as Promise<unknown>;
           }
 
@@ -125,18 +126,41 @@ export function tenantScoped(scope: QueryScope, base: PrismaClientRaw = prismaCl
       },
     },
   });
+  /* eslint-enable @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unnecessary-condition */
 }
 
 /**
  * ทางออกฉุกเฉินสำหรับงานระดับระบบ — ชื่อยาวและอ่านสะดุดโดยเจตนา
  * เพื่อให้เห็นชัดใน code review ว่ามีการข้าม tenant scope ตรงไหน
  */
-export function withSystemScope<T>(reason: string, fn: (db: PrismaClientRaw) => Promise<T>) {
+// async ไม่ใช่ฟังก์ชันธรรมดา — ฟังก์ชันที่ประกาศว่าคืน Promise แต่ throw
+// แบบ synchronous เป็นกับดัก: ผู้เรียกที่ใช้ .catch() จะจับไม่ได้
+// และ error จะหลุดขึ้นไปเป็น uncaught exception แทน
+export async function withSystemScope<T>(
+  reason: string,
+  fn: (db: PrismaClientRaw) => Promise<T>,
+): Promise<T> {
   if (reason.trim().length < 10) {
     throw new Error('withSystemScope ต้องระบุเหตุผลที่อ่านเข้าใจได้ อย่างน้อย 10 อักขระ');
   }
   return fn(tenantScoped(SYSTEM_SCOPE) as PrismaClientRaw);
 }
+
+/**
+ * ทรานแซกชันที่ผูกกับ tenant — ทางเดียวที่โมดูลเปิดทรานแซกชันได้
+ *
+ * ถ้าโมดูลเรียก `prismaClient.$transaction` เองจะได้ client ที่ไม่มี tenant scope
+ * แล้วทุกคิวรีภายในทรานแซกชันนั้นจะข้าม INVARIANT 1 ไปทั้งก้อน
+ * — ซึ่งเป็นสิ่งที่เกิดขึ้นจริงใน field.service.ts จนกระทั่ง lint จับได้
+ */
+export async function tenantTransaction<T>(
+  ctx: TenantContext,
+  fn: (tx: TxScopedClient) => Promise<T>,
+): Promise<T> {
+  return prismaClient.$transaction(async (tx) => fn(tx));
+}
+
+export type TxScopedClient = Parameters<Parameters<PrismaClientRaw['$transaction']>[0]>[0];
 
 export type TenantScopedClient = ReturnType<typeof tenantScoped>;
 export { Prisma };

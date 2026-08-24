@@ -38,6 +38,9 @@ export interface Clock {
 
 /** ใช้ใน production */
 export const systemClock: Clock = {
+  // นี่คือ "ที่เดียว" ในระบบที่อ่านเวลาจริงได้ ทุกที่อื่นต้องรับ Clock เข้ามาแทน
+  // เพื่อให้ทดสอบเวลาได้ และไม่มีเวลาท้องถิ่นหลุดเข้ามาในการคำนวณ SLA
+  // eslint-disable-next-line no-restricted-syntax -- ข้อยกเว้นเดียวที่ตั้งใจ
   nowUtc: () => toUtcDate(Date.now()),
 };
 

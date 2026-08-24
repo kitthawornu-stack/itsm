@@ -49,7 +49,9 @@ export function Button({
       data-size={size}
       disabled={disabled}
       onClick={onClick}
-      title={shortcut === undefined ? undefined : `${String(children)} (${shortcut})`}
+      // ไม่แปลง children เป็นสตริง — children เป็น ReactNode ซึ่งอาจเป็น object
+      // และจะกลายเป็น [object Object] ใน tooltip
+      title={shortcut === undefined ? undefined : `คีย์ลัด ${shortcut}`}
     >
       {children}
     </button>

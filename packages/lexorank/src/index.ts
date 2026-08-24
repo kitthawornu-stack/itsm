@@ -18,8 +18,26 @@
 
 const ALPHABET = '0123456789abcdefghijklmnopqrstuvwxyz';
 const BASE = ALPHABET.length; // 36
-const MIN_CHAR = ALPHABET[0]!; // '0'
-const MAX_CHAR = ALPHABET[BASE - 1]!; // 'z'
+const MIN_CHAR = '0';
+const MAX_CHAR = 'z';
+
+/**
+ * เข้าถึง alphabet แบบล้มดัง แทนการใช้ non-null assertion
+ *
+ * `!` บอกคอมไพเลอร์ว่า "เชื่อฉัน" แล้วเงียบเมื่อผิด · ฟังก์ชันนี้โยน error
+ * ที่บอกค่าที่ผิดจริง ๆ ซึ่งสำคัญมากในอัลกอริทึมที่คำนวณดัชนีเองทุกบรรทัด
+ */
+function charAt(index: number): string {
+  const c = ALPHABET[index];
+  if (c === undefined) throw new RangeError(`ดัชนีนอกช่วง alphabet: ${index}`);
+  return c;
+}
+
+function bodyCharAt(body: string, index: number): string {
+  const c = body[index];
+  if (c === undefined) throw new RangeError(`ดัชนีนอกช่วง body "${body}": ${index}`);
+  return c;
+}
 
 export const BUCKETS = ['0', '1', '2'] as const;
 export type Bucket = (typeof BUCKETS)[number];
@@ -79,9 +97,12 @@ export function compareRank(a: string, b: string): number {
  * - `between(x, null)`    → หลัง x (ลากลงล่างสุด)
  */
 export function between(prev: string | null, next: string | null): string {
-  if (prev === null && next === null) return `0|${MID_SEED}`;
+  // จัดโครงให้ TypeScript แคบชนิดได้เอง แทนการใช้ `!`
+  // เวอร์ชันแรกเขียนเป็น `if (a === null && b === null)` แล้วตามด้วย `if (a === null)`
+  // ซึ่งมนุษย์อ่านแล้วรู้ว่า b ไม่เป็น null แน่ แต่ TypeScript ตามไม่ได้
   if (prev === null) {
-    const { bucket, body } = parse(next!);
+    if (next === null) return `0|${MID_SEED}`;
+    const { bucket, body } = parse(next);
     return `${bucket}|${bodyBefore(body)}`;
   }
   if (next === null) {
@@ -101,7 +122,7 @@ export function between(prev: string | null, next: string | null): string {
 }
 
 /** 'i' คือกลางของ 0-z พอดี (index 18 จาก 36) */
-const MID_SEED = ALPHABET[Math.floor(BASE / 2)]!; // 'i'
+const MID_SEED = charAt(Math.floor(BASE / 2)); // 'i'
 
 /** ค่าที่อยู่ก่อน body — ถ้าหลักแรกยังลดได้ให้ลด ถ้าไม่ได้ให้ต่อท้าย */
 function bodyBefore(body: string): string {
@@ -124,16 +145,16 @@ function bodyBetween(lo: string, hi: string): string {
   let i = 0;
 
   for (;;) {
-    const a = i < lo.length ? digit(lo[i]!) : 0;
-    const b = i < hi.length ? digit(hi[i]!) : BASE;
+    const a = i < lo.length ? digit(bodyCharAt(lo, i)) : 0;
+    const b = i < hi.length ? digit(bodyCharAt(hi, i)) : BASE;
 
     if (b - a > 1) {
       const mid = a + Math.floor((b - a) / 2);
-      return result + ALPHABET[mid]!;
+      return result + charAt(mid);
     }
 
     // ไม่มีช่องว่างที่หลักนี้ — คงหลักของ lo ไว้แล้วเดินต่อ
-    result += i < lo.length ? lo[i]! : MIN_CHAR;
+    result += i < lo.length ? bodyCharAt(lo, i) : MIN_CHAR;
     i += 1;
 
     // กันวนไม่จบเมื่อ lo กับ hi ติดกันสนิท: ต่อหลักกลางท้ายสุด
@@ -170,7 +191,7 @@ function encode(value: number, width: number): string {
   let v = value;
   let s = '';
   for (let i = 0; i < width; i += 1) {
-    s = ALPHABET[v % BASE]! + s;
+    s = charAt(v % BASE) + s;
     v = Math.floor(v / BASE);
   }
   return s;
@@ -185,5 +206,7 @@ export function needsRebalance(ranks: readonly string[]): boolean {
 
 export function nextBucket(current: Bucket): Bucket {
   const i = BUCKETS.indexOf(current);
-  return BUCKETS[(i + 1) % BUCKETS.length]!;
+  const b = BUCKETS[(i + 1) % BUCKETS.length];
+  if (b === undefined) throw new RangeError(`bucket ไม่ถูกต้อง: ${current}`);
+  return b;
 }

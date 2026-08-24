@@ -21,6 +21,8 @@ import { prismaClient } from '../src/infrastructure/prisma/client';
 import { tenantScoped } from '../src/infrastructure/prisma/tenant-scope';
 import { CrossTenantAccessError, type TenantContext } from '@itsm/types';
 
+import { purgeTenants } from './helpers/cleanup';
+
 const KEY_A = 'test-tenant-a';
 const KEY_B = 'test-tenant-b';
 
@@ -33,7 +35,7 @@ let userBId: bigint;
 
 beforeAll(async () => {
   // ล้างของเก่าที่อาจค้างจากรอบก่อน
-  await prismaClient.tenant.deleteMany({ where: { key: { in: [KEY_A, KEY_B] } } });
+  await purgeTenants([KEY_A, KEY_B]);
 
   const a = await prismaClient.tenant.create({ data: { key: KEY_A, name: 'Tenant A' } });
   const b = await prismaClient.tenant.create({ data: { key: KEY_B, name: 'Tenant B' } });
@@ -53,7 +55,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  await prismaClient.tenant.deleteMany({ where: { key: { in: [KEY_A, KEY_B] } } });
+  await purgeTenants([KEY_A, KEY_B]);
   await prismaClient.$disconnect();
 });
 

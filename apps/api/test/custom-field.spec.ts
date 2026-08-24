@@ -349,7 +349,6 @@ describe('Spike B · 4 · ตัวเลขที่ตัดสิน ADR-001'
       where: { workItemId: { in: ids } },
     });
 
-    // eslint-disable-next-line no-console -- ตัวเลขนี้คือสิ่งที่ตัดสิน ADR-001 ต้องเห็นใน CI
     console.log(
       `    ADR-001: snapshot ${viaSnapshot.toFixed(1)} ms · EAV ${viaEav.toFixed(1)} ms · ` +
         `เร็วกว่า ${(viaEav / viaSnapshot).toFixed(1)}x · EAV ${eavRows} แถวสำหรับ 50 งาน`,

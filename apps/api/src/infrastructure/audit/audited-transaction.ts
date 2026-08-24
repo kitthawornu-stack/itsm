@@ -113,7 +113,14 @@ export function change(
   oldValue: unknown,
   newValue: unknown,
 ): WorkItemChange {
-  const str = (v: unknown): string | null =>
-    v === null || v === undefined ? null : typeof v === 'string' ? v : String(v);
+  // ไม่ใช้ String(v) ตรง ๆ — object จะกลายเป็น "[object Object]" ในประวัติ
+  // ซึ่งทำให้ audit trail ไร้ประโยชน์พอดีในเคสที่ต้องการมันที่สุด
+  const str = (v: unknown): string | null => {
+    if (v === null || v === undefined) return null;
+    if (typeof v === 'string') return v;
+    if (typeof v === 'number' || typeof v === 'bigint' || typeof v === 'boolean') return String(v);
+    if (v instanceof Date) return v.toISOString();
+    return JSON.stringify(v);
+  };
   return { kind: 'work-item', workItemId, field, oldValue: str(oldValue), newValue: str(newValue) };
 }

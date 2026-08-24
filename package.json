@@ -10,7 +10,7 @@
   "scripts": {
     "dev": "turbo run dev",
     "build": "turbo run build",
-    "lint": "turbo run lint",
+    "lint": "eslint . && stylelint \"packages/**/*.css\" \"apps/**/*.css\"",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
     "db:up": "docker compose --env-file .env -f infra/compose/docker-compose.yml up -d",
@@ -21,9 +21,12 @@
     "db:generate": "pnpm --filter @itsm/api exec prisma generate",
     "db:studio": "pnpm --filter @itsm/api exec prisma studio",
     "db:seed": "pnpm --filter @itsm/api exec tsx prisma/seed.ts",
-    "format": "prettier --write \"**/*.{ts,tsx,js,json,md,yml,css}\""
+    "format": "prettier --write \"**/*.{ts,tsx,js,json,md,yml,css}\"",
+    "lint:fix": "eslint . --fix && stylelint \"packages/**/*.css\" \"apps/**/*.css\" --fix",
+    "ci": "pnpm lint && pnpm typecheck && pnpm test"
   },
   "devDependencies": {
+    "@vitest/coverage-v8": "^2.1.9",
     "eslint": "^10.9.0",
     "eslint-import-resolver-typescript": "^4.4.5",
     "eslint-plugin-import": "^2.32.0",

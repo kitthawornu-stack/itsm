@@ -9,6 +9,8 @@
  */
 import { Controller, Get, HttpException, HttpStatus, Param, Post, Query } from '@nestjs/common';
 
+/* eslint-disable @typescript-eslint/no-deprecated -- resolveDevTenantContext ถูกทำเครื่องหมาย deprecated โดยตั้งใจ
+   เพื่อให้ทุกจุดที่ใช้มองเห็นได้ในทันทีเมื่อโมดูล identity พร้อม (ADR-003) จุดเหล่านี้คือรายการที่ต้องลบ */
 import { resolveDevTenantContext } from '../../infrastructure/http/dev-tenant.guard';
 import { tenantScoped } from '../../infrastructure/prisma/tenant-scope';
 import { SearchIndexNotReadyError, searchWorkItems } from '../search-index';

@@ -1,6 +1,6 @@
 import { Controller, Get } from '@nestjs/common';
 
-import { prismaClient } from '../../infrastructure/prisma/client';
+import { withSystemScope } from '../../infrastructure/prisma/tenant-scope';
 
 interface ComponentHealth {
   status: 'up' | 'down';
@@ -13,9 +13,12 @@ export class HealthController {
   async check(): Promise<{ status: string; components: Record<string, ComponentHealth> }> {
     const components: Record<string, ComponentHealth> = {};
 
-    // withSystemScope ไม่จำเป็นที่นี่ — health check ไม่แตะข้อมูลของ tenant ใด
     try {
-      await prismaClient.$queryRaw`SELECT 1`;
+      // health check ไม่แตะข้อมูลของ tenant ใด แต่ยังต้องประกาศเจตนา
+      // เพื่อให้เห็นชัดใน code review ว่าเป็นการข้าม tenant scope โดยตั้งใจ
+      await withSystemScope('health check ระดับระบบ ไม่แตะข้อมูลของ tenant ใด', async (db) => {
+        await db.$queryRaw`SELECT 1`;
+      });
       components['mysql'] = { status: 'up' };
     } catch (e) {
       components['mysql'] = { status: 'down', detail: (e as Error).message };

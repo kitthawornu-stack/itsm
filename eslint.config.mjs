@@ -32,10 +32,34 @@ const moduleBoundaryZones = API_MODULES.map((mod) => ({
 
 export default tseslint.config(
   {
-    ignores: ['**/dist/**', '**/.next/**', '**/node_modules/**', '**/.prisma/**'],
+    ignores: [
+      '**/dist/**',
+      '**/.next/**',
+      '**/node_modules/**',
+      '**/.prisma/**',
+      '**/coverage/**',
+      'apps/web/next-env.d.ts',
+      // ไฟล์คอนฟิกของเครื่องมือ ไม่อยู่ใน tsconfig ของแอปจึง type-check ไม่ได้
+      '**/vitest.config.ts',
+    ],
   },
 
-  ...tseslint.configs.strictTypeChecked,
+  // type-checked rules ใช้ได้เฉพาะไฟล์ TypeScript ที่อยู่ใน tsconfig
+  // ถ้าปล่อยให้ครอบ .mjs/.js ด้วย eslint จะล้มทั้ง repo ด้วย error ที่ชี้ไปผิดที่
+  ...tseslint.configs.strictTypeChecked.map((c) => ({ ...c, files: ['**/*.{ts,tsx}'] })),
+
+  // ไฟล์คอนฟิกที่เป็น JS ธรรมดา — ตรวจไวยากรณ์อย่างเดียว
+  {
+    files: ['**/*.{js,mjs,cjs}'],
+    ...tseslint.configs.disableTypeChecked,
+  },
+
+  // ไฟล์คอนฟิกของเครื่องมือ (vitest, next) ไม่ได้อยู่ใน tsconfig ของแอป
+  // จึงใช้ type-checked rules กับมันไม่ได้
+  {
+    files: ['**/vitest.config.ts', '**/next.config.ts'],
+    ...tseslint.configs.disableTypeChecked,
+  },
 
   {
     files: ['**/*.{ts,tsx}'],
@@ -98,6 +122,12 @@ export default tseslint.config(
       '@typescript-eslint/consistent-type-imports': 'error',
       '@typescript-eslint/no-floating-promises': 'error',
       '@typescript-eslint/require-await': 'error',
+      // ตัวเลขใน template literal เป็นเรื่องปกติและปลอดภัย
+      // กฎเริ่มต้นห้ามไว้เพื่อกัน object ที่กลายเป็น [object Object] ซึ่งยังคงห้ามอยู่
+      '@typescript-eslint/restrict-template-expressions': [
+        'error',
+        { allowNumber: true, allowBoolean: false, allowNullish: false },
+      ],
     },
   },
 
@@ -129,10 +159,13 @@ export default tseslint.config(
 
   // ---------- เทสต์ผ่อนได้บางข้อ ----------
   {
-    files: ['**/*.spec.ts', '**/*.test.ts', '**/prisma/seed.ts'],
+    files: ['**/*.spec.ts', '**/*.test.ts', '**/prisma/seed.ts', '**/test/helpers/**'],
     rules: {
       '@typescript-eslint/no-non-null-assertion': 'off',
       'no-restricted-syntax': 'off',
+      // callback ของเทสต์ที่ไม่มี await เป็นเรื่องปกติ
+      '@typescript-eslint/require-await': 'off',
+      'no-console': 'off',
     },
   },
 );
