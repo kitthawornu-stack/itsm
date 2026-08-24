@@ -17,8 +17,8 @@
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-import { prismaClient } from '../src/infrastructure/prisma/client.js';
-import { tenantScoped } from '../src/infrastructure/prisma/tenant-scope.js';
+import { prismaClient } from '../src/infrastructure/prisma/client';
+import { tenantScoped } from '../src/infrastructure/prisma/tenant-scope';
 import { CrossTenantAccessError, type TenantContext } from '@itsm/types';
 
 const KEY_A = 'test-tenant-a';

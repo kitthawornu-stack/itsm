@@ -20,7 +20,7 @@ import {
   type TenantContext,
 } from '@itsm/types';
 
-import { prismaClient, type PrismaClientRaw } from './client.js';
+import { prismaClient, type PrismaClientRaw } from './client';
 
 /** โมเดลเดียวที่ไม่มีคอลัมน์ tenant_id — ตัว tenant เอง */
 const UNSCOPED_MODELS = new Set<string>(['Tenant']);

@@ -43,6 +43,14 @@ export default tseslint.config(
     languageOptions: {
       parserOptions: { projectService: true },
     },
+    settings: {
+      // eslint-plugin-import ต้องมี resolver นี้จึงจะตามหาไฟล์ .ts ที่ import แบบไม่มีนามสกุลเจอ
+      // ถ้าไม่มี rule import/no-restricted-paths จะไม่ยิงเลย โดยไม่มี error ให้เห็น
+      'import/resolver': {
+        typescript: { project: ['apps/*/tsconfig.json', 'packages/*/tsconfig.json'] },
+        node: { extensions: ['.ts', '.tsx', '.js'] },
+      },
+    },
     rules: {
       // ---------- INVARIANT 5 · ขอบเขตโมดูล ----------
       'import/no-restricted-paths': [

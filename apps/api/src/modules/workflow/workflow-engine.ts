@@ -1,0 +1,274 @@
+/**
+ * Workflow Engine — state machine ที่นิยามอยู่ในฐานข้อมูล ไม่ใช่ในโค้ด
+ *
+ * transition หนึ่งเส้นมีสามชั้น ตามลำดับนี้เท่านั้น:
+ *   1. CONDITION      ใครเห็นปุ่มนี้        ไม่ผ่าน = ปุ่มไม่ปรากฏเลย
+ *   2. VALIDATOR      กรอกครบไหม           ไม่ผ่าน = ปุ่มยังเห็น แต่กดแล้วถูกปฏิเสธพร้อมเหตุผล
+ *   3. POST_FUNCTION  ทำอะไรต่อหลังผ่าน    รันในทรานแซกชันเดียวกับการเปลี่ยนสถานะ
+ *
+ * ความต่างระหว่างชั้น 1 กับ 2 เป็นเรื่องของประสบการณ์ผู้ใช้ที่สำคัญ:
+ * ถ้าเอา required-field ไปไว้ใน CONDITION ผู้ใช้จะเห็นปุ่มหายไปโดยไม่รู้สาเหตุ
+ * ถ้าเอา permission ไปไว้ใน VALIDATOR ผู้ใช้ที่ไม่มีสิทธิ์จะรู้ว่าระบบต้องการฟิลด์อะไร
+ *
+ * โมดูลนี้เป็น pure function ทั้งหมด — ไม่แตะฐานข้อมูล ไม่มี side effect
+ * จึงทดสอบเคสขอบได้ครบโดยไม่ต้องตั้ง fixture (ดู workflow-engine.spec.ts)
+ */
+
+export type RuleKind = 'CONDITION' | 'VALIDATOR' | 'POST_FUNCTION';
+
+export interface TransitionRule {
+  kind: RuleKind;
+  ruleType: string;
+  config: Record<string, unknown>;
+  position: number;
+}
+
+export interface TransitionDefinition {
+  id: bigint;
+  name: string;
+  /** null = global transition ทำได้จากทุกสถานะ */
+  fromStatusId: bigint | null;
+  toStatusId: bigint;
+  position: number;
+  rules: TransitionRule[];
+}
+
+export interface TransitionContext {
+  currentUserId: bigint;
+  currentStatusId: bigint;
+  assigneeId: bigint | null;
+  userGroupIds: bigint[];
+  /** ค่าฟิลด์ปัจจุบันของ work item รวมทั้ง built-in และ custom field */
+  fields: Record<string, unknown>;
+}
+
+export interface TransitionOutcome {
+  transitionId: bigint;
+  toStatusId: bigint;
+  postFunctions: TransitionRule[];
+}
+
+// ============================================================
+// Errors
+// ============================================================
+
+export class TransitionNotAllowedError extends Error {
+  constructor(
+    readonly transitionName: string,
+    readonly reason: string,
+  ) {
+    super(`ไม่สามารถทำ "${transitionName}" ได้: ${reason}`);
+    this.name = 'TransitionNotAllowedError';
+  }
+}
+
+export class ValidationFailedError extends Error {
+  constructor(
+    readonly transitionName: string,
+    readonly missingFields: string[],
+  ) {
+    super(
+      `ทำ "${transitionName}" ไม่ได้ เพราะยังไม่ได้กรอก: ${missingFields.join(', ')}`,
+    );
+    this.name = 'ValidationFailedError';
+  }
+}
+
+export class UnknownRuleError extends Error {
+  constructor(kind: RuleKind, ruleType: string) {
+    super(
+      `กฎที่ระบบไม่รู้จัก: ${kind}/${ruleType} — ` +
+        `ปฏิเสธ transition ไว้ก่อนเพื่อความปลอดภัย ` +
+        `(ถ้าข้ามไป สิทธิ์จะเปิดกว้างกว่าที่แอดมินตั้งใจ)`,
+    );
+    this.name = 'UnknownRuleError';
+  }
+}
+
+// ============================================================
+// CONDITION — ใครเห็นปุ่มนี้
+// ============================================================
+
+type ConditionFn = (config: Record<string, unknown>, ctx: TransitionContext) => boolean;
+
+function toBigIntList(value: unknown): bigint[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((v) => {
+      if (typeof v === 'bigint') return v;
+      if (typeof v === 'number' || typeof v === 'string') {
+        try {
+          return BigInt(v);
+        } catch {
+          return null;
+        }
+      }
+      return null;
+    })
+    .filter((v): v is bigint => v !== null);
+}
+
+const CONDITIONS: Record<string, ConditionFn> = {
+  /** ผู้กดต้องเป็นผู้รับผิดชอบงานนั้น */
+  'assignee-is-current-user': (_config, ctx) =>
+    ctx.assigneeId !== null && ctx.assigneeId === ctx.currentUserId,
+
+  /** ผู้กดต้องอยู่ในกลุ่มใดกลุ่มหนึ่งที่กำหนด */
+  'in-group': (config, ctx) => {
+    const required = toBigIntList(config['groupIds']);
+    if (required.length === 0) return false;
+    return required.some((g) => ctx.userGroupIds.includes(g));
+  },
+
+  /** งานต้องมีผู้รับผิดชอบแล้ว */
+  'has-assignee': (_config, ctx) => ctx.assigneeId !== null,
+
+  /** งานต้องยังไม่มีผู้รับผิดชอบ (เช่น ปุ่ม "รับงานนี้") */
+  'is-unassigned': (_config, ctx) => ctx.assigneeId === null,
+};
+
+// ============================================================
+// VALIDATOR — กรอกครบไหม
+// ============================================================
+
+/**
+ * ค่าที่ถือว่า "ยังไม่กรอก"
+ *
+ * ระวัง: 0 และ false **ถือว่ากรอกแล้ว** — การใช้ falsy check ตรง ๆ ที่นี่
+ * เป็นบั๊กคลาสสิกที่ทำให้ฟิลด์ตัวเลขที่มีค่า 0 ถูกมองว่าว่าง
+ */
+function isEmpty(value: unknown): boolean {
+  if (value === null || value === undefined) return true;
+  if (typeof value === 'string') return value.trim().length === 0;
+  if (Array.isArray(value)) return value.length === 0;
+  return false;
+}
+
+type ValidatorFn = (
+  config: Record<string, unknown>,
+  ctx: TransitionContext,
+) => { ok: true } | { ok: false; missingFields: string[] };
+
+const VALIDATORS: Record<string, ValidatorFn> = {
+  /** ฟิลด์ที่ระบุต้องมีค่าครบทุกตัว — รายงานที่ขาดทั้งหมดในครั้งเดียว */
+  'required-fields': (config, ctx) => {
+    const required = Array.isArray(config['fields'])
+      ? (config['fields'] as unknown[]).filter((f): f is string => typeof f === 'string')
+      : [];
+    const missing = required.filter((f) => isEmpty(ctx.fields[f]));
+    return missing.length === 0 ? { ok: true } : { ok: false, missingFields: missing };
+  },
+};
+
+// ============================================================
+// POST_FUNCTION — ชื่อที่รองรับ (การรันจริงอยู่ใน workflow.service)
+// ============================================================
+
+export const KNOWN_POST_FUNCTIONS = new Set([
+  'stop-sla',
+  'start-sla',
+  'pause-sla',
+  'set-resolution',
+  'assign-to-current-user',
+  'clear-assignee',
+  'notify',
+  'fire-webhook',
+]);
+
+// ============================================================
+// API
+// ============================================================
+
+function appliesToCurrentStatus(t: TransitionDefinition, ctx: TransitionContext): boolean {
+  return t.fromStatusId === null || t.fromStatusId === ctx.currentStatusId;
+}
+
+/**
+ * ตรวจ CONDITION ทุกข้อ — โยน UnknownRuleError ถ้าเจอกฎที่ไม่รู้จัก
+ * ผู้เรียกเลือกได้ว่าจะปล่อย error ขึ้นไป (validateTransition) หรือถือว่าไม่ผ่าน (evaluateTransitions)
+ */
+function checkConditions(t: TransitionDefinition, ctx: TransitionContext): void {
+  const conditions = t.rules
+    .filter((r) => r.kind === 'CONDITION')
+    .sort((a, b) => a.position - b.position);
+
+  for (const rule of conditions) {
+    const fn = CONDITIONS[rule.ruleType];
+    if (fn === undefined) throw new UnknownRuleError('CONDITION', rule.ruleType);
+    if (!fn(rule.config, ctx)) {
+      throw new TransitionNotAllowedError(t.name, `เงื่อนไข "${rule.ruleType}" ไม่ผ่าน`);
+    }
+  }
+}
+
+/**
+ * transition ที่ผู้ใช้ควร **เห็นปุ่ม** ในสถานะปัจจุบัน
+ *
+ * ตรวจเฉพาะ CONDITION — ไม่ตรวจ VALIDATOR โดยเจตนา
+ * เพราะปุ่มที่หายไปเพราะยังไม่กรอกฟิลด์ ทำให้ผู้ใช้ไม่รู้ว่าต้องทำอะไรต่อ
+ */
+export function evaluateTransitions(
+  transitions: TransitionDefinition[],
+  ctx: TransitionContext,
+): TransitionDefinition[] {
+  return transitions
+    .filter((t) => appliesToCurrentStatus(t, ctx))
+    .filter((t) => {
+      try {
+        checkConditions(t, ctx);
+        return true;
+      } catch {
+        // กฎที่ไม่รู้จักหรือเงื่อนไขไม่ผ่าน → ไม่แสดงปุ่ม (ปลอดภัยไว้ก่อน)
+        return false;
+      }
+    })
+    .sort((a, b) => a.position - b.position);
+}
+
+/**
+ * ตรวจครบทุกชั้นก่อนเปลี่ยนสถานะจริง
+ *
+ * คืน post function ที่ต้องรัน — ผู้เรียกมีหน้าที่รันมันใน `auditedTransaction`
+ * เดียวกับการอัปเดตสถานะ (INVARIANT 2)
+ */
+export function validateTransition(
+  t: TransitionDefinition,
+  ctx: TransitionContext,
+): TransitionOutcome {
+  if (!appliesToCurrentStatus(t, ctx)) {
+    throw new TransitionNotAllowedError(
+      t.name,
+      `สถานะปัจจุบันไม่ตรงกับจุดเริ่มต้นของ transition นี้`,
+    );
+  }
+
+  // ชั้น 1 ก่อนเสมอ — ผู้ใช้ที่ไม่มีสิทธิ์ต้องไม่รู้ว่าระบบต้องการฟิลด์อะไร
+  checkConditions(t, ctx);
+
+  // ชั้น 2
+  const validators = t.rules
+    .filter((r) => r.kind === 'VALIDATOR')
+    .sort((a, b) => a.position - b.position);
+
+  const missing: string[] = [];
+  for (const rule of validators) {
+    const fn = VALIDATORS[rule.ruleType];
+    if (fn === undefined) throw new UnknownRuleError('VALIDATOR', rule.ruleType);
+    const result = fn(rule.config, ctx);
+    if (!result.ok) missing.push(...result.missingFields);
+  }
+  if (missing.length > 0) throw new ValidationFailedError(t.name, missing);
+
+  // ชั้น 3 — ตรวจว่ารู้จักทุกตัวก่อนคืน ไม่ปล่อยให้ล้มกลางทรานแซกชัน
+  const postFunctions = t.rules
+    .filter((r) => r.kind === 'POST_FUNCTION')
+    .sort((a, b) => a.position - b.position);
+
+  for (const p of postFunctions) {
+    if (!KNOWN_POST_FUNCTIONS.has(p.ruleType)) {
+      throw new UnknownRuleError('POST_FUNCTION', p.ruleType);
+    }
+  }
+
+  return { transitionId: t.id, toStatusId: t.toStatusId, postFunctions };
+}

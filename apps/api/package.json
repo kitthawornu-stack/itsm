@@ -3,7 +3,7 @@
   "version": "0.0.1",
   "private": true,
   "scripts": {
-    "dev": "echo \"api dev server: Phase 0 pending\"",
+    "dev": "dotenv -e ../../.env -- tsx watch src/main.ts",
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "echo \"eslint: Phase 0 pending\"",
@@ -12,19 +12,29 @@
     "prisma:format": "prisma format",
     "test:watch": "dotenv -e ../../.env -- vitest",
     "prisma:generate": "dotenv -e ../../.env -- prisma generate",
-    "seed": "dotenv -e ../../.env -- tsx prisma/seed.ts"
+    "seed": "dotenv -e ../../.env -- tsx prisma/seed.ts",
+    "start": "node dist/main.js"
   },
   "devDependencies": {
     "prisma": "^6.1.0",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2",
     "vitest": "^2.1.8",
-    "dotenv-cli": "^7.4.4"
+    "dotenv-cli": "^7.4.4",
+    "@nestjs/testing": "^11.0.1",
+    "supertest": "^7.0.0",
+    "@types/node": "^22.10.2"
   },
   "dependencies": {
     "@prisma/client": "^6.1.0",
     "@itsm/types": "workspace:*",
-    "@itsm/lexorank": "workspace:*"
-  },
-  "type": "module"
+    "@itsm/lexorank": "workspace:*",
+    "@nestjs/common": "^11.0.1",
+    "@nestjs/core": "^11.0.1",
+    "@nestjs/platform-express": "^11.0.1",
+    "@nestjs/config": "^4.0.0",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.1",
+    "zod": "^3.24.1"
+  }
 }

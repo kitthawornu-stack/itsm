@@ -1,0 +1,222 @@
+/**
+ * Workflow Engine — เทสต์เป็นข้อกำหนด เขียนก่อน implementation (CLAUDE.md §4)
+ *
+ * ทำไมเอนจินนี้ต้องเขียนเทสต์ก่อน: ความผิดพลาดปรากฏเป็น
+ * "ปุ่มที่ไม่ควรเห็นแต่เห็น" ซึ่งคือช่องโหว่ด้านสิทธิ์ ไม่ใช่บั๊กด้านการใช้งาน
+ *
+ * โครงสร้างที่ต้องบังคับ — transition หนึ่งเส้นมีสามชั้น ตามลำดับนี้เท่านั้น:
+ *   1. CONDITION      ใครเห็นปุ่มนี้        → ถ้าไม่ผ่าน ปุ่มต้องไม่ปรากฏเลย
+ *   2. VALIDATOR      กรอกครบไหม           → ปุ่มปรากฏ แต่กดแล้วถูกปฏิเสธพร้อมเหตุผล
+ *   3. POST_FUNCTION  ทำอะไรต่อหลังผ่าน    → รันหลังเปลี่ยนสถานะ ในทรานแซกชันเดียวกัน
+ *
+ * ความต่างระหว่าง CONDITION กับ VALIDATOR สำคัญมาก:
+ * ถ้าเอา required-field ไปไว้ใน CONDITION ผู้ใช้จะเห็นปุ่มหายไปโดยไม่รู้สาเหตุ
+ */
+import { describe, expect, it } from 'vitest';
+
+import {
+  evaluateTransitions,
+  validateTransition,
+  TransitionNotAllowedError,
+  ValidationFailedError,
+  type TransitionDefinition,
+  type TransitionContext,
+} from './workflow-engine';
+
+// ---------- ตัวช่วยสร้างข้อมูลทดสอบ ----------
+
+const STATUS = {
+  new: { id: 1n, name: 'New', category: 'TODO' as const, pausesSla: false },
+  investigating: { id: 2n, name: 'Investigating', category: 'IN_PROGRESS' as const, pausesSla: false },
+  pending: { id: 3n, name: 'Pending Customer', category: 'IN_PROGRESS' as const, pausesSla: true },
+  resolved: { id: 4n, name: 'Resolved', category: 'DONE' as const, pausesSla: false },
+};
+
+function ctx(overrides: Partial<TransitionContext> = {}): TransitionContext {
+  return {
+    currentUserId: 100n,
+    currentStatusId: STATUS.investigating.id,
+    assigneeId: 100n,
+    userGroupIds: [10n],
+    fields: {},
+    ...overrides,
+  };
+}
+
+const resolveTransition: TransitionDefinition = {
+  id: 900n,
+  name: 'แก้ไขเสร็จแล้ว',
+  fromStatusId: STATUS.investigating.id,
+  toStatusId: STATUS.resolved.id,
+  position: 1,
+  rules: [
+    { kind: 'CONDITION', ruleType: 'assignee-is-current-user', config: {}, position: 1 },
+    { kind: 'VALIDATOR', ruleType: 'required-fields', config: { fields: ['resolution'] }, position: 1 },
+    { kind: 'POST_FUNCTION', ruleType: 'stop-sla', config: { goal: 'time-to-resolve' }, position: 1 },
+  ],
+};
+
+const startTransition: TransitionDefinition = {
+  id: 901n,
+  name: 'เริ่มตรวจสอบ',
+  fromStatusId: STATUS.new.id,
+  toStatusId: STATUS.investigating.id,
+  position: 1,
+  rules: [],
+};
+
+const escalate: TransitionDefinition = {
+  id: 902n,
+  name: 'ยกระดับเป็น Major Incident',
+  fromStatusId: null, // global — ทำได้จากทุกสถานะ
+  toStatusId: STATUS.investigating.id,
+  position: 9,
+  rules: [{ kind: 'CONDITION', ruleType: 'in-group', config: { groupIds: ['99'] }, position: 1 }],
+};
+
+// ============================================================
+describe('Workflow Engine · การเลือก transition ที่ทำได้', () => {
+  it('คืนเฉพาะ transition ที่ออกจากสถานะปัจจุบัน', () => {
+    const available = evaluateTransitions([startTransition, resolveTransition], ctx());
+    expect(available.map((t) => t.name)).toEqual(['แก้ไขเสร็จแล้ว']);
+  });
+
+  it('transition ที่ fromStatusId = null ใช้ได้จากทุกสถานะ', () => {
+    const available = evaluateTransitions([escalate], ctx({ userGroupIds: [99n] }));
+    expect(available.map((t) => t.name)).toEqual(['ยกระดับเป็น Major Incident']);
+
+    const fromNew = evaluateTransitions([escalate], ctx({
+      currentStatusId: STATUS.new.id,
+      userGroupIds: [99n],
+    }));
+    expect(fromNew).toHaveLength(1);
+  });
+
+  it('CONDITION ที่ไม่ผ่าน ทำให้ปุ่มไม่ปรากฏเลย', () => {
+    // ผู้ใช้ไม่ใช่ผู้รับผิดชอบ → assignee-is-current-user ไม่ผ่าน
+    const available = evaluateTransitions([resolveTransition], ctx({ assigneeId: 555n }));
+    expect(available).toHaveLength(0);
+  });
+
+  it('CONDITION แบบกลุ่ม: ไม่อยู่ในกลุ่มที่กำหนดก็ไม่เห็นปุ่ม', () => {
+    expect(evaluateTransitions([escalate], ctx({ userGroupIds: [10n] }))).toHaveLength(0);
+    expect(evaluateTransitions([escalate], ctx({ userGroupIds: [10n, 99n] }))).toHaveLength(1);
+  });
+
+  it('VALIDATOR ที่ไม่ผ่าน **ไม่** ทำให้ปุ่มหาย — ปุ่มยังเห็น แต่กดแล้วถูกปฏิเสธ', () => {
+    // ไม่ได้กรอก resolution แต่ต้องยังเห็นปุ่ม เพื่อให้ผู้ใช้รู้ว่าต้องกรอกอะไร
+    const available = evaluateTransitions([resolveTransition], ctx({ fields: {} }));
+    expect(available).toHaveLength(1);
+    expect(available[0]?.name).toBe('แก้ไขเสร็จแล้ว');
+  });
+
+  it('เรียงตาม position เพื่อให้คีย์ลัด 1-9 คงที่', () => {
+    const t2 = { ...startTransition, id: 903n, name: 'B', fromStatusId: STATUS.investigating.id, position: 2 };
+    const t1 = { ...startTransition, id: 904n, name: 'A', fromStatusId: STATUS.investigating.id, position: 1 };
+    const available = evaluateTransitions([t2, t1], ctx());
+    expect(available.map((t) => t.name)).toEqual(['A', 'B']);
+  });
+});
+
+describe('Workflow Engine · การตรวจก่อนเปลี่ยนสถานะ', () => {
+  it('ผ่านเมื่อ condition และ validator ผ่านทั้งหมด', () => {
+    const outcome = validateTransition(resolveTransition, ctx({ fields: { resolution: 'แก้ไขเรียบร้อย' } }));
+    expect(outcome.toStatusId).toBe(STATUS.resolved.id);
+    expect(outcome.postFunctions.map((p) => p.ruleType)).toEqual(['stop-sla']);
+  });
+
+  it('โยน TransitionNotAllowedError เมื่อ CONDITION ไม่ผ่าน', () => {
+    expect(() => validateTransition(resolveTransition, ctx({ assigneeId: 555n }))).toThrow(
+      TransitionNotAllowedError,
+    );
+  });
+
+  it('โยน TransitionNotAllowedError เมื่อสถานะปัจจุบันไม่ตรงกับ fromStatusId', () => {
+    expect(() =>
+      validateTransition(resolveTransition, ctx({ currentStatusId: STATUS.new.id })),
+    ).toThrow(TransitionNotAllowedError);
+  });
+
+  it('โยน ValidationFailedError พร้อมชื่อฟิลด์ที่ขาด — ไม่ใช่ข้อความคลุมเครือ', () => {
+    try {
+      validateTransition(resolveTransition, ctx({ fields: {} }));
+      expect.unreachable('ควรโยน error');
+    } catch (e) {
+      expect(e).toBeInstanceOf(ValidationFailedError);
+      expect((e as ValidationFailedError).missingFields).toEqual(['resolution']);
+    }
+  });
+
+  it('ฟิลด์ที่เป็นสตริงว่างหรือช่องว่างล้วน ถือว่ายังไม่กรอก', () => {
+    expect(() => validateTransition(resolveTransition, ctx({ fields: { resolution: '' } }))).toThrow(
+      ValidationFailedError,
+    );
+    expect(() =>
+      validateTransition(resolveTransition, ctx({ fields: { resolution: '   ' } })),
+    ).toThrow(ValidationFailedError);
+  });
+
+  it('ฟิลด์ที่เป็น 0 หรือ false ถือว่ากรอกแล้ว — ไม่ใช่ค่าว่าง', () => {
+    const t: TransitionDefinition = {
+      ...resolveTransition,
+      rules: [
+        { kind: 'VALIDATOR', ruleType: 'required-fields', config: { fields: ['count', 'flag'] }, position: 1 },
+      ],
+    };
+    expect(() => validateTransition(t, ctx({ fields: { count: 0, flag: false } }))).not.toThrow();
+  });
+
+  it('รายงานฟิลด์ที่ขาดทั้งหมดในครั้งเดียว ไม่ใช่ทีละตัว', () => {
+    const t: TransitionDefinition = {
+      ...resolveTransition,
+      rules: [
+        { kind: 'VALIDATOR', ruleType: 'required-fields', config: { fields: ['a', 'b', 'c'] }, position: 1 },
+      ],
+    };
+    try {
+      validateTransition(t, ctx({ fields: { b: 'x' } }));
+      expect.unreachable('ควรโยน error');
+    } catch (e) {
+      expect((e as ValidationFailedError).missingFields).toEqual(['a', 'c']);
+    }
+  });
+
+  it('POST_FUNCTION เรียงตาม position', () => {
+    const t: TransitionDefinition = {
+      ...resolveTransition,
+      rules: [
+        { kind: 'POST_FUNCTION', ruleType: 'notify', config: {}, position: 2 },
+        { kind: 'POST_FUNCTION', ruleType: 'stop-sla', config: {}, position: 1 },
+      ],
+    };
+    const outcome = validateTransition(t, ctx());
+    expect(outcome.postFunctions.map((p) => p.ruleType)).toEqual(['stop-sla', 'notify']);
+  });
+
+  it('rule ที่ระบบไม่รู้จักต้องทำให้ transition ล้มเหลว ไม่ใช่ข้ามไปเงียบ ๆ', () => {
+    // นี่คือพฤติกรรมที่สำคัญด้านความปลอดภัย: ถ้าแอดมินตั้ง condition ที่โค้ดยังไม่รองรับ
+    // แล้วเราข้ามมันไป ผลคือสิทธิ์ถูกเปิดกว้างกว่าที่แอดมินตั้งใจ
+    const t: TransitionDefinition = {
+      ...resolveTransition,
+      rules: [{ kind: 'CONDITION', ruleType: 'rule-ที่ยังไม่มีในโค้ด', config: {}, position: 1 }],
+    };
+    expect(() => validateTransition(t, ctx())).toThrow(/ไม่รู้จัก/);
+    expect(evaluateTransitions([t], ctx())).toHaveLength(0);
+  });
+});
+
+describe('Workflow Engine · ลำดับการทำงานสามชั้น', () => {
+  it('CONDITION ถูกตรวจก่อน VALIDATOR เสมอ', () => {
+    // ถ้าทั้งสองชั้นไม่ผ่าน ต้องได้ TransitionNotAllowedError (ชั้นแรก)
+    // ไม่ใช่ ValidationFailedError — เพราะผู้ใช้ที่ไม่มีสิทธิ์ไม่ควรรู้ว่าต้องกรอกฟิลด์อะไร
+    expect(() =>
+      validateTransition(resolveTransition, ctx({ assigneeId: 555n, fields: {} })),
+    ).toThrow(TransitionNotAllowedError);
+  });
+
+  it('transition ที่ไม่มี rule เลย ผ่านได้และไม่มี post function', () => {
+    const outcome = validateTransition(startTransition, ctx({ currentStatusId: STATUS.new.id }));
+    expect(outcome.toStatusId).toBe(STATUS.investigating.id);
+    expect(outcome.postFunctions).toHaveLength(0);
+  });
+});
