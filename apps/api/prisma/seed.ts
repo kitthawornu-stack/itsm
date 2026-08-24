@@ -19,10 +19,23 @@ const prisma = new PrismaClient();
 
 // ตัวสุ่มแบบกำหนดค่าเริ่มต้นได้ — Math.random() ทำให้ seed ไม่ทำซ้ำได้
 // และทำให้เทสต์สมรรถนะเทียบกันข้ามรอบไม่ได้
+//
+// ใช้ mulberry32 ไม่ใช่ LCG แบบ (s * 1103515245 + 12345)
+//
+// เหตุผล: ใน JavaScript ตัวเลขเป็น double 53 บิต การคูณ seed ด้วย 1103515245
+// ทำให้ผลลัพธ์เกิน 2^53 และ **สูญเสียบิตล่างซึ่งเป็นบิตที่มีความสุ่ม**
+// ผลจริงที่วัดได้ตอนแรก: 10,000 แถวมี summary ที่ไม่ซ้ำเพียง 19 แบบ
+// และ placeholder {n} ได้ค่า 1 ตลอด
+//
+// ความล้มเหลวแบบเงียบอีกครั้ง: seed รันผ่าน ไม่มี error แต่ข้อมูลไร้ความหลากหลาย
+// ทำให้การทดสอบค้นหาและ relevance ทั้งหมดที่รันบนข้อมูลนี้ไม่มีความหมาย
+// mulberry32 ใช้ Math.imul ซึ่งคูณแบบ 32 บิตจึงไม่มีปัญหานี้
 let seedState = 20260824;
 function rnd(max: number): number {
-  seedState = (seedState * 1103515245 + 12345) & 0x7fffffff;
-  return seedState % max;
+  seedState = (seedState + 0x6d2b79f5) | 0;
+  let t = Math.imul(seedState ^ (seedState >>> 15), 1 | seedState);
+  t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+  return ((t ^ (t >>> 14)) >>> 0) % max;
 }
 function pick<T>(arr: readonly T[]): T {
   return arr[rnd(arr.length)]!;
@@ -86,7 +99,26 @@ async function main(): Promise<void> {
   console.log('เริ่ม seed…');
 
   // ---------- ล้างข้อมูลเดิมของ tenant นี้ ----------
-  await prisma.tenant.deleteMany({ where: { key: 'default' } });
+  //
+  // ต้องลบตามลำดับเอง ไม่พึ่ง cascade ของ tenant เพราะ
+  // workflow_scheme -> workflow เป็น onDelete: Restrict (ตั้งใจ: กันลบ workflow
+  // ที่ยังมีโปรเจกต์ใช้อยู่) เมื่อ MySQL ไล่ cascade จาก tenant ลำดับการลบ
+  // ไม่รับประกัน จึงชนกับ Restrict และได้ error P2003
+  const existing = await prisma.tenant.findFirst({ where: { key: 'default' } });
+  if (existing !== null) {
+    const t = existing.id;
+    await prisma.workItemHistory.deleteMany({ where: { tenantId: t } });
+    await prisma.workItem.deleteMany({ where: { tenantId: t } });
+    await prisma.workflowScheme.deleteMany({ where: { tenantId: t } });
+    await prisma.fieldConfig.deleteMany({ where: { tenantId: t } });
+    await prisma.transitionRule.deleteMany({ where: { tenantId: t } });
+    await prisma.workflowTransition.deleteMany({ where: { tenantId: t } });
+    await prisma.workflowStatus.deleteMany({ where: { tenantId: t } });
+    await prisma.workflow.deleteMany({ where: { tenantId: t } });
+    await prisma.projectCounter.deleteMany({ where: { tenantId: t } });
+    await prisma.project.deleteMany({ where: { tenantId: t } });
+    await prisma.tenant.delete({ where: { id: t } });
+  }
 
   const tenant = await prisma.tenant.create({
     data: { key: 'default', name: 'Plus Dental Clinic Group', locale: 'th', timezone: 'Asia/Bangkok' },
