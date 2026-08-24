@@ -1,0 +1,294 @@
+/**
+ * Design tokens — INVARIANT 4
+ *
+ * โครงสร้างสามชั้น (master-plan 7.3):
+ *   ชั้น 1 Primitive  ค่าดิบ ไม่มีความหมาย  — ห้ามใช้ในคอมโพเนนต์
+ *   ชั้น 2 Semantic   บทบาท เปลี่ยนตามธีม   — ชั้นเดียวที่คอมโพเนนต์อ้างได้
+ *   ชั้น 3 Component  เฉพาะเมื่อจำเป็นจริง
+ *
+ * ธีมมี **สามสถานะ** ไม่ใช่สองสถานะ:
+ *   1. ตามระบบ (ค่าเริ่มต้น) — ไม่มี attribute ใด ๆ · ใช้ prefers-color-scheme ตัดสิน
+ *   2. สว่างเสมอ            — [data-theme="light"] ต้องชนะแม้ระบบตั้งเป็นมืด
+ *   3. มืดเสมอ              — [data-theme="dark"] ต้องชนะแม้ระบบตั้งเป็นสว่าง
+ *
+ * กติกาที่ theme.spec.ts ตรวจอัตโนมัติ:
+ *   - ทุก semantic token ต้องนิยามครบทั้งสามบล็อก
+ *   - ห้ามมี token ที่นิยามเฉพาะใน media query หรือ [data-theme] เท่านั้น
+ *     (สีที่นิยามที่นั่นอย่างเดียวจะไม่ถูกใช้ในสถานะ "ตามระบบ")
+ *   - คู่สีข้อความ/พื้นหลังต้องผ่าน WCAG AA (4.5:1) ทั้งสามสถานะ
+ */
+
+/* ============================================================
+   ชั้น 1 · PRIMITIVE — ค่าเดียวทุกธีม ห้ามใช้ในคอมโพเนนต์
+   ============================================================ */
+:root {
+  --p-teal-900: #0a5060;
+  --p-teal-700: #0e6a7d;
+  --p-teal-300: #4fbbd1;
+  --p-teal-100: #dfeef2;
+  --p-teal-050: #0f323a;
+
+  --p-clay-800: #7f3b1d;
+  --p-clay-600: #a04c28;
+  --p-clay-300: #e08a5f;
+  --p-clay-100: #f8ebe3;
+  --p-clay-050: #3a2217;
+
+  --p-ink-900: #0d1312;
+  --p-ink-800: #121a18;
+  --p-ink-700: #151d1b;
+  --p-ink-600: #1b2523;
+  --p-ink-500: #232f2c;
+  --p-ink-400: #293533;
+  --p-ink-300: #3d4b48;
+  --p-ink-200: #6f807b;
+  --p-ink-150: #84928d;
+  --p-ink-100: #9aaaa5;
+  --p-ink-075: #54615d;
+  --p-ink-050: #dce3e0;
+  --p-ink-030: #e9eeeb;
+  --p-ink-020: #f1f4f2;
+  --p-ink-015: #f8faf9;
+  --p-ink-010: #ffffff;
+  --p-ink-inv: #e6edeb;
+
+  --p-red-700: #b3253c;
+  --p-red-400: #ee6480;
+  --p-red-100: #fbe6ea;
+  --p-red-050: #3a1620;
+
+  --p-amber-800: #8f6209;
+  --p-amber-400: #d6a73e;
+  --p-amber-100: #f9f0db;
+  --p-amber-050: #32280e;
+
+  --p-green-700: #2c7a50;
+  --p-green-400: #5cbe85;
+  --p-green-100: #e2f2e8;
+  --p-green-050: #152f1e;
+
+  --p-blue-700: #2a6699;
+  --p-blue-400: #71afe0;
+  --p-blue-100: #e3eef8;
+  --p-blue-050: #132737;
+}
+
+/* ============================================================
+   ชั้น 2 · SEMANTIC — สถานะที่ 1: ค่าเริ่มต้น (โหมดสว่าง)
+   ทุก token ต้องอยู่ในบล็อกนี้ ห้ามนิยามครั้งแรกใน media query
+   ============================================================ */
+:root {
+  /* พื้นผิว — ธีมสว่างสื่อความสูงด้วยเงา */
+  --surface: var(--p-ink-010);
+  --surface-2: var(--p-ink-015);
+  --surface-3: var(--p-ink-030);
+  --bg: var(--p-ink-020);
+
+  --border: var(--p-ink-050);
+  --border-strong: #bfccc7;
+
+  --text: var(--p-ink-800);
+  --text-muted: var(--p-ink-075);
+  --text-faint: var(--p-ink-150);
+  --text-on-accent: #ffffff;
+
+  /* แบรนด์ — สองสายของระบบ */
+  --accent-service: var(--p-teal-700);
+  --accent-service-soft: var(--p-teal-100);
+  --accent-service-ink: var(--p-teal-900);
+  --accent-delivery: var(--p-clay-600);
+  --accent-delivery-soft: var(--p-clay-100);
+  --accent-delivery-ink: var(--p-clay-800);
+
+  /* Semantic — ห้ามใช้นอกความหมายนี้ */
+  --status-critical: var(--p-red-700);
+  --status-critical-soft: var(--p-red-100);
+  --status-warning: var(--p-amber-800);
+  --status-warning-soft: var(--p-amber-100);
+  --status-success: var(--p-green-700);
+  --status-success-soft: var(--p-green-100);
+  --status-info: var(--p-blue-700);
+  --status-info-soft: var(--p-blue-100);
+  --status-neutral: var(--p-ink-075);
+  --status-neutral-soft: var(--p-ink-030);
+
+  /* Elevation — ธีมสว่างใช้เงา */
+  --elevation-1: 0 1px 2px rgb(16 32 28 / 7%);
+  --elevation-2: 0 4px 16px rgb(16 32 28 / 8%), 0 1px 3px rgb(16 32 28 / 5%);
+  --elevation-3: 0 12px 32px rgb(16 32 28 / 12%), 0 2px 6px rgb(16 32 28 / 6%);
+
+  --focus-ring: 0 0 0 2px var(--surface), 0 0 0 4px var(--accent-service);
+
+  /* ---------- ค่าที่ไม่ขึ้นกับธีม ---------- */
+  --radius-sm: 4px;
+  --radius-md: 7px;
+  --radius-lg: 12px;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+
+  /* ความหนาแน่น — สลับได้จากแถบเครื่องมือ จำต่อผู้ใช้ */
+  --row-height: 40px;
+
+  /**
+   * line-height ขั้นต่ำ 1.6 ทุกที่ที่มีข้อความไทย
+   * สระบนและวรรณยุกต์ซ้อนกันสองชั้น ถ้าใช้ 1.5 แบบภาษาอังกฤษ
+   * วรรณยุกต์บรรทัดบนจะชนสระล่างของบรรทัดถัดไป
+   */
+  --line-height-body: 1.72;
+  --line-height-dense: 1.6;
+  --line-height-heading: 1.3;
+
+  --font-display: "Anuphan", "Segoe UI", system-ui, sans-serif;
+  --font-body: "IBM Plex Sans Thai", "Anuphan", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "Cascadia Mono", monospace;
+
+  color-scheme: light dark;
+}
+
+[data-density="compact"] {
+  --row-height: 30px;
+}
+
+[data-density="relaxed"] {
+  --row-height: 52px;
+}
+
+/* ============================================================
+   สถานะที่ 2 · ตามระบบ + ระบบตั้งเป็นมืด
+   guard :not([data-theme="light"]) เพื่อให้การเลือก "สว่างเสมอ" ชนะ
+   ============================================================ */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --surface: var(--p-ink-700);
+    --surface-2: var(--p-ink-600);
+    --surface-3: var(--p-ink-500);
+    --bg: var(--p-ink-900);
+
+    --border: var(--p-ink-400);
+    --border-strong: var(--p-ink-300);
+
+    --text: var(--p-ink-inv);
+    --text-muted: var(--p-ink-100);
+    --text-faint: var(--p-ink-200);
+    --text-on-accent: var(--p-ink-900);
+
+    --accent-service: var(--p-teal-300);
+    --accent-service-soft: var(--p-teal-050);
+    --accent-service-ink: #8cd9e8;
+    --accent-delivery: var(--p-clay-300);
+    --accent-delivery-soft: var(--p-clay-050);
+    --accent-delivery-ink: #f2ae85;
+
+    --status-critical: var(--p-red-400);
+    --status-critical-soft: var(--p-red-050);
+    --status-warning: var(--p-amber-400);
+    --status-warning-soft: var(--p-amber-050);
+    --status-success: var(--p-green-400);
+    --status-success-soft: var(--p-green-050);
+    --status-info: var(--p-blue-400);
+    --status-info-soft: var(--p-blue-050);
+    --status-neutral: var(--p-ink-100);
+    --status-neutral-soft: var(--p-ink-500);
+
+    /**
+     * ธีมมืดสื่อความสูงด้วย **พื้นผิวที่สว่างขึ้น** ไม่ใช่เงา
+     * เงามองไม่เห็นบนพื้นมืด — เงาที่เหลือไว้เป็นแค่การเน้นขอบเบา ๆ
+     */
+    --elevation-1: 0 1px 2px rgb(0 0 0 / 45%);
+    --elevation-2: 0 6px 22px rgb(0 0 0 / 45%);
+    --elevation-3: 0 16px 40px rgb(0 0 0 / 55%);
+  }
+}
+
+/* ============================================================
+   สถานะที่ 3 · เลือก "มืดเสมอ" — ต้องชนะแม้ระบบตั้งเป็นสว่าง
+   ค่าต้องตรงกับบล็อก media query ข้างบนทุกตัว
+   ============================================================ */
+:root[data-theme="dark"] {
+  --surface: var(--p-ink-700);
+  --surface-2: var(--p-ink-600);
+  --surface-3: var(--p-ink-500);
+  --bg: var(--p-ink-900);
+
+  --border: var(--p-ink-400);
+  --border-strong: var(--p-ink-300);
+
+  --text: var(--p-ink-inv);
+  --text-muted: var(--p-ink-100);
+  --text-faint: var(--p-ink-200);
+  --text-on-accent: var(--p-ink-900);
+
+  --accent-service: var(--p-teal-300);
+  --accent-service-soft: var(--p-teal-050);
+  --accent-service-ink: #8cd9e8;
+  --accent-delivery: var(--p-clay-300);
+  --accent-delivery-soft: var(--p-clay-050);
+  --accent-delivery-ink: #f2ae85;
+
+  --status-critical: var(--p-red-400);
+  --status-critical-soft: var(--p-red-050);
+  --status-warning: var(--p-amber-400);
+  --status-warning-soft: var(--p-amber-050);
+  --status-success: var(--p-green-400);
+  --status-success-soft: var(--p-green-050);
+  --status-info: var(--p-blue-400);
+  --status-info-soft: var(--p-blue-050);
+  --status-neutral: var(--p-ink-100);
+  --status-neutral-soft: var(--p-ink-500);
+
+  --elevation-1: 0 1px 2px rgb(0 0 0 / 45%);
+  --elevation-2: 0 6px 22px rgb(0 0 0 / 45%);
+  --elevation-3: 0 16px 40px rgb(0 0 0 / 55%);
+}
+
+/* ============================================================
+   BASE
+   ============================================================ */
+body {
+  /* ต้องระบุพื้นหลังเสมอ — body โปร่งใสจะยืมพื้นของ host มา */
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-body);
+  line-height: var(--line-height-body);
+
+  /* ภาษาไทยไม่มีช่องว่างระหว่างคำ — ถ้าไม่ตั้ง ข้อความจะดันตารางล้น */
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+  border-radius: var(--radius-sm);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* พิมพ์และส่งออก PDF — บังคับธีมสว่างเสมอ ไม่ว่าผู้ใช้ตั้งอะไร */
+@media print {
+  :root {
+    --surface: #ffffff;
+    --surface-2: #ffffff;
+    --surface-3: #f1f4f2;
+    --bg: #ffffff;
+    --text: #121a18;
+    --text-muted: #54615d;
+    --border: #dce3e0;
+    --elevation-1: none;
+    --elevation-2: none;
+    --elevation-3: none;
+  }
+}
