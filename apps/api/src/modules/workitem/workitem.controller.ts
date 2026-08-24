@@ -7,12 +7,17 @@
  * ⚠️ ยังไม่มีการยืนยันตัวตน — ใช้ resolveDevTenantContext ซึ่งโยน error
  * เมื่อรันบน production ดู ADR-003
  */
-import { Controller, Get, HttpException, HttpStatus, Param, Query } from '@nestjs/common';
+import { Controller, Get, HttpException, HttpStatus, Param, Post, Query } from '@nestjs/common';
 
 import { resolveDevTenantContext } from '../../infrastructure/http/dev-tenant.guard';
 import { tenantScoped } from '../../infrastructure/prisma/tenant-scope';
 import { SearchIndexNotReadyError, searchWorkItems } from '../search-index';
-import { availableTransitions } from '../workflow';
+import {
+  TransitionNotAllowedError,
+  ValidationFailedError,
+  applyTransition,
+  availableTransitions,
+} from '../workflow';
 
 export interface WorkItemListRow {
   id: string;
@@ -123,8 +128,15 @@ export class WorkItemController {
     });
     if (item === null) return { error: `ไม่พบงาน ${key}` };
 
-    const transitions =
-      ctx.actorId === null ? [] : await availableTransitions(ctx, item.id, ctx.actorId);
+    const [transitions, history] = await Promise.all([
+      ctx.actorId === null ? Promise.resolve([]) : availableTransitions(ctx, item.id, ctx.actorId),
+      db.workItemHistory.findMany({
+        where: { workItemId: item.id },
+        orderBy: { id: 'desc' },
+        take: 20,
+        include: { actor: { select: { displayName: true } } },
+      }),
+    ]);
 
     return {
       id: item.id.toString(),
@@ -141,6 +153,70 @@ export class WorkItemController {
       updatedAt: item.updatedAt.toISOString(),
       // ปุ่มที่ผู้ใช้คนนี้เห็นได้จริง — ผ่าน CONDITION ชั้นแรกของ workflow engine แล้ว
       transitions: transitions.map((t) => ({ id: t.id.toString(), name: t.name })),
+      history: history.map((h) => ({
+        id: h.id.toString(),
+        field: h.field,
+        oldValue: h.oldValue,
+        newValue: h.newValue,
+        actor: h.actor?.displayName ?? 'ระบบ',
+        createdAt: h.createdAt.toISOString(),
+      })),
     };
+  }
+
+  /**
+   * กด transition — ทางเข้าเดียวที่เปลี่ยนสถานะงานได้
+   *
+   * ทุกกรณีล้มเหลวมีรหัสสถานะและข้อความของตัวเอง ไม่รวมเป็น 500 ก้อนเดียว
+   * เพราะหน้าจอต้องบอกผู้ใช้ได้ว่าต้องทำอะไรต่อ ไม่ใช่แค่ว่า "ผิดพลาด"
+   */
+  @Post(':key/transitions/:transitionId')
+  async transition(
+    @Param('key') key: string,
+    @Param('transitionId') transitionId: string,
+  ): Promise<unknown> {
+    const ctx = await resolveDevTenantContext();
+    if (ctx.actorId === null) {
+      throw new HttpException({ message: 'ไม่พบผู้ใช้สำหรับดำเนินการ' }, HttpStatus.FORBIDDEN);
+    }
+    const db = tenantScoped(ctx);
+    const item = await db.workItem.findFirst({ where: { itemKey: key }, select: { id: true } });
+    if (item === null) {
+      throw new HttpException({ message: `ไม่พบงาน ${key}` }, HttpStatus.NOT_FOUND);
+    }
+
+    try {
+      const result = await applyTransition(ctx, item.id, BigInt(transitionId), ctx.actorId);
+      const status = await db.workflowStatus.findFirst({
+        where: { id: result.toStatusId },
+        select: { name: true, category: true },
+      });
+      return {
+        ok: true,
+        itemKey: key,
+        newStatus: status?.name ?? null,
+        appliedPostFunctions: result.appliedPostFunctions,
+      };
+    } catch (e) {
+      if (e instanceof ValidationFailedError) {
+        // 422 — คำขอถูกต้องตามรูปแบบ แต่ข้อมูลยังไม่ครบ · บอกชื่อฟิลด์ที่ขาด
+        throw new HttpException(
+          {
+            error: 'validation_failed',
+            message: e.message,
+            missingFields: e.missingFields,
+          },
+          HttpStatus.UNPROCESSABLE_ENTITY,
+        );
+      }
+      if (e instanceof TransitionNotAllowedError) {
+        // 403 — ไม่มีสิทธิ์หรือสถานะไม่ตรง · ห้ามบอกว่าต้องกรอกฟิลด์อะไร
+        throw new HttpException(
+          { error: 'transition_not_allowed', message: e.message },
+          HttpStatus.FORBIDDEN,
+        );
+      }
+      throw e;
+    }
   }
 }

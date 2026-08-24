@@ -119,8 +119,8 @@ export default async function QueuePage(): Promise<ReactNode> {
             <span>เหลือถึงกำหนด</span>
           </div>
           {data.rows.map((r) => (
+            <a key={r.id} href={`/browse/${r.itemKey}`} className="queue-link">
             <WorkItemRow
-              key={r.id}
               itemKey={r.itemKey}
               summary={r.summary}
               priority={{
@@ -139,6 +139,7 @@ export default async function QueuePage(): Promise<ReactNode> {
                   : placeholderSla(r.itemKey, r.priority?.rank ?? 5)
               }
             />
+            </a>
           ))}
         </div>
       )}
