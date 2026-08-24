@@ -20,6 +20,9 @@ importers:
 
   apps/api:
     dependencies:
+      '@itsm/lexorank':
+        specifier: workspace:*
+        version: link:../../packages/lexorank
       '@itsm/types':
         specifier: workspace:*
         version: link:../../packages/types
@@ -36,6 +39,15 @@ importers:
       tsx:
         specifier: ^4.19.2
         version: 4.23.12
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9
+
+  packages/lexorank:
+    devDependencies:
       typescript:
         specifier: ^5.7.2
         version: 5.9.3

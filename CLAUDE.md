@@ -81,6 +81,12 @@ infra/compose  Docker Compose สำหรับ dev และ on-prem bundle
 - `utf8mb4` = 4 ไบต์/อักขระ · index prefix ยาวสุด 3072 ไบต์ → ระวัง composite index ที่มี VARCHAR ยาว
 - DDL บนตารางใหญ่ล็อกนาน → migration ที่แตะ `work_item` บน production ใช้ **gh-ost**
 - `rank` ใช้ collation `utf8mb4_bin` เท่านั้น (LexoRank ต้องเทียบแบบ binary)
+- **`rank` เป็น reserved word ใน MySQL 8** (window function) — raw SQL และคำสั่ง gh-ost
+  ต้องครอบด้วย backtick เสมอ (``ORDER BY `rank` ``) มิฉะนั้นได้ syntax error · Prisma ใส่ให้เองอยู่แล้ว
+- ก่อนเพิ่มคิวรีใหม่ที่หน้าจอเรียกบ่อย **ต้องรัน EXPLAIN บน seed data 10,000 แถว**
+  และดูค่า `filtered` — ถ้าต่ำกว่า 50% แปลว่า index ไม่ครอบ predicate + ORDER BY
+  (ตัวอย่างจริง: คิวรีหน้า Agent Queue เริ่มที่ filtered 7% ต้องเพิ่ม
+  `@@index([tenantId, projectId, resolvedAt, updatedAt])` จึงขึ้นเป็น 100%)
 
 ### Custom field (ADR-001)
 
@@ -162,13 +168,16 @@ pnpm db:up                    # docker compose up -d (MySQL/Redis/OpenSearch/Min
 pnpm db:down                  # หยุด containers
 pnpm db:migrate               # prisma migrate dev
 pnpm db:studio                # prisma studio
-pnpm db:seed                  # seed data 10,000 work item
+pnpm --filter @itsm/api seed  # seed data 10,000 work item (~3 วินาที)
 pnpm lint                     # eslint + stylelint ทุก workspace
 pnpm typecheck                # tsc --noEmit ทุก workspace
 pnpm test                     # unit + integration
 ```
 
-ฐานข้อมูลชื่อ **`itsm`** · MySQL 8 ที่ `localhost:3306` · user `itsm` / `itsm_dev` (dev เท่านั้น)
+ฐานข้อมูลชื่อ **`itsm`** · MySQL 8 ในคอนเทนเนอร์ที่ **`localhost:3307`** · user `itsm` / `itsm_dev` (dev เท่านั้น)
+
+> พอร์ต 3307 ไม่ใช่ 3306 เพราะเครื่องพัฒนามี MySQL ของระบบ (service `MySQL80`) ครอง 3306 อยู่
+> ต้องเปิด Docker Desktop ก่อนรัน `pnpm db:up`
 
 ---
 
