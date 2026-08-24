@@ -14,6 +14,7 @@ import { Controller, Get, HttpException, HttpStatus, Param, Post, Query } from '
 import { resolveDevTenantContext } from '../../infrastructure/http/dev-tenant.guard';
 import { tenantScoped } from '../../infrastructure/prisma/tenant-scope';
 import { SearchIndexNotReadyError, searchWorkItems } from '../search-index';
+import { slaForWorkItems, type SlaSnapshot } from '../sla';
 import {
   TransitionNotAllowedError,
   ValidationFailedError,
@@ -30,6 +31,8 @@ export interface WorkItemListRow {
   assignee: { name: string } | null;
   updatedAt: string;
   resolvedAt: string | null;
+  /** null เมื่อโปรเจกต์ยังไม่ได้ตั้ง SLA Policy หรืองานยังไม่มีนาฬิกา */
+  sla: SlaSnapshot | null;
 }
 
 @Controller('work-items')
@@ -94,6 +97,11 @@ export class WorkItemController {
       db.workItem.count({ where }),
     ]);
 
+    const sla = await slaForWorkItems(
+      ctx,
+      rows.map((w) => w.id),
+    );
+
     return {
       total,
       rows: rows.map((w) => ({
@@ -109,6 +117,7 @@ export class WorkItemController {
         assignee: w.assignee === null ? null : { name: w.assignee.displayName },
         updatedAt: w.updatedAt.toISOString(),
         resolvedAt: w.resolvedAt?.toISOString() ?? null,
+        sla: sla.get(w.id.toString()) ?? null,
       })),
     };
   }

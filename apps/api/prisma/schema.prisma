@@ -207,6 +207,7 @@ model Project {
   tenant           Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   permissionScheme PermissionScheme? @relation(fields: [permissionSchemeId], references: [id], onDelete: SetNull)
   counter          ProjectCounter?
+  slaPolicies      SlaPolicy[]
   workItems        WorkItem[]
   workflowSchemes  WorkflowScheme[]
   fieldConfigs     FieldConfig[]
@@ -502,6 +503,7 @@ model WorkItem {
   parent     WorkItem?      @relation("WorkItemHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
   children   WorkItem[]     @relation("WorkItemHierarchy")
 
+  slaClocks   WorkItemSla[]
   fieldValues WorkItemFieldValue[]
   comments    WorkItemComment[]
   attachments WorkItemAttachment[]
@@ -671,4 +673,140 @@ model WorkItemHistory {
   @@index([tenantId, workItemId, createdAt])
   @@index([tenantId, field, createdAt])
   @@map("work_item_history")
+}
+
+// ============================================================
+// SLA
+// ============================================================
+
+/**
+ * ปฏิทินเวลาทำการ — แอดมินตั้งค่าได้ ไม่ใช่เขียนตายในโค้ด
+ * `verified` เป็น false จนกว่าจะมีคนตรวจรายการวันหยุดกับประกาศจริง
+ * ระบบต้องปฏิเสธการคำนวณ SLA บน production ด้วยปฏิทินที่ยังไม่ตรวจสอบ
+ */
+model SlaCalendar {
+  id        BigInt   @id @default(autoincrement())
+  tenantId  BigInt   @map("tenant_id")
+  name      String   @db.VarChar(255)
+  timezone  String   @default("Asia/Bangkok") @db.VarChar(64)
+  /// เวลาทำการรายวัน [{startMinute,endMinute}] × 7 · index 0 = อาทิตย์
+  weekly    Json
+  /// ตรวจรายการวันหยุดกับประกาศจริงแล้วหรือยัง
+  verified  Boolean  @default(false)
+  createdAt DateTime @default(now()) @map("created_at") @db.DateTime(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.DateTime(3)
+
+  holidays SlaHoliday[]
+  policies SlaPolicy[]
+
+  @@unique([tenantId, name])
+  @@map("sla_calendar")
+}
+
+model SlaHoliday {
+  id         BigInt @id @default(autoincrement())
+  tenantId   BigInt @map("tenant_id")
+  calendarId BigInt @map("calendar_id")
+  /// YYYY-MM-DD ตามเวลาท้องถิ่นของปฏิทิน — เก็บเป็นข้อความเพื่อไม่ให้ timezone เข้ามาเกี่ยว
+  date       String @db.VarChar(10)
+  name       String @db.VarChar(255)
+
+  calendar SlaCalendar @relation(fields: [calendarId], references: [id], onDelete: Cascade)
+
+  @@unique([calendarId, date])
+  @@index([tenantId, date])
+  @@map("sla_holiday")
+}
+
+model SlaPolicy {
+  id         BigInt   @id @default(autoincrement())
+  tenantId   BigInt   @map("tenant_id")
+  projectId  BigInt   @map("project_id")
+  name       String   @db.VarChar(255)
+  calendarId BigInt   @map("calendar_id")
+  createdAt  DateTime @default(now()) @map("created_at") @db.DateTime(3)
+
+  project  Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  calendar SlaCalendar @relation(fields: [calendarId], references: [id], onDelete: Restrict)
+  goals    SlaGoal[]
+
+  @@unique([tenantId, projectId, name])
+  @@map("sla_policy")
+}
+
+/**
+ * เป้าหมายหนึ่งข้อ เช่น "ตอบกลับครั้งแรกภายใน 15 นาทีสำหรับ P1"
+ * ระบบไล่ goal จาก position น้อยไปมาก และใช้ **ตัวแรกที่เข้าเงื่อนไข**
+ * เงื่อนไขตอนนี้เป็นโครงสร้างง่าย ๆ (ช่วงความสำคัญ + ประเภทงาน)
+ * แผนระบุว่าจะใช้ HQL — ยังไม่ถึงเวลา เพราะ HQL compiler ยิงไป OpenSearch
+ * ซึ่งใช้ตัดสินเงื่อนไขของแถวเดียวไม่ได้
+ */
+model SlaGoal {
+  id       BigInt @id @default(autoincrement())
+  tenantId BigInt @map("tenant_id")
+  policyId BigInt @map("policy_id")
+  /// คีย์ที่โค้ดอ้างถึง เช่น "time-to-resolve"
+  key      String @db.VarChar(64)
+  name     String @db.VarChar(255)
+  /// เป้าหมายเป็นมิลลิวินาทีของเวลาทำการ
+  targetMs Int    @map("target_ms")
+  position Int    @default(0)
+  /// เงื่อนไขการเข้าคู่ {priorityRanks?: number[], issueTypeNames?: string[]}
+  match    Json?
+
+  policy SlaPolicy     @relation(fields: [policyId], references: [id], onDelete: Cascade)
+  items  WorkItemSla[]
+
+  @@unique([policyId, key, position])
+  @@index([tenantId, policyId, position])
+  @@map("sla_goal")
+}
+
+/**
+ * นาฬิกา SLA หนึ่งเรือนของงานหนึ่งใบ
+ * คอลัมน์สถานะเป็นค่า denormalise จากรายการเหตุการณ์ — **แหล่งความจริงคือ
+ * `sla_event`** คำนวณใหม่จากเหตุการณ์ได้เสมอ ซึ่งจำเป็นเมื่อต้องแก้ปฏิทิน
+ * ย้อนหลังหรือแก้เป้าที่ตั้งผิด
+ */
+model WorkItemSla {
+  id         BigInt @id @default(autoincrement())
+  tenantId   BigInt @map("tenant_id")
+  workItemId BigInt @map("work_item_id")
+  goalId     BigInt @map("goal_id")
+
+  state      String    @db.VarChar(16)
+  elapsedMs  Int       @map("elapsed_ms")
+  targetMs   Int       @map("target_ms")
+  breachAt   DateTime? @map("breach_at") @db.DateTime(3)
+  isBreached Boolean   @default(false) @map("is_breached")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.DateTime(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.DateTime(3)
+
+  workItem WorkItem   @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+  goal     SlaGoal    @relation(fields: [goalId], references: [id], onDelete: Restrict)
+  events   SlaEvent[]
+
+  @@unique([workItemId, goalId])
+  // คิว "ใกล้หลุด" เรียงตาม breachAt ของงานที่ยังเดินอยู่
+  @@index([tenantId, isBreached, breachAt])
+  @@index([tenantId, workItemId])
+  @@map("work_item_sla")
+}
+
+/**
+ * append-only — แหล่งความจริงของนาฬิกา SLA
+ */
+model SlaEvent {
+  id            BigInt   @id @default(autoincrement())
+  tenantId      BigInt   @map("tenant_id")
+  workItemSlaId BigInt   @map("work_item_sla_id")
+  kind          String   @db.VarChar(16)
+  at            DateTime @db.DateTime(3)
+  newTargetMs   Int?     @map("new_target_ms")
+
+  sla WorkItemSla @relation(fields: [workItemSlaId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, workItemSlaId, at])
+  @@map("sla_event")
 }

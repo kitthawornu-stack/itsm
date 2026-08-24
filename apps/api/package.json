@@ -14,7 +14,8 @@
     "prisma:generate": "dotenv -e ../../.env -- prisma generate",
     "seed": "dotenv -e ../../.env -- tsx prisma/seed.ts",
     "start": "node dist/main.js",
-    "reindex": "dotenv -e ../../.env -- tsx src/scripts/reindex.ts"
+    "reindex": "dotenv -e ../../.env -- tsx src/scripts/reindex.ts",
+    "seed:sla": "dotenv -e ../../.env -- tsx src/scripts/seed-sla.ts"
   },
   "devDependencies": {
     "prisma": "^6.1.0",

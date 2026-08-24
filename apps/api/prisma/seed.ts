@@ -389,7 +389,16 @@ async function main(): Promise<void> {
       ? statusPool.filter((s) => s.category === StatusCategory.DONE)[rnd(2) % statusPool.filter((s) => s.category === StatusCategory.DONE).length]!
       : pick(statusPool.filter((s) => s.category !== StatusCategory.DONE));
 
-    const createdAt = new Date(NOW - rnd(365) * DAY - rnd(DAY));
+    // อายุของตั๋วต้องสะท้อนความจริง: **งานที่ยังเปิดอยู่กระจุกตัวช่วงล่าสุด**
+    // ไม่ใช่กระจายทั้งปีเท่า ๆ กับงานที่ปิดไปแล้ว
+    //
+    // เวอร์ชันแรกสุ่มอายุแบบเดียวกันทั้งคู่ ผลคือเมื่อต่อ SLA Engine เข้ามา
+    // 477 จาก 500 ใบขึ้นว่าหลุด SLA — ถูกตามนาฬิกา แต่เป็นข้อมูลที่เป็นไปไม่ได้จริง
+    // และทำให้หน้าคิวไม่บอกอะไรเลยเพราะทุกแถวเป็นสีแดง
+    const ageMs = closed
+      ? rnd(365) * DAY + rnd(DAY) // ปิดแล้ว — กระจายทั้งปี
+      : rnd(6) * DAY + rnd(DAY); // ยังเปิด — ไม่เกิน 6 วัน
+    const createdAt = new Date(NOW - ageMs);
     const resolvedAt = closed ? new Date(createdAt.getTime() + (rnd(72) + 1) * 3_600_000) : null;
 
     const pool =

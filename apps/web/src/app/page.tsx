@@ -16,6 +16,16 @@ interface ApiRow {
   priority: { rank: number; name: string } | null;
   assignee: { name: string } | null;
   updatedAt: string;
+  sla: {
+    goalName: string;
+    state: 'not-started' | 'running' | 'paused' | 'met' | 'breached';
+    elapsedMs: number;
+    targetMs: number;
+    remainingMs: number;
+    breachAt: string | null;
+    ratio: number;
+    isBreached: boolean;
+  } | null;
 }
 
 const API = process.env['API_BASE_URL'] ?? 'http://localhost:4000';
@@ -41,33 +51,46 @@ async function fetchQueue(): Promise<{ rows: ApiRow[]; total: number } | { error
 }
 
 /**
- * ⚠️ **SLA จำลอง — ยังไม่ใช่ของจริง**
+ * แปลงสถานะ SLA จาก API ให้เป็นรูปที่คอมโพเนนต์ SlaBar ใช้
  *
- * SLA Engine ตัวจริงยังไม่ได้สร้าง (อยู่ใน Phase 1) ฟังก์ชันนี้กระจายสถานะ
- * แบบกำหนดค่าได้จากคีย์งาน เพื่อให้เห็นคอมโพเนนต์ SlaBar ครบทุกสถานะ
+ * **เวลาที่เหลือคือเวลาทำการ ไม่ใช่เวลานาฬิกา** — เป้า 45 ชั่วโมงทำการ
+ * กินเวลาปฏิทินราวหนึ่งสัปดาห์ ถ้าแสดงเป็นเวลานาฬิกาจะขึ้นว่า "เหลือ 160 ชม."
+ * ซึ่งไม่ตรงกับที่ Agent คิด และไม่ช่วยให้ตัดสินใจว่าจะหยิบงานไหนก่อน
  *
- * ความพยายามแรกใช้ `updatedAt` ตรง ๆ แต่ seed data กระจายตลอดปี
- * ผลคือ 40 จาก 50 แถวขึ้น "เหลือ 0 นาที" สีแดงหมด — หน้าจอที่ทุกอย่างวิกฤต
- * คือหน้าจอที่ไม่บอกอะไรเลย ซึ่งขัดกับหลักการ "สถานะต้องอ่านได้ใน 1 วินาที"
+ * เกิน 8 ชั่วโมงทำการขึ้นไปแสดงเป็น **วันเวลาที่ครบกำหนด** แทนจำนวนชั่วโมง
+ * เพราะ "เหลือ 44 ชม." ก็ยังต้องคิดต่อว่าคือวันไหน
  */
-function placeholderSla(
-  itemKey: string,
-  rank: number,
+function toSlaBar(
+  sla: NonNullable<ApiRow['sla']>,
 ): { elapsedRatio: number; state: 'ok' | 'warning' | 'critical' | 'paused'; label: string } {
-  let h = 0;
-  for (let i = 0; i < itemKey.length; i += 1) h = (h * 31 + itemKey.charCodeAt(i)) % 100_000;
+  if (sla.state === 'paused') {
+    return { elapsedRatio: Math.min(sla.ratio, 1), state: 'paused', label: '⏸ หยุดนาฬิกา' };
+  }
+  if (sla.isBreached) {
+    return { elapsedRatio: 1, state: 'critical', label: 'หลุด SLA แล้ว' };
+  }
 
-  const budgetHours = rank <= 1 ? 2 : rank === 2 ? 8 : 24;
-  // งานสำคัญมีโอกาสใกล้หลุดสูงกว่า ซึ่งสะท้อนความเป็นจริง
-  const ratio = ((h % 100) / 100) * (rank <= 2 ? 1 : 0.8);
-  const remainingH = budgetHours * (1 - ratio);
+  const workingHoursLeft = sla.remainingMs / 3_600_000;
+  const state = sla.ratio >= 0.9 ? 'critical' : sla.ratio >= 0.7 ? 'warning' : 'ok';
 
-  const fmt = (hours: number): string =>
-    hours < 1 ? `เหลือ ${Math.max(1, Math.round(hours * 60))} นาที` : `เหลือ ${hours.toFixed(1)} ชม.`;
+  let label: string;
+  if (workingHoursLeft < 1) {
+    label = `เหลือ ${Math.max(1, Math.round(workingHoursLeft * 60))} นาที`;
+  } else if (workingHoursLeft < 8) {
+    label = `เหลือ ${workingHoursLeft.toFixed(1)} ชม.`;
+  } else if (sla.breachAt !== null) {
+    label = `ครบ ${new Date(sla.breachAt).toLocaleString('th-TH', {
+      day: 'numeric',
+      month: 'short',
+      hour: '2-digit',
+      minute: '2-digit',
+      timeZone: 'Asia/Bangkok',
+    })}`;
+  } else {
+    label = `เหลือ ${Math.round(workingHoursLeft)} ชม.`;
+  }
 
-  if (ratio >= 0.9) return { elapsedRatio: ratio, state: 'critical', label: fmt(remainingH) };
-  if (ratio >= 0.7) return { elapsedRatio: ratio, state: 'warning', label: fmt(remainingH) };
-  return { elapsedRatio: ratio, state: 'ok', label: fmt(remainingH) };
+  return { elapsedRatio: Math.min(sla.ratio, 1), state, label };
 }
 
 export default async function QueuePage(): Promise<ReactNode> {
@@ -97,9 +120,8 @@ export default async function QueuePage(): Promise<ReactNode> {
       <div className="toolbar">
         <StatusPill label="ยังไม่เสร็จ" category="TODO" />
         <span style={{ fontSize: 12.5, color: 'var(--text-muted)' }}>
-          คีย์ · หัวข้อ · สถานะ · ความสำคัญ · ผู้รับผิดชอบ มาจาก MySQL จริงผ่าน REST API ·{' '}
-          <b style={{ color: 'var(--status-warning)' }}>คอลัมน์ SLA เป็นค่าจำลอง</b>{' '}
-          เพราะ SLA Engine อยู่ใน Phase 1
+          ทุกคอลัมน์มาจากฐานข้อมูลจริง — รวมถึง <b>SLA ที่คำนวณจากปฏิทินเวลาทำการ</b>{' '}
+          และหยุดนาฬิกาเมื่อรอลูกค้าตอบ
         </span>
       </div>
 
@@ -133,11 +155,7 @@ export default async function QueuePage(): Promise<ReactNode> {
                 pausesSla: r.status.pausesSla,
               }}
               {...(r.assignee === null ? {} : { assignee: r.assignee.name })}
-              sla={
-                r.status.pausesSla
-                  ? { elapsedRatio: 0.4, state: 'paused', label: '⏸ หยุดนาฬิกา' }
-                  : placeholderSla(r.itemKey, r.priority?.rank ?? 5)
-              }
+              {...(r.sla === null ? {} : { sla: toSlaBar(r.sla) })}
             />
             </a>
           ))}

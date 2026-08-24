@@ -245,7 +245,9 @@ pnpm db:up                    # docker compose up -d (MySQL/Redis/OpenSearch/Min
 pnpm db:down                  # หยุด containers
 pnpm db:migrate               # prisma migrate dev
 pnpm db:studio                # prisma studio
-pnpm --filter @itsm/api seed  # seed data 10,000 work item (~3 วินาที)
+pnpm --filter @itsm/api seed      # seed data 10,000 work item (~4 วินาที)
+pnpm --filter @itsm/api seed:sla  # SLA policy + ปฏิทิน + นาฬิกาให้งานที่เปิดอยู่
+pnpm --filter @itsm/api reindex   # สร้างดัชนีค้นหาใหม่จาก MySQL
 pnpm lint                     # eslint + stylelint ทุก workspace
 pnpm typecheck                # tsc --noEmit ทุก workspace
 pnpm test                     # unit + integration

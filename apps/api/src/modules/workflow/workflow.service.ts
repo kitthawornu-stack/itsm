@@ -9,6 +9,7 @@ import { systemClock, type TenantContext } from '@itsm/types';
 
 import { auditedTransaction, change, type AuditEntry } from '../../infrastructure/audit/audited-transaction';
 import { tenantScoped } from '../../infrastructure/prisma/tenant-scope';
+import { recordSlaEvent } from '../sla';
 import {
   evaluateTransitions,
   validateTransition,
@@ -182,12 +183,13 @@ export async function applyTransition(
   // engine ตรวจครบสามชั้นและคืน post function ที่ต้องรัน
   const outcome = validateTransition(definition, tctx);
 
-  const toStatus = await tenantScoped(ctx).workflowStatus.findUnique({
-    where: { id: outcome.toStatusId },
-  });
+  const [toStatus, fromStatus] = await Promise.all([
+    tenantScoped(ctx).workflowStatus.findUnique({ where: { id: outcome.toStatusId } }),
+    tenantScoped(ctx).workflowStatus.findUnique({ where: { id: item.statusId } }),
+  ]);
   if (toStatus === null) throw new WorkItemNotFoundError(workItemId);
 
-  return auditedTransaction(
+  const result = await auditedTransaction(
     { ...ctx, actorId },
     `workflow.transition:${definition.name}`,
     async (tx) => {
@@ -241,4 +243,21 @@ export async function applyTransition(
       };
     },
   );
+
+  // นาฬิกา SLA ตามสถานะใหม่ — ทำ **หลัง** ทรานแซกชันสำเร็จ
+  //
+  // เหตุผลที่ไม่รวมในทรานแซกชันเดียวกัน: การคำนวณ SLA อ่านปฏิทินและเหตุการณ์
+  // ทั้งหมด ถ้าอยู่ในทรานแซกชันจะถือล็อกบนแถว work_item นานเกินจำเป็น
+  // ผลที่ยอมรับได้: ถ้าขั้นนี้ล้ม สถานะเปลี่ยนแล้วแต่นาฬิกายังไม่อัปเดต
+  // ซึ่งแก้ได้ด้วย recomputeSla() และไม่ทำให้ข้อมูลผิดถาวร
+  const now = systemClock.nowUtc();
+  if (toStatus.category === 'DONE') {
+    await recordSlaEvent(ctx, item.id, 'stop', now);
+  } else if (toStatus.pausesSla && fromStatus?.pausesSla !== true) {
+    await recordSlaEvent(ctx, item.id, 'pause', now);
+  } else if (!toStatus.pausesSla && fromStatus?.pausesSla === true) {
+    await recordSlaEvent(ctx, item.id, 'resume', now);
+  }
+
+  return result;
 }
