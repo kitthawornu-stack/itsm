@@ -1,0 +1,35 @@
+node_modules/
+dist/
+build/
+.next/
+out/
+coverage/
+*.tsbuildinfo
+
+.env
+.env.local
+.env.*.local
+!.env.example
+
+.turbo/
+.cache/
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+
+# local volumes created by docker compose
+infra/compose/data/
+
+# generated prisma client
+apps/api/node_modules/.prisma/
+packages/*/node_modules/.prisma/
+
+# build artifacts of the docs page
+docs/.build/

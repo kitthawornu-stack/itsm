@@ -1,0 +1,662 @@
+// Helix — ITSM + Project Management Platform
+// ตารางแกน 27 ตาราง สำหรับ Phase 0
+// กติกาบังคับ (ดู CLAUDE.md §1):
+//   1. ทุกตารางมี tenantId และเป็นคอลัมน์แรกของทุก composite index
+//   2. เวลาทุกค่าเป็น DATETIME(3) UTC — ห้ามใช้ TIMESTAMP (จำกัดถึงปี 2038)
+//   3. MySQL ไม่มี partial index / array type — ใช้ bridge table ไม่ใช่ JSON ที่ query ไม่ลง index
+//   4. work_item.rank ต้องใช้ collation utf8mb4_bin (ตั้งใน migration แยก — Prisma ยังไม่รองรับ per-column collation)
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../node_modules/.prisma/client"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================
+// PLATFORM
+// ============================================================
+
+model Tenant {
+  id        BigInt   @id @default(autoincrement())
+  key       String   @unique @db.VarChar(64) // ใช้ใน subdomain และ index alias ของ OpenSearch
+  name      String   @db.VarChar(255)
+  isActive  Boolean  @default(true) @map("is_active")
+  locale    String   @default("th") @db.VarChar(10)
+  timezone  String   @default("Asia/Bangkok") @db.VarChar(64)
+  createdAt DateTime @default(now()) @map("created_at") @db.DateTime(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.DateTime(3)
+
+  users             User[]
+  groups            UserGroup[]
+  projects          Project[]
+  issueTypes        IssueType[]
+  priorities        Priority[]
+  resolutions       Resolution[]
+  workflows         Workflow[]
+  fieldDefinitions  FieldDefinition[]
+  workItems         WorkItem[]
+  permissionSchemes PermissionScheme[]
+  auditLogs         AuditLog[]
+
+  @@map("tenant")
+}
+
+model User {
+  id           BigInt    @id @default(autoincrement())
+  tenantId     BigInt    @map("tenant_id")
+  email        String    @db.VarChar(320)
+  displayName  String    @map("display_name") @db.VarChar(255)
+  avatarColor  String?   @map("avatar_color") @db.VarChar(7) // เก็บเป็น token key ไม่ใช่สีดิบ ดู CLAUDE.md §6
+  passwordHash String?   @map("password_hash") @db.VarChar(255) // null เมื่อผู้ใช้มาจาก SSO/LDAP เท่านั้น
+  externalId   String?   @map("external_id") @db.VarChar(255) // subject จาก OIDC / DN จาก LDAP
+  isSystem     Boolean   @default(false) @map("is_system") // true สำหรับ actor ของ Automation ดู CLAUDE.md
+  isActive     Boolean   @default(true) @map("is_active")
+  lastLoginAt  DateTime? @map("last_login_at") @db.DateTime(3)
+  createdAt    DateTime  @default(now()) @map("created_at") @db.DateTime(3)
+  updatedAt    DateTime  @updatedAt @map("updated_at") @db.DateTime(3)
+
+  tenant           Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  groupMemberships GroupMember[]
+  reportedItems    WorkItem[]           @relation("WorkItemReporter")
+  assignedItems    WorkItem[]           @relation("WorkItemAssignee")
+  comments         WorkItemComment[]
+  attachments      WorkItemAttachment[]
+  watching         WorkItemWatcher[]
+  historyEntries   WorkItemHistory[]
+  auditLogs        AuditLog[]
+
+  @@unique([tenantId, email])
+  @@index([tenantId, isActive])
+  @@index([tenantId, externalId])
+  @@map("user")
+}
+
+model UserGroup {
+  id        BigInt   @id @default(autoincrement())
+  tenantId  BigInt   @map("tenant_id")
+  name      String   @db.VarChar(255)
+  isSynced  Boolean  @default(false) @map("is_synced") // มาจาก LDAP/AD sync — ห้ามแก้สมาชิกด้วยมือ
+  createdAt DateTime @default(now()) @map("created_at") @db.DateTime(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.DateTime(3)
+
+  tenant  Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  members GroupMember[]
+  grants  PermissionGrant[]
+
+  @@unique([tenantId, name])
+  @@map("user_group")
+}
+
+model GroupMember {
+  groupId  BigInt   @map("group_id")
+  userId   BigInt   @map("user_id")
+  tenantId BigInt   @map("tenant_id")
+  addedAt  DateTime @default(now()) @map("added_at") @db.DateTime(3)
+
+  group UserGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([groupId, userId])
+  @@index([tenantId, userId])
+  @@map("group_member")
+}
+
+model PermissionScheme {
+  id        BigInt   @id @default(autoincrement())
+  tenantId  BigInt   @map("tenant_id")
+  name      String   @db.VarChar(255)
+  createdAt DateTime @default(now()) @map("created_at") @db.DateTime(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.DateTime(3)
+
+  tenant   Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  grants   PermissionGrant[]
+  projects Project[]
+
+  @@unique([tenantId, name])
+  @@map("permission_scheme")
+}
+
+// สิทธิ์ให้กับ "กลุ่ม" หรือ "บทบาทในโปรเจกต์" — ไม่ให้กับผู้ใช้รายบุคคลโดยตรง
+// เพื่อให้ audit ตอบได้ว่าทำไมคนนี้ทำได้ ไม่ใช่แค่ว่าทำได้
+model PermissionGrant {
+  id          BigInt        @id @default(autoincrement())
+  tenantId    BigInt        @map("tenant_id")
+  schemeId    BigInt        @map("scheme_id")
+  permission  PermissionKey
+  groupId     BigInt?       @map("group_id")
+  projectRole ProjectRole?  @map("project_role")
+
+  scheme PermissionScheme @relation(fields: [schemeId], references: [id], onDelete: Cascade)
+  group  UserGroup?       @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@unique([schemeId, permission, groupId, projectRole])
+  @@index([tenantId, permission])
+  @@map("permission_grant")
+}
+
+enum PermissionKey {
+  BROWSE_PROJECT
+  CREATE_ITEM
+  EDIT_ITEM
+  DELETE_ITEM
+  ASSIGN_ITEM
+  TRANSITION_ITEM
+  ADD_COMMENT
+  DELETE_COMMENT
+  MANAGE_ATTACHMENT
+  LINK_ITEM
+  BULK_EDIT
+  MANAGE_SPRINT
+  MANAGE_PROJECT
+  VIEW_REPORT
+  ADMINISTER_TENANT
+}
+
+enum ProjectRole {
+  AGENT
+  CUSTOMER
+  DEVELOPER
+  MANAGER
+  ADMIN
+}
+
+// append-only — ห้าม UPDATE หรือ DELETE (บังคับที่ชั้น service ดู CLAUDE.md §1 invariant 2)
+model AuditLog {
+  id         BigInt   @id @default(autoincrement())
+  tenantId   BigInt   @map("tenant_id")
+  actorId    BigInt?  @map("actor_id")
+  action     String   @db.VarChar(64) // e.g. "permission.grant", "user.deactivate"
+  entityType String   @map("entity_type") @db.VarChar(64)
+  entityId   String   @map("entity_id") @db.VarChar(64)
+  payload    Json?
+  traceId    String?  @map("trace_id") @db.VarChar(64) // โยงกลับไป OpenTelemetry trace ได้
+  ipAddress  String?  @map("ip_address") @db.VarChar(45)
+  createdAt  DateTime @default(now()) @map("created_at") @db.DateTime(3)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  actor  User?  @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, createdAt])
+  @@index([tenantId, entityType, entityId])
+  @@index([tenantId, actorId, createdAt])
+  @@map("audit_log")
+}
+
+// ============================================================
+// CONFIGURATION
+// ============================================================
+
+model Project {
+  id                 BigInt      @id @default(autoincrement())
+  tenantId           BigInt      @map("tenant_id")
+  key                String      @db.VarChar(16) // คำนำหน้าของ item_key เช่น "SD", "PLAT"
+  name               String      @db.VarChar(255)
+  description        String?     @db.Text
+  type               ProjectType
+  leadId             BigInt?     @map("lead_id")
+  permissionSchemeId BigInt?     @map("permission_scheme_id")
+  isArchived         Boolean     @default(false) @map("is_archived")
+  createdAt          DateTime    @default(now()) @map("created_at") @db.DateTime(3)
+  updatedAt          DateTime    @updatedAt @map("updated_at") @db.DateTime(3)
+
+  tenant           Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  permissionScheme PermissionScheme? @relation(fields: [permissionSchemeId], references: [id], onDelete: SetNull)
+  counter          ProjectCounter?
+  workItems        WorkItem[]
+  workflowSchemes  WorkflowScheme[]
+  fieldConfigs     FieldConfig[]
+
+  @@unique([tenantId, key])
+  @@index([tenantId, isArchived])
+  @@map("project")
+}
+
+enum ProjectType {
+  SERVICE_DESK
+  SOFTWARE
+  BUSINESS
+}
+
+// ตัวนับเลขรันแยกต่อโปรเจกต์ — ค่าจริงมาจาก Redis INCR, ตารางนี้เป็นแหล่งความจริงสำรอง
+// และเป็นค่าเริ่มต้นตอน warm cache ใหม่
+model ProjectCounter {
+  projectId BigInt   @id @map("project_id")
+  tenantId  BigInt   @map("tenant_id")
+  lastValue Int      @default(0) @map("last_value")
+  updatedAt DateTime @updatedAt @map("updated_at") @db.DateTime(3)
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("project_counter")
+}
+
+model IssueType {
+  id             BigInt   @id @default(autoincrement())
+  tenantId       BigInt   @map("tenant_id")
+  name           String   @db.VarChar(64)
+  iconKey        String   @map("icon_key") @db.VarChar(32) // ชื่อไอคอนใน design system ไม่ใช่ URL
+  isSubtask      Boolean  @default(false) @map("is_subtask")
+  hierarchyLevel Int      @default(0) @map("hierarchy_level") // 1=Epic, 0=Story/Task/Incident, -1=Sub-task
+  createdAt      DateTime @default(now()) @map("created_at") @db.DateTime(3)
+
+  tenant          Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  workItems       WorkItem[]
+  workflowSchemes WorkflowScheme[]
+  fieldConfigs    FieldConfig[]
+
+  @@unique([tenantId, name])
+  @@map("issue_type")
+}
+
+model Priority {
+  id         Int      @id @default(autoincrement())
+  tenantId   BigInt   @map("tenant_id")
+  name       String   @db.VarChar(32)
+  rank       Int // 1 = P1 Critical ... 5 = P5 Trivial — ใช้เรียงลำดับ
+  colorToken String   @map("color_token") @db.VarChar(32) // semantic token key เช่น "status-critical" ไม่ใช่ hex
+  createdAt  DateTime @default(now()) @map("created_at") @db.DateTime(3)
+
+  tenant    Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  workItems WorkItem[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId, rank])
+  @@map("priority")
+}
+
+model Resolution {
+  id        Int      @id @default(autoincrement())
+  tenantId  BigInt   @map("tenant_id")
+  name      String   @db.VarChar(64)
+  createdAt DateTime @default(now()) @map("created_at") @db.DateTime(3)
+
+  tenant    Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  workItems WorkItem[]
+
+  @@unique([tenantId, name])
+  @@map("resolution")
+}
+
+// ============================================================
+// WORKFLOW ENGINE
+// ============================================================
+
+model Workflow {
+  id        BigInt   @id @default(autoincrement())
+  tenantId  BigInt   @map("tenant_id")
+  name      String   @db.VarChar(255)
+  version   Int      @default(1)
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at") @db.DateTime(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.DateTime(3)
+
+  tenant      Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  statuses    WorkflowStatus[]
+  transitions WorkflowTransition[]
+  schemes     WorkflowScheme[]
+
+  @@unique([tenantId, name, version])
+  @@map("workflow")
+}
+
+// category คือสิ่งที่ Board, Burndown และ SLA ใช้ — ไม่ใช่ชื่อสถานะ
+model WorkflowStatus {
+  id         BigInt         @id @default(autoincrement())
+  tenantId   BigInt         @map("tenant_id")
+  workflowId BigInt         @map("workflow_id")
+  name       String         @db.VarChar(64)
+  category   StatusCategory
+  position   Int
+  isInitial  Boolean        @default(false) @map("is_initial")
+  pausesSla  Boolean        @default(false) @map("pauses_sla") // เช่น "Pending Customer" — หยุดนาฬิกา SLA
+
+  workflow        Workflow             @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  transitionsFrom WorkflowTransition[] @relation("TransitionFrom")
+  transitionsTo   WorkflowTransition[] @relation("TransitionTo")
+  workItems       WorkItem[]
+
+  @@unique([workflowId, name])
+  @@index([tenantId, workflowId, position])
+  @@map("workflow_status")
+}
+
+enum StatusCategory {
+  TODO
+  IN_PROGRESS
+  DONE
+}
+
+model WorkflowTransition {
+  id           BigInt  @id @default(autoincrement())
+  tenantId     BigInt  @map("tenant_id")
+  workflowId   BigInt  @map("workflow_id")
+  name         String  @db.VarChar(64) // ข้อความบนปุ่ม — ภาษาคน ดู CLAUDE.md §5
+  fromStatusId BigInt? @map("from_status_id") // null = transition ที่ทำได้จากทุกสถานะ (global)
+  toStatusId   BigInt  @map("to_status_id")
+  position     Int     @default(0) // ลำดับของคีย์ลัด 1-9 ในหน้ารายละเอียด
+
+  workflow   Workflow         @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  fromStatus WorkflowStatus?  @relation("TransitionFrom", fields: [fromStatusId], references: [id], onDelete: Cascade)
+  toStatus   WorkflowStatus   @relation("TransitionTo", fields: [toStatusId], references: [id], onDelete: Cascade)
+  rules      TransitionRule[]
+
+  @@index([tenantId, workflowId, fromStatusId])
+  @@map("workflow_transition")
+}
+
+// สามชั้นของ transition: CONDITION (ใครเห็นปุ่ม) → VALIDATOR (กรอกครบไหม) → POST_FUNCTION (ทำอะไรต่อ)
+model TransitionRule {
+  id           BigInt   @id @default(autoincrement())
+  tenantId     BigInt   @map("tenant_id")
+  transitionId BigInt   @map("transition_id")
+  kind         RuleKind
+  ruleType     String   @map("rule_type") @db.VarChar(64) // e.g. "assignee-is-current-user", "required-fields", "set-resolution"
+  config       Json
+  position     Int      @default(0)
+
+  transition WorkflowTransition @relation(fields: [transitionId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, transitionId, kind, position])
+  @@map("transition_rule")
+}
+
+enum RuleKind {
+  CONDITION
+  VALIDATOR
+  POST_FUNCTION
+}
+
+// ผูก (project × issueType) → workflow — นี่คือกลไกที่ทำให้ Incident กับ Story
+// อยู่ตาราง work_item เดียวกันได้โดยมีพฤติกรรมคนละแบบ
+model WorkflowScheme {
+  id          BigInt @id @default(autoincrement())
+  tenantId    BigInt @map("tenant_id")
+  projectId   BigInt @map("project_id")
+  issueTypeId BigInt @map("issue_type_id")
+  workflowId  BigInt @map("workflow_id")
+
+  project   Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  issueType IssueType @relation(fields: [issueTypeId], references: [id], onDelete: Cascade)
+  workflow  Workflow  @relation(fields: [workflowId], references: [id], onDelete: Restrict)
+
+  @@unique([projectId, issueTypeId])
+  @@index([tenantId, workflowId])
+  @@map("workflow_scheme")
+}
+
+// ============================================================
+// CUSTOM FIELD (ADR-001: EAV + JSON snapshot)
+// ============================================================
+
+model FieldDefinition {
+  id        BigInt    @id @default(autoincrement())
+  tenantId  BigInt    @map("tenant_id")
+  key       String    @db.VarChar(64)
+  name      String    @db.VarChar(255)
+  type      FieldType
+  options   Json? // ตัวเลือกของ SELECT/MULTI_SELECT — อ่านอย่างเดียว ไม่ใช้ query
+  isSystem  Boolean   @default(false) @map("is_system") // ฟิลด์ระบบ เช่น summary, priority — ห้ามลบ
+  createdAt DateTime  @default(now()) @map("created_at") @db.DateTime(3)
+
+  tenant  Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  configs FieldConfig[]
+  values  WorkItemFieldValue[]
+
+  @@unique([tenantId, key])
+  @@map("field_definition")
+}
+
+enum FieldType {
+  TEXT
+  TEXTAREA
+  RICH_TEXT
+  NUMBER
+  DECIMAL
+  DATE
+  DATETIME
+  CHECKBOX
+  SELECT
+  MULTI_SELECT
+  USER
+  MULTI_USER
+  LABELS
+  URL
+}
+
+// ฟิลด์ตัวไหนแสดง/บังคับกรอก ในโปรเจกต์และประเภทงานไหน
+model FieldConfig {
+  id          BigInt  @id @default(autoincrement())
+  tenantId    BigInt  @map("tenant_id")
+  projectId   BigInt  @map("project_id")
+  issueTypeId BigInt  @map("issue_type_id")
+  fieldId     BigInt  @map("field_id")
+  isRequired  Boolean @default(false) @map("is_required")
+  isVisible   Boolean @default(true) @map("is_visible")
+  position    Int     @default(0)
+
+  project   Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  issueType IssueType       @relation(fields: [issueTypeId], references: [id], onDelete: Cascade)
+  field     FieldDefinition @relation(fields: [fieldId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, issueTypeId, fieldId])
+  @@index([tenantId, projectId, issueTypeId, position])
+  @@map("field_config")
+}
+
+// ============================================================
+// CORE WORK ITEM
+// ============================================================
+
+model WorkItem {
+  id       BigInt @id @default(autoincrement())
+  tenantId BigInt @map("tenant_id")
+
+  itemKey     String @map("item_key") @db.VarChar(32) // "SD-1042" — คีย์ที่มนุษย์อ่าน
+  projectId   BigInt @map("project_id")
+  issueTypeId BigInt @map("issue_type_id")
+
+  summary     String @db.VarChar(500)
+  description Json? // rich text เป็น structured document ไม่ใช่ HTML ดิบ
+
+  statusId     BigInt @map("status_id")
+  priorityId   Int?   @map("priority_id")
+  resolutionId Int?   @map("resolution_id")
+
+  reporterId BigInt  @map("reporter_id")
+  assigneeId BigInt? @map("assignee_id")
+  parentId   BigInt? @map("parent_id")
+
+  // LexoRank (ADR-002) — สตริงเรียงลำดับได้ ทำให้ลากการ์ดเป็น UPDATE แถวเดียว
+  // ต้องใช้ collation utf8mb4_bin — ตั้งใน migration แยก
+  rank String @db.VarChar(255)
+
+  storyPoints   Decimal? @map("story_points") @db.Decimal(6, 2)
+  timeOriginal  Int?     @map("time_original") // วินาที
+  timeSpent     Int?     @map("time_spent") // วินาที
+  timeRemaining Int?     @map("time_remaining") // วินาที
+
+  dueDate DateTime? @map("due_date") @db.DateTime(3)
+
+  // สำเนาอ่านอย่างเดียวของ custom field — ห้ามอ่านไปเขียนต่อ (CLAUDE.md §3)
+  fieldSnapshot Json? @map("field_snapshot")
+  // สถานะนาฬิกา SLA ที่ denormalize ไว้ เพื่อให้คิวเรนเดอร์แถบเวลาได้โดยไม่ JOIN
+  slaState      Json? @map("sla_state")
+
+  createdAt  DateTime  @default(now()) @map("created_at") @db.DateTime(3)
+  updatedAt  DateTime  @updatedAt @map("updated_at") @db.DateTime(3)
+  resolvedAt DateTime? @map("resolved_at") @db.DateTime(3) // ฐานของ MTTR ทุกรายงาน
+
+  tenant     Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  project    Project        @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  issueType  IssueType      @relation(fields: [issueTypeId], references: [id], onDelete: Restrict)
+  status     WorkflowStatus @relation(fields: [statusId], references: [id], onDelete: Restrict)
+  priority   Priority?      @relation(fields: [priorityId], references: [id], onDelete: SetNull)
+  resolution Resolution?    @relation(fields: [resolutionId], references: [id], onDelete: SetNull)
+  reporter   User           @relation("WorkItemReporter", fields: [reporterId], references: [id], onDelete: Restrict)
+  assignee   User?          @relation("WorkItemAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  parent     WorkItem?      @relation("WorkItemHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
+  children   WorkItem[]     @relation("WorkItemHierarchy")
+
+  fieldValues WorkItemFieldValue[]
+  comments    WorkItemComment[]
+  attachments WorkItemAttachment[]
+  watchers    WorkItemWatcher[]
+  history     WorkItemHistory[]
+  keyAliases  WorkItemKeyAlias[]
+  linksOut    WorkItemLink[]       @relation("LinkSource")
+  linksIn     WorkItemLink[]       @relation("LinkTarget")
+
+  @@unique([tenantId, itemKey])
+  @@index([tenantId, projectId, statusId])
+  @@index([tenantId, assigneeId, statusId])
+  @@index([tenantId, projectId, rank])
+  @@index([tenantId, parentId])
+  @@index([tenantId, updatedAt])
+  @@index([tenantId, resolvedAt])
+  @@map("work_item")
+}
+
+// คีย์เดิมหลังย้ายงานข้ามโปรเจกต์ — เก็บไว้ตลอดไปเพื่อให้ลิงก์เก่าและอีเมลเก่ายังใช้ได้
+model WorkItemKeyAlias {
+  id         BigInt   @id @default(autoincrement())
+  tenantId   BigInt   @map("tenant_id")
+  oldKey     String   @map("old_key") @db.VarChar(32)
+  workItemId BigInt   @map("work_item_id")
+  movedAt    DateTime @default(now()) @map("moved_at") @db.DateTime(3)
+
+  workItem WorkItem @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, oldKey])
+  @@index([tenantId, workItemId])
+  @@map("work_item_key_alias")
+}
+
+// แหล่งความจริงของ custom field — แยกคอลัมน์ตามชนิดเพื่อให้ index และเปรียบเทียบได้ถูกชนิด
+model WorkItemFieldValue {
+  id         BigInt @id @default(autoincrement())
+  tenantId   BigInt @map("tenant_id")
+  workItemId BigInt @map("work_item_id")
+  fieldId    BigInt @map("field_id")
+
+  valueText   String?   @map("value_text") @db.Text
+  valueNumber Decimal?  @map("value_number") @db.Decimal(20, 6)
+  valueDate   DateTime? @map("value_date") @db.DateTime(3)
+  valueBool   Boolean?  @map("value_bool")
+  valueRefId  BigInt?   @map("value_ref_id") // อ้างถึง user / option id
+
+  workItem WorkItem        @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+  field    FieldDefinition @relation(fields: [fieldId], references: [id], onDelete: Cascade)
+
+  @@unique([workItemId, fieldId, valueRefId])
+  @@index([tenantId, fieldId, valueNumber])
+  @@index([tenantId, fieldId, valueDate])
+  @@index([tenantId, fieldId, valueRefId])
+  @@map("work_item_field_value")
+}
+
+model WorkItemLink {
+  id        BigInt   @id @default(autoincrement())
+  tenantId  BigInt   @map("tenant_id")
+  sourceId  BigInt   @map("source_id")
+  targetId  BigInt   @map("target_id")
+  type      LinkType
+  createdAt DateTime @default(now()) @map("created_at") @db.DateTime(3)
+
+  source WorkItem @relation("LinkSource", fields: [sourceId], references: [id], onDelete: Cascade)
+  target WorkItem @relation("LinkTarget", fields: [targetId], references: [id], onDelete: Cascade)
+
+  @@unique([sourceId, targetId, type])
+  @@index([tenantId, targetId])
+  @@map("work_item_link")
+}
+
+enum LinkType {
+  RELATES_TO
+  BLOCKS
+  IS_BLOCKED_BY
+  DUPLICATES
+  CAUSES
+  IS_CAUSED_BY
+}
+
+model WorkItemComment {
+  id         BigInt    @id @default(autoincrement())
+  tenantId   BigInt    @map("tenant_id")
+  workItemId BigInt    @map("work_item_id")
+  authorId   BigInt    @map("author_id")
+  body       Json // structured document — sanitize ที่ชั้น service
+  isInternal Boolean   @default(false) @map("is_internal") // true = ไม่แสดงใน Service Portal
+  createdAt  DateTime  @default(now()) @map("created_at") @db.DateTime(3)
+  updatedAt  DateTime  @updatedAt @map("updated_at") @db.DateTime(3)
+  deletedAt  DateTime? @map("deleted_at") @db.DateTime(3) // soft delete — audit ต้องยังตอบได้ว่าเคยมี
+
+  workItem WorkItem @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+  author   User     @relation(fields: [authorId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, workItemId, createdAt])
+  @@map("work_item_comment")
+}
+
+model WorkItemAttachment {
+  id         BigInt     @id @default(autoincrement())
+  tenantId   BigInt     @map("tenant_id")
+  workItemId BigInt     @map("work_item_id")
+  uploaderId BigInt     @map("uploader_id")
+  filename   String     @db.VarChar(500)
+  mimeType   String     @map("mime_type") @db.VarChar(255)
+  sizeBytes  BigInt     @map("size_bytes")
+  storageKey String     @map("storage_key") @db.VarChar(1000) // path ใน MinIO/S3
+  scanStatus ScanStatus @default(PENDING) @map("scan_status")
+  createdAt  DateTime   @default(now()) @map("created_at") @db.DateTime(3)
+
+  workItem WorkItem @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+  uploader User     @relation(fields: [uploaderId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, workItemId])
+  @@map("work_item_attachment")
+}
+
+enum ScanStatus {
+  PENDING
+  CLEAN
+  INFECTED
+  FAILED
+}
+
+model WorkItemWatcher {
+  workItemId BigInt   @map("work_item_id")
+  userId     BigInt   @map("user_id")
+  tenantId   BigInt   @map("tenant_id")
+  addedAt    DateTime @default(now()) @map("added_at") @db.DateTime(3)
+
+  workItem WorkItem @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([workItemId, userId])
+  @@index([tenantId, userId])
+  @@map("work_item_watcher")
+}
+
+// append-only — เขียนในทรานแซกชันเดียวกับการแก้ข้อมูล (CLAUDE.md §1 invariant 2)
+model WorkItemHistory {
+  id         BigInt   @id @default(autoincrement())
+  tenantId   BigInt   @map("tenant_id")
+  workItemId BigInt   @map("work_item_id")
+  actorId    BigInt?  @map("actor_id") // null = ระบบ · ดู isSystem บน user สำหรับ Automation
+  field      String   @db.VarChar(64) // "status", "assignee", "customfield_12" หรือ "__transition__"
+  oldValue   String?  @map("old_value") @db.Text
+  newValue   String?  @map("new_value") @db.Text
+  traceId    String?  @map("trace_id") @db.VarChar(64)
+  createdAt  DateTime @default(now()) @map("created_at") @db.DateTime(3)
+
+  workItem WorkItem @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+  actor    User?    @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, workItemId, createdAt])
+  @@index([tenantId, field, createdAt])
+  @@map("work_item_history")
+}

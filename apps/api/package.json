@@ -1,0 +1,22 @@
+{
+  "name": "@itsm/api",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "dev": "echo \"api dev server: Phase 0 pending\"",
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "echo \"eslint: Phase 0 pending\"",
+    "test": "echo \"tests: Phase 0 pending\"",
+    "prisma:validate": "prisma validate",
+    "prisma:format": "prisma format"
+  },
+  "devDependencies": {
+    "prisma": "^6.1.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.1.0"
+  }
+}

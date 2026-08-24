@@ -1,0 +1,31 @@
+{
+  "name": "itsm",
+  "version": "0.0.1",
+  "private": true,
+  "packageManager": "pnpm@10.32.1",
+  "engines": {
+    "node": ">=22.0.0",
+    "pnpm": ">=10.0.0"
+  },
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "db:up": "docker compose --env-file .env -f infra/compose/docker-compose.yml up -d",
+    "db:down": "docker compose --env-file .env -f infra/compose/docker-compose.yml down",
+    "db:logs": "docker compose --env-file .env -f infra/compose/docker-compose.yml logs -f",
+    "db:reset": "docker compose --env-file .env -f infra/compose/docker-compose.yml down -v && pnpm db:up",
+    "db:migrate": "pnpm --filter @itsm/api exec prisma migrate dev",
+    "db:generate": "pnpm --filter @itsm/api exec prisma generate",
+    "db:studio": "pnpm --filter @itsm/api exec prisma studio",
+    "db:seed": "pnpm --filter @itsm/api exec tsx prisma/seed.ts",
+    "format": "prettier --write \"**/*.{ts,tsx,js,json,md,yml,css}\""
+  },
+  "devDependencies": {
+    "prettier": "^3.3.3",
+    "turbo": "^2.3.3",
+    "typescript": "^5.7.2"
+  }
+}
