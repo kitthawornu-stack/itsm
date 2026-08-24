@@ -1,1 +1,2 @@
-export * from './components/index';
+export * from './components/presentational';
+export * from './components/interactive';

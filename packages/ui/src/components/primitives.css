@@ -113,6 +113,8 @@
   font-family: var(--font-mono);
   font-size: 10.5px;
   color: var(--text-muted);
+  /* ห้ามตัดบรรทัด — "P1 Critical" ที่ขึ้นสองบรรทัดทำให้ความสูงแถวไม่เท่ากันทั้งคิว */
+  white-space: nowrap;
 }
 
 .ui-priority-bar {

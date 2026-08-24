@@ -33,3 +33,7 @@ packages/*/node_modules/.prisma/
 
 # build artifacts of the docs page
 docs/.build/
+
+# next.js
+apps/web/.next/
+apps/web/next-env.d.ts

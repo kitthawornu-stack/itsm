@@ -16,7 +16,22 @@ import {
   buildTextQuery,
   workItemIndexName,
 } from './index-mapping';
-import { openSearch } from './opensearch-client';
+import { OpenSearchError, openSearch } from './opensearch-client';
+
+/**
+ * ดัชนียังไม่ถูกสร้าง — ไม่ใช่ error ของผู้ใช้ และ **ห้ามกลืนเป็นผลลัพธ์ว่าง**
+ * เพราะผลว่างจะทำให้ผู้ใช้เชื่อว่า "ไม่มีข้อมูล" ทั้งที่จริงคือระบบค้นหายังไม่พร้อม
+ * ต้องแยกออกมาให้ชั้นบนแสดงข้อความที่ถูกต้องและให้ทีมงานเห็นใน alert
+ */
+export class SearchIndexNotReadyError extends Error {
+  constructor(readonly index: string) {
+    super(
+      `ดัชนีค้นหา "${index}" ยังไม่ถูกสร้าง — ` +
+        'รัน `pnpm --filter @itsm/api reindex` เพื่อสร้างจาก MySQL',
+    );
+    this.name = 'SearchIndexNotReadyError';
+  }
+}
 
 export interface WorkItemDoc {
   tenantId: number;
@@ -131,7 +146,13 @@ export async function searchWorkItems(
     text,
     ...(opts.projectIds === undefined ? {} : { projectIds: opts.projectIds }),
   });
-  const hits = await openSearch.search<WorkItemDoc>(index, query, opts.size ?? 20);
+  let hits;
+  try {
+    hits = await openSearch.search<WorkItemDoc>(index, query, opts.size ?? 20);
+  } catch (e) {
+    if (e instanceof OpenSearchError && e.status === 404) throw new SearchIndexNotReadyError(index);
+    throw e;
+  }
   return hits.map((h) => ({
     itemKey: h.source.itemKey,
     summary: h.source.summary,

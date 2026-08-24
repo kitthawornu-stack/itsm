@@ -13,7 +13,8 @@
     "test:watch": "dotenv -e ../../.env -- vitest",
     "prisma:generate": "dotenv -e ../../.env -- prisma generate",
     "seed": "dotenv -e ../../.env -- tsx prisma/seed.ts",
-    "start": "node dist/main.js"
+    "start": "node dist/main.js",
+    "reindex": "dotenv -e ../../.env -- tsx src/scripts/reindex.ts"
   },
   "devDependencies": {
     "prisma": "^6.1.0",
