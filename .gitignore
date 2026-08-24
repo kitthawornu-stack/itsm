@@ -37,3 +37,6 @@ docs/.build/
 # next.js
 apps/web/.next/
 apps/web/next-env.d.ts
+
+# storybook
+packages/ui/storybook-static/

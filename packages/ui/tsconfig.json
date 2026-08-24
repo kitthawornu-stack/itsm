@@ -1,8 +1,25 @@
 {
   "compilerOptions": {
-    "target": "ES2023", "module": "ESNext", "moduleResolution": "Bundler",
-    "lib": ["ES2023", "DOM"], "jsx": "react-jsx", "strict": true,
-    "noUncheckedIndexedAccess": true, "skipLibCheck": true, "noEmit": true
+    "target": "ES2023",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "lib": [
+      "ES2023",
+      "DOM"
+    ],
+    "jsx": "react-jsx",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "types": [
+      "node"
+    ]
   },
-  "include": ["src/**/*.ts", "src/**/*.tsx"]
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.tsx",
+    ".storybook/**/*.ts",
+    ".storybook/**/*.tsx"
+  ]
 }

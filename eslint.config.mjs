@@ -41,6 +41,7 @@ export default tseslint.config(
       'apps/web/next-env.d.ts',
       // ไฟล์คอนฟิกของเครื่องมือ ไม่อยู่ใน tsconfig ของแอปจึง type-check ไม่ได้
       '**/vitest.config.ts',
+      '**/storybook-static/**',
     ],
   },
 
