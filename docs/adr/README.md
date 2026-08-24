@@ -5,11 +5,11 @@
 
 | ADR | หัวข้อ | สถานะ | เจ้าของ |
 |---|---|---|---|
-| [001](ADR-001-custom-field-storage.md) | วิธีเก็บ Custom Field | 🟡 ร่าง | Tech Lead |
-| [002](ADR-002-lexorank.md) | การจัดลำดับงานด้วย LexoRank | 🟡 ร่าง | Tech Lead |
+| [001](ADR-001-custom-field-storage.md) | วิธีเก็บ Custom Field | 🟢 ยอมรับ (Spike B · snapshot เร็วกว่า 7.4x) | Tech Lead |
+| [002](ADR-002-lexorank.md) | การจัดลำดับงานด้วย LexoRank | 🟢 ยอมรับ (Spike D · 19 เคสผ่าน) | Tech Lead |
 | [003](ADR-003-identity.md) | Keycloak หรือ In-house Auth | 🔴 ต้องตัดสิน | Tech Lead |
 | [004](ADR-004-modular-monolith.md) | Modular Monolith ไม่ใช่ Microservices | 🟡 ร่าง | Tech Lead |
-| [005](ADR-005-search.md) | OpenSearch เป็นแหล่งค้นหาเดียว | 🟡 ร่าง | BE Lead |
+| [005](ADR-005-search.md) | OpenSearch เป็นแหล่งค้นหาเดียว | 🟢 ยอมรับ (Spike C · 69 เคสผ่าน) | BE Lead |
 
 **สถานะ:** 🔴 ต้องตัดสิน · 🟡 ร่าง (รอเซ็นรับ) · 🟢 ยอมรับแล้ว · ⚫ ถูกแทนที่
 

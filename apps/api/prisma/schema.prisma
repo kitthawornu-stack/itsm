@@ -553,10 +553,17 @@ model WorkItemFieldValue {
   valueBool   Boolean?  @map("value_bool")
   valueRefId  BigInt?   @map("value_ref_id") // อ้างถึง user / option id
 
+  // ลำดับของค่าในฟิลด์หลายค่า (multi-select, labels, multi-user) — ค่าเดี่ยวใช้ 0
+  //
+  // Spike B พบว่า unique เดิม (workItemId, fieldId, valueRefId) ใช้ไม่ได้:
+  // ฟิลด์หลายค่าที่เก็บเป็นข้อความมี valueRefId = NULL ทุกแถว จึงชนกันเอง
+  // และไม่มีทางรักษาลำดับที่ผู้ใช้เลือกไว้
+  position Int @default(0)
+
   workItem WorkItem        @relation(fields: [workItemId], references: [id], onDelete: Cascade)
   field    FieldDefinition @relation(fields: [fieldId], references: [id], onDelete: Cascade)
 
-  @@unique([workItemId, fieldId, valueRefId])
+  @@unique([workItemId, fieldId, position])
   @@index([tenantId, fieldId, valueNumber])
   @@index([tenantId, fieldId, valueDate])
   @@index([tenantId, fieldId, valueRefId])
