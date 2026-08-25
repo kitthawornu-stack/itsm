@@ -67,6 +67,11 @@ export interface InputProps {
   invalid?: boolean;
   /** ข้อความบอกว่าเกิดอะไรและต้องทำอะไรต่อ — ไม่ขอโทษ ไม่คลุมเครือ */
   errorMessage?: string;
+  /**
+   * เพดานความยาว — กันไว้ที่หน้าจอ ไม่ใช่ให้เซิร์ฟเวอร์ตัดทีหลัง
+   * ข้อความที่ถูกตัดเงียบ ๆ ผู้ใช้จะรู้ตอนเปิดกลับมาอ่านแล้วเท่านั้น
+   */
+  maxLength?: number;
   id?: string;
 }
 
@@ -76,6 +81,7 @@ export function Input({
   placeholder,
   invalid = false,
   errorMessage,
+  maxLength,
   id,
 }: InputProps): ReactNode {
   const errorId = id === undefined ? undefined : `${id}-error`;
@@ -86,12 +92,18 @@ export function Input({
         id={id}
         value={value}
         placeholder={placeholder}
+        maxLength={maxLength}
         aria-invalid={invalid}
         aria-describedby={invalid ? errorId : undefined}
         onChange={(e) => {
           onChange(e.target.value);
         }}
       />
+      {maxLength === undefined || value.length <= maxLength * 0.9 ? null : (
+        <span className="ui-textarea-count" data-near="true">
+          {value.length} / {maxLength}
+        </span>
+      )}
       {invalid && errorMessage !== undefined ? (
         <span id={errorId} role="alert" className="ui-sla-label" data-state="critical">
           {errorMessage}
@@ -206,3 +218,154 @@ export function WorkItemRow({
   );
 }
 
+// ============================================================
+
+export interface SelectOption {
+  value: string;
+  label: string;
+}
+
+export interface SelectProps {
+  value: string;
+  onChange: (value: string) => void;
+  options: readonly SelectOption[];
+  /**
+   * ตัวเลือกแรกที่ยังไม่ได้เลือก — ใส่เมื่อ "ยังไม่เลือก" เป็นสถานะที่ถูกต้อง
+   * ถ้าไม่ใส่ ค่าแรกจะถูกเลือกให้เลย ซึ่งทำให้ผู้ใช้ส่งค่าที่ไม่ได้ตั้งใจ
+   */
+  placeholder?: string;
+  invalid?: boolean;
+  errorMessage?: string;
+  disabled?: boolean;
+  id?: string;
+}
+
+/**
+ * ใช้ `<select>` ของเบราว์เซอร์โดยตั้งใจ ไม่ทำ dropdown เอง
+ *
+ * ของเบราว์เซอร์ได้คีย์บอร์ด การพิมพ์เพื่อกระโดด และตัวเลือกแบบเนทีฟบนมือถือ
+ * มาฟรีทั้งหมด ซึ่ง dropdown ที่เขียนเองต้องทำใหม่ทุกอย่างและมักทำได้ไม่ครบ
+ * เมื่อต้องการค้นหาในตัวเลือกหรือเลือกหลายค่า ค่อยเพิ่มคอมโพเนนต์แยกต่างหาก
+ */
+export function Select({
+  value,
+  onChange,
+  options,
+  placeholder,
+  invalid = false,
+  errorMessage,
+  disabled = false,
+  id,
+}: SelectProps): ReactNode {
+  const errorId = id === undefined ? undefined : `${id}-error`;
+  return (
+    <>
+      <select
+        className="ui-select"
+        id={id}
+        value={value}
+        disabled={disabled}
+        aria-invalid={invalid}
+        aria-describedby={invalid ? errorId : undefined}
+        onChange={(e) => {
+          onChange(e.target.value);
+        }}
+      >
+        {placeholder === undefined ? null : (
+          <option value="">{placeholder}</option>
+        )}
+        {options.map((o) => (
+          <option key={o.value} value={o.value}>
+            {o.label}
+          </option>
+        ))}
+      </select>
+      {invalid && errorMessage !== undefined ? (
+        <span id={errorId} role="alert" className="ui-sla-label" data-state="critical">
+          {errorMessage}
+        </span>
+      ) : null}
+    </>
+  );
+}
+
+// ============================================================
+
+export interface TextareaProps {
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+  rows?: number;
+  invalid?: boolean;
+  errorMessage?: string;
+  /** แสดงตัวนับเมื่อมีเพดาน — ผู้ใช้ต้องรู้ก่อนถูกตัด ไม่ใช่หลังจากส่งไปแล้ว */
+  maxLength?: number;
+  id?: string;
+}
+
+export function Textarea({
+  value,
+  onChange,
+  placeholder,
+  rows = 4,
+  invalid = false,
+  errorMessage,
+  maxLength,
+  id,
+}: TextareaProps): ReactNode {
+  const errorId = id === undefined ? undefined : `${id}-error`;
+  // เตือนเมื่อเหลือน้อยกว่า 10% ของเพดาน ไม่ใช่ตอนเต็มแล้ว
+  const near = maxLength !== undefined && value.length > maxLength * 0.9;
+  return (
+    <>
+      <textarea
+        className="ui-textarea"
+        id={id}
+        value={value}
+        rows={rows}
+        placeholder={placeholder}
+        maxLength={maxLength}
+        aria-invalid={invalid}
+        aria-describedby={invalid ? errorId : undefined}
+        onChange={(e) => {
+          onChange(e.target.value);
+        }}
+      />
+      {maxLength === undefined ? null : (
+        <span className="ui-textarea-count" data-near={near ? 'true' : 'false'}>
+          {value.length} / {maxLength}
+        </span>
+      )}
+      {invalid && errorMessage !== undefined ? (
+        <span id={errorId} role="alert" className="ui-sla-label" data-state="critical">
+          {errorMessage}
+        </span>
+      ) : null}
+    </>
+  );
+}
+
+// ============================================================
+
+export interface FieldProps {
+  label: string;
+  htmlFor: string;
+  /** ป้ายบอกว่าต้องกรอก — ไม่ใช่ดอกจันลอย ๆ ที่ screen reader อ่านว่า "ดาว" */
+  required?: boolean;
+  /** คำอธิบายใต้ป้าย สำหรับสิ่งที่ป้ายอย่างเดียวบอกไม่หมด */
+  hint?: string;
+  children: ReactNode;
+}
+
+export function Field({ label, htmlFor, required = false, hint, children }: FieldProps): ReactNode {
+  return (
+    <div className="ui-field">
+      <label className="ui-field-label" htmlFor={htmlFor}>
+        {label}
+        {required ? <span className="ui-field-required"> จำเป็น</span> : null}
+      </label>
+      {hint === undefined ? null : <span className="ui-field-hint">{hint}</span>}
+      {children}
+    </div>
+  );
+}
