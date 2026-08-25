@@ -10,7 +10,7 @@
  */
 import type { TenantContext } from '@itsm/types';
 
-import { tenantScoped } from '../../infrastructure/prisma/tenant-scope';
+import { tenantScoped, type Prisma } from '../../infrastructure/prisma/tenant-scope';
 import {
   WORK_ITEM_INDEX_SETTINGS,
   buildTextQuery,
@@ -64,6 +64,74 @@ export async function ensureIndex(tenantId: bigint): Promise<string> {
 }
 
 /** สร้างดัชนีใหม่ทั้งหมดจาก MySQL — ปลอดภัยเสมอ เพราะ MySQL คือแหล่งความจริง */
+/** ตารางที่ต้อง include ครบก่อนแปลงเป็นเอกสารค้นหา */
+const INDEX_INCLUDE = {
+  project: true,
+  issueType: true,
+  status: true,
+  priority: true,
+} as const;
+
+/**
+ * ดึงข้อความออกจาก description ที่เก็บเป็น structured document
+ *
+ * `description` เป็นคอลัมน์ JSON เสมอ ไม่เคยเป็นสตริง โค้ดเดิมเช็ก `typeof === 'string'`
+ * จึงได้ค่าว่างทุกครั้ง แปลว่ารายละเอียดของงานไม่เคยถูกค้นเจอเลยสักใบ
+ * ตอนที่ยังไม่มีทางกรอกรายละเอียดมันไม่มีผล ตอนนี้มีแล้วจึงต้องแก้
+ */
+function descriptionText(value: unknown): string {
+  if (typeof value === 'string') return value;
+  if (value === null || typeof value !== 'object') return '';
+  const doc = value as Record<string, unknown>;
+  return typeof doc['text'] === 'string' ? doc['text'] : '';
+}
+
+type IndexableWorkItem = Prisma.WorkItemGetPayload<{ include: typeof INDEX_INCLUDE }>;
+
+function toDoc(w: IndexableWorkItem): WorkItemDoc {
+  return {
+    tenantId: Number(w.tenantId),
+    projectId: Number(w.projectId),
+    projectKey: w.project.key,
+    itemKey: w.itemKey,
+    issueTypeId: Number(w.issueTypeId),
+    issueTypeName: w.issueType.name,
+    statusId: Number(w.statusId),
+    statusName: w.status.name,
+    statusCategory: w.status.category,
+    priorityId: w.priorityId,
+    priorityRank: w.priority?.rank ?? null,
+    reporterId: Number(w.reporterId),
+    assigneeId: w.assigneeId === null ? null : Number(w.assigneeId),
+    parentId: w.parentId === null ? null : Number(w.parentId),
+    summary: w.summary,
+    description: descriptionText(w.description),
+    createdAt: w.createdAt.toISOString(),
+    updatedAt: w.updatedAt.toISOString(),
+    resolvedAt: w.resolvedAt?.toISOString() ?? null,
+  };
+}
+
+/**
+ * จัดดัชนีงานใบเดียว — ใช้ตอนสร้างหรือแก้ไข
+ *
+ * ไม่สร้างดัชนีใหม่ ถ้าดัชนียังไม่มีให้สร้างก่อน (`ensureIndex`)
+ * เพื่อไม่ให้งานใบแรกของ tenant ใหม่หายไปเงียบ ๆ
+ */
+export async function indexWorkItem(ctx: TenantContext, workItemId: bigint): Promise<boolean> {
+  const db = tenantScoped(ctx);
+  const w = await db.workItem.findFirst({
+    where: { id: workItemId },
+    include: INDEX_INCLUDE,
+  });
+  if (w === null) return false;
+
+  const index = await ensureIndex(ctx.tenantId);
+  await openSearch.bulkIndex(index, [{ id: w.itemKey, doc: toDoc(w) }]);
+  await openSearch.refresh(index);
+  return true;
+}
+
 export async function reindexAll(
   ctx: TenantContext,
   opts: { batchSize?: number; onProgress?: (done: number, total: number) => void } = {},
@@ -92,30 +160,7 @@ export async function reindexAll(
 
     await openSearch.bulkIndex(
       index,
-      rows.map((w) => ({
-        id: w.itemKey,
-        doc: {
-          tenantId: Number(w.tenantId),
-          projectId: Number(w.projectId),
-          projectKey: w.project.key,
-          itemKey: w.itemKey,
-          issueTypeId: Number(w.issueTypeId),
-          issueTypeName: w.issueType.name,
-          statusId: Number(w.statusId),
-          statusName: w.status.name,
-          statusCategory: w.status.category,
-          priorityId: w.priorityId,
-          priorityRank: w.priority?.rank ?? null,
-          reporterId: Number(w.reporterId),
-          assigneeId: w.assigneeId === null ? null : Number(w.assigneeId),
-          parentId: w.parentId === null ? null : Number(w.parentId),
-          summary: w.summary,
-          description: typeof w.description === 'string' ? w.description : '',
-          createdAt: w.createdAt.toISOString(),
-          updatedAt: w.updatedAt.toISOString(),
-          resolvedAt: w.resolvedAt?.toISOString() ?? null,
-        } satisfies WorkItemDoc,
-      })),
+      rows.map((w) => ({ id: w.itemKey, doc: toDoc(w) })),
     );
 
     done += rows.length;
