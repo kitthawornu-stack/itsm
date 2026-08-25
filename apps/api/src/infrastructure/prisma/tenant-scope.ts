@@ -157,7 +157,12 @@ export async function tenantTransaction<T>(
   ctx: TenantContext,
   fn: (tx: TxScopedClient) => Promise<T>,
 ): Promise<T> {
-  return prismaClient.$transaction(async (tx) => fn(tx));
+  // **ต้องเปิดทรานแซกชันจาก client ที่ extend แล้ว** ไม่ใช่ `prismaClient` ดิบ
+  // Prisma ส่ง extension ต่อเข้าไปใน tx ให้ก็ต่อเมื่อเปิดจาก client ที่มี extension
+  // ถ้าเปิดจาก client ดิบ ทุกคิวรีใน tx จะไม่มี tenant scope เลยทั้งก้อน
+  // — พิสูจน์ไว้ใน test/tenant-isolation.spec.ts ข้อ 9
+  const scoped = tenantScoped(ctx) as unknown as PrismaClientRaw;
+  return scoped.$transaction(async (tx) => fn(tx));
 }
 
 export type TxScopedClient = Parameters<Parameters<PrismaClientRaw['$transaction']>[0]>[0];

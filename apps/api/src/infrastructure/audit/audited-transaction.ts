@@ -11,7 +11,8 @@
  */
 import type { TenantContext } from '@itsm/types';
 
-import { prismaClient, type PrismaClientRaw } from '../prisma/client';
+import { type PrismaClientRaw } from '../prisma/client';
+import { tenantScoped } from '../prisma/tenant-scope';
 
 /** ทรานแซกชัน client ของ Prisma — ไม่มี $transaction / $connect ให้เรียกซ้อน */
 export type TxClient = Parameters<Parameters<PrismaClientRaw['$transaction']>[0]>[0];
@@ -64,9 +65,12 @@ export async function auditedTransaction<T>(
   ctx: TenantContext,
   operation: string,
   fn: (tx: TxClient) => Promise<AuditedResult<T>>,
-  base: PrismaClientRaw = prismaClient,
+  base?: PrismaClientRaw,
 ): Promise<T> {
-  return base.$transaction(async (tx) => {
+  // ค่าปริยายต้องเป็น client ที่ผูก tenant แล้ว ไม่ใช่ `prismaClient` ดิบ
+  // มิฉะนั้นคิวรีทุกตัวใน tx จะข้าม INVARIANT 1 — ซึ่งเคยเป็นอย่างนั้นจริง
+  const client = base ?? (tenantScoped(ctx) as unknown as PrismaClientRaw);
+  return client.$transaction(async (tx) => {
     const { result, audit } = await fn(tx);
 
     if (audit.length === 0) throw new MissingAuditError(operation);

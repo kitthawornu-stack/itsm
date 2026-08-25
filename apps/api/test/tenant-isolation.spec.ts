@@ -18,7 +18,8 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { prismaClient } from '../src/infrastructure/prisma/client';
-import { tenantScoped } from '../src/infrastructure/prisma/tenant-scope';
+import { tenantScoped, tenantTransaction } from '../src/infrastructure/prisma/tenant-scope';
+import { auditedTransaction } from '../src/infrastructure/audit/audited-transaction';
 import { CrossTenantAccessError, type TenantContext } from '@itsm/types';
 
 import { purgeTenants } from './helpers/cleanup';
@@ -135,5 +136,43 @@ describe('tenant isolation · INVARIANT 1', () => {
     for (const g of groups) {
       expect(g.tenantId).toBe(tenantA);
     }
+  });
+});
+
+/**
+ * 9 · ทรานแซกชัน
+ *
+ * จุดที่เผลอง่ายที่สุด: `tenantScoped()` คืน client ที่มี extension
+ * แต่ถ้าเปิดทรานแซกชันจาก client ดิบ ตัว `tx` ข้างในจะ **ไม่มี** extension
+ * แล้วทุกคิวรีในนั้นข้าม INVARIANT 1 ไปทั้งก้อนโดยไม่มีสัญญาณอะไรเลย
+ *
+ * เคสพวกนี้เขียนเพื่อตอบคำถามเดียว: `tx` กันข้าม tenant จริงไหม
+ */
+describe('INVARIANT 1 · ในทรานแซกชัน', () => {
+  it('9a · tenantTransaction — findMany ข้างในไม่เห็นข้อมูลของ tenant อื่น', async () => {
+    const seen = await tenantTransaction(ctxA, async (tx) => tx.user.findMany());
+    for (const u of seen) expect(u.tenantId).toBe(tenantA);
+  });
+
+  it('9b · tenantTransaction — findFirst ด้วย id ของ tenant อื่นต้องไม่เจอ', async () => {
+    const found = await tenantTransaction(ctxA, async (tx) =>
+      tx.user.findFirst({ where: { id: userBId } }),
+    );
+    expect(found).toBeNull();
+  });
+
+  it('9c · auditedTransaction — คิวรีข้างในก็ต้องถูกจำกัดเหมือนกัน', async () => {
+    const found = await auditedTransaction(ctxA, 'test.probe', async (tx) => ({
+      result: await tx.user.findFirst({ where: { id: userBId } }),
+      audit: [
+        {
+          kind: 'system' as const,
+          action: 'probe',
+          entityType: 'test',
+          entityId: '0',
+        },
+      ],
+    }));
+    expect(found).toBeNull();
   });
 });
