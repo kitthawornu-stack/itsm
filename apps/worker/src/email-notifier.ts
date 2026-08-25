@@ -27,6 +27,15 @@ export interface PendingNotification {
   /** null = การแจ้งเตือนระดับทีม ยังไม่ระบุตัวบุคคล */
   recipientEmail: string | null;
   recipientName: string | null;
+  /**
+   * ปลายทางระดับทีม ใช้เมื่อ `recipientEmail` เป็น null
+   *
+   * มาจากกลุ่มที่ผูกกับโปรเจกต์ของงานใบนั้น (`project.notifyGroupId`)
+   * งานที่ยังไม่มีผู้รับผิดชอบแล้ว SLA หลุด คือใบที่พลาดไม่ได้ที่สุด
+   * ถ้าไม่มีปลายทางต้องบันทึกว่าข้ามเพราะอะไร ไม่ใช่เงียบไป
+   */
+  teamEmails?: string[];
+  teamName?: string | null;
   /** อ่านแล้วก่อนที่จะส่ง = คนเห็นบนหน้าเว็บไปแล้ว */
   readAt: Date | null;
 }
@@ -43,11 +52,26 @@ export type Decision =
  */
 export function decide(n: PendingNotification): Decision {
   if (n.recipientEmail === null || n.recipientEmail.trim() === '') {
-    return {
-      send: false,
-      state: 'skipped',
-      reason: 'ไม่มีผู้รับที่ระบุตัวได้ (การแจ้งเตือนระดับทีม) — รอช่องทางของทีม',
-    };
+    /**
+     * ไม่มีตัวบุคคล → ลองปลายทางของทีม
+     *
+     * ตรวจ `readAt` **ก่อน** เพราะการแจ้งเตือนระดับทีมที่ถูกอ่านแล้ว
+     * แปลว่ามีคนในทีมเห็นและรับไปแล้ว การส่งอีเมลตามหลังจึงกวนเปล่า ๆ
+     */
+    if (n.readAt !== null) {
+      return { send: false, state: 'skipped', reason: 'มีคนในทีมอ่านบนหน้าเว็บไปแล้วก่อนส่ง' };
+    }
+    const valid = (n.teamEmails ?? []).map((e) => e.trim()).filter((e) => e.includes('@'));
+    if (valid.length === 0) {
+      return {
+        send: false,
+        state: 'skipped',
+        reason:
+          'ไม่มีผู้รับที่ระบุตัวได้ และโปรเจกต์ยังไม่ได้ตั้งกลุ่มรับแจ้งเตือน (project.notifyGroupId)',
+      };
+    }
+    // ส่งฉบับเดียวถึงทุกคนในทีม ไม่ใช่คนละฉบับ — การตอบกลับจะได้อยู่ที่เดียวกัน
+    return { send: true, to: valid.join(', ') };
   }
   if (!n.recipientEmail.includes('@')) {
     return { send: false, state: 'skipped', reason: `อีเมลผู้รับไม่ถูกรูปแบบ: ${n.recipientEmail}` };
@@ -73,6 +97,10 @@ export interface RenderedEmail {
 export function renderEmail(n: PendingNotification, webBaseUrl: string): RenderedEmail {
   const lines: string[] = [];
   if (n.recipientName !== null) lines.push(`เรียน ${n.recipientName}`, '');
+  else if (n.teamName !== null && n.teamName !== undefined) {
+    // ทีมต้องรู้ว่าทำไมถึงได้รับ — งานใบนี้ยังไม่มีใครรับผิดชอบ
+    lines.push(`เรียนทีม ${n.teamName}`, '', 'งานใบนี้ยังไม่มีผู้รับผิดชอบ', '');
+  }
   lines.push(n.title);
   if (n.body !== null && n.body.trim() !== '') lines.push('', n.body.trim());
   if (n.itemKey !== null) {

@@ -187,26 +187,44 @@ async function main(): Promise<void> {
       const [items, users] = await Promise.all([
         prisma.workItem.findMany({
           where: { id: { in: itemIds } },
-          select: { id: true, itemKey: true },
+          select: {
+            id: true,
+            itemKey: true,
+            // ปลายทางของการแจ้งเตือนระดับทีม ผูกอยู่กับโปรเจกต์ของงาน
+            project: {
+              select: {
+                notifyGroup: {
+                  select: {
+                    name: true,
+                    members: { select: { user: { select: { email: true } } } },
+                  },
+                },
+              },
+            },
+          },
         }),
         prisma.user.findMany({
           where: { id: { in: userIds } },
           select: { id: true, email: true, displayName: true },
         }),
       ]);
-      const keyById = new Map(items.map((i) => [i.id.toString(), i.itemKey]));
+      const itemById = new Map(items.map((i) => [i.id.toString(), i]));
       const userById = new Map(users.map((u) => [u.id.toString(), u]));
 
       return rows.map((r) => {
         const u = r.userId === null ? undefined : userById.get(r.userId.toString());
+        const item = r.workItemId === null ? undefined : itemById.get(r.workItemId.toString());
+        const group = item?.project.notifyGroup ?? null;
         return {
           id: r.id,
           tenantId: r.tenantId,
           title: r.title,
           body: r.body,
-          itemKey: r.workItemId === null ? null : (keyById.get(r.workItemId.toString()) ?? null),
+          itemKey: item?.itemKey ?? null,
           recipientEmail: u?.email ?? null,
           recipientName: u?.displayName ?? null,
+          teamEmails: group === null ? [] : group.members.map((m) => m.user.email),
+          teamName: group?.name ?? null,
           readAt: r.readAt,
         };
       });

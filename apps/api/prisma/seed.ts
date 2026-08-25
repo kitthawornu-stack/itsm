@@ -309,6 +309,8 @@ async function main(): Promise<void> {
       type: ProjectType.SERVICE_DESK,
       leadId: agents[0]!.id,
       permissionSchemeId: schemeSd.id,
+      // ปลายทางของงานที่ยังไม่มีผู้รับผิดชอบ — ถ้าไม่ตั้ง การแจ้งเตือนจะไปไม่ถึงใคร
+      notifyGroupId: groupIt.id,
     },
   });
   const projectPlat = await prisma.project.create({
@@ -319,6 +321,7 @@ async function main(): Promise<void> {
       type: ProjectType.SOFTWARE,
       leadId: devs[0]!.id,
       permissionSchemeId: schemeSw.id,
+      notifyGroupId: groupDev.id,
     },
   });
 

@@ -85,8 +85,9 @@ model UserGroup {
   updatedAt DateTime @updatedAt @map("updated_at") @db.DateTime(3)
 
   tenant  Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  members GroupMember[]
-  grants  PermissionGrant[]
+  members         GroupMember[]
+  grants          PermissionGrant[]
+  notifyProjects  Project[]         @relation("ProjectNotifyGroup")
 
   @@unique([tenantId, name])
   @@map("user_group")
@@ -199,6 +200,10 @@ model Project {
   description        String?     @db.Text
   type               ProjectType
   leadId             BigInt?     @map("lead_id")
+  /// กลุ่มที่รับการแจ้งเตือนของงานที่ยังไม่มีผู้รับผิดชอบ
+  /// null = ไม่มีปลายทาง การแจ้งเตือนระดับทีมของโปรเจกต์นี้จะไปไม่ถึงใคร
+  /// ซึ่งบันทึกไว้เป็น skipped พร้อมเหตุผล ไม่ใช่หายเงียบ
+  notifyGroupId      BigInt?     @map("notify_group_id")
   permissionSchemeId BigInt?     @map("permission_scheme_id")
   isArchived         Boolean     @default(false) @map("is_archived")
   createdAt          DateTime    @default(now()) @map("created_at") @db.DateTime(3)
@@ -206,6 +211,7 @@ model Project {
 
   tenant           Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   permissionScheme PermissionScheme? @relation(fields: [permissionSchemeId], references: [id], onDelete: SetNull)
+  notifyGroup      UserGroup?        @relation("ProjectNotifyGroup", fields: [notifyGroupId], references: [id], onDelete: SetNull)
   counter          ProjectCounter?
   slaPolicies      SlaPolicy[]
   workItems        WorkItem[]

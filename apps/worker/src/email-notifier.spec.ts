@@ -38,11 +38,36 @@ describe('decide', () => {
     expect(d).toMatchObject({ state: 'skipped' });
   });
 
-  it('การแจ้งเตือนระดับทีมที่ไม่มีผู้รับ = ข้าม พร้อมเหตุผล ไม่ใช่ค้างเป็น pending', () => {
+  it('การแจ้งเตือนระดับทีมที่โปรเจกต์ยังไม่ตั้งกลุ่ม = ข้าม พร้อมเหตุผลที่ชี้ทางแก้', () => {
     const d = decide(n({ recipientEmail: null }));
     expect(d).toMatchObject({ send: false, state: 'skipped' });
-    // เหตุผลต้องอ่านรู้เรื่องโดยไม่ต้องเปิด log — แถวที่ค้างโดยไม่มีเหตุผลสืบต่อไม่ได้
-    if (!d.send) expect(d.reason.length).toBeGreaterThan(10);
+    // เหตุผลต้องบอกว่าต้องไปแก้ที่ไหน ไม่ใช่แค่ว่าส่งไม่ได้
+    if (!d.send) expect(d.reason).toContain('notifyGroupId');
+  });
+
+  it('**การแจ้งเตือนระดับทีมส่งถึงทุกคนในกลุ่ม ฉบับเดียว**', () => {
+    // ฉบับเดียวถึงทุกคน ไม่ใช่คนละฉบับ — การตอบกลับจะได้อยู่ที่เดียวกัน
+    const d = decide(
+      n({ recipientEmail: null, teamEmails: ['a@x.test', 'b@x.test'], teamName: 'IT Support' }),
+    );
+    expect(d).toEqual({ send: true, to: 'a@x.test, b@x.test' });
+  });
+
+  it('กลุ่มที่มีแต่อีเมลผิดรูปแบบ = ข้าม ไม่ใช่ส่งไปที่ขยะ', () => {
+    const d = decide(n({ recipientEmail: null, teamEmails: ['ไม่ใช่อีเมล', '  '] }));
+    expect(d).toMatchObject({ send: false, state: 'skipped' });
+  });
+
+  it('กลุ่มที่มีอีเมลถูกบ้างผิดบ้าง = ส่งเฉพาะที่ถูก', () => {
+    const d = decide(n({ recipientEmail: null, teamEmails: ['ok@x.test', 'พัง'] }));
+    expect(d).toEqual({ send: true, to: 'ok@x.test' });
+  });
+
+  it('แจ้งระดับทีมที่มีคนอ่านบนเว็บแล้ว = ไม่ส่ง แม้จะมีปลายทาง', () => {
+    const d = decide(
+      n({ recipientEmail: null, teamEmails: ['a@x.test'], readAt: new Date('2026-08-25T10:00:00Z') }),
+    );
+    expect(d).toMatchObject({ send: false, state: 'skipped' });
   });
 
   it('อีเมลว่างเปล่า (สตริงว่าง) นับเป็นไม่มีผู้รับ ไม่ใช่พยายามส่งไปที่ว่าง', () => {
@@ -87,8 +112,20 @@ describe('renderEmail', () => {
     expect(renderEmail(n(), WEB).text).toContain('เรียน สมชาย');
   });
 
-  it('ไม่รู้ชื่อก็ไม่ทักลอย ๆ ว่า "เรียน "', () => {
+  it('ไม่รู้ชื่อและไม่มีทีม ก็ไม่ทักลอย ๆ ว่า "เรียน "', () => {
     expect(renderEmail(n({ recipientName: null }), WEB).text).not.toContain('เรียน ');
+  });
+
+  it('อีเมลถึงทีมบอกชื่อทีม และบอกว่าทำไมถึงได้รับ', () => {
+    const t = renderEmail(
+      n({ recipientName: null, recipientEmail: null, teamName: 'IT Support' }),
+      WEB,
+    ).text;
+    expect(t).toContain('เรียนทีม IT Support');
+    // ทีมต้องรู้ว่าได้รับเพราะงานยังไม่มีเจ้าของ ไม่ใช่งงว่าทำไมถึงมาถึงตัวเอง
+    expect(t).toContain('ยังไม่มีผู้รับผิดชอบ');
+    // เว้นบรรทัดก่อนหัวข้อ เหมือนอีเมลที่ส่งถึงตัวบุคคล
+    expect(t.split('\n\n')[1]).toBe('งานใบนี้ยังไม่มีผู้รับผิดชอบ');
   });
 
   it('รายละเอียดว่างไม่ทิ้งบรรทัดว่างซ้อนกัน', () => {
