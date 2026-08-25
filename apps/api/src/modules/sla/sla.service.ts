@@ -93,6 +93,8 @@ export interface SlaSnapshot {
   targetMs: number;
   remainingMs: number;
   breachAt: string | null;
+  /** เวลาที่หลุดไปแล้วจริง — null เมื่อยังไม่หลุด */
+  breachedAt: string | null;
   ratio: number;
   isBreached: boolean;
 }
@@ -240,6 +242,7 @@ export async function recomputeSla(
       elapsedMs: Math.round(status.elapsedMs),
       targetMs: status.targetMs,
       breachAt: status.breachAt,
+      breachedAt: status.breachedAt,
       isBreached: status.isBreached,
     },
   });
@@ -269,6 +272,7 @@ export async function recomputeSla(
     targetMs: status.targetMs,
     remainingMs: status.remainingMs,
     breachAt: status.breachAt?.toISOString() ?? null,
+    breachedAt: status.breachedAt?.toISOString() ?? null,
     ratio: status.ratio,
     isBreached: status.isBreached,
   };
@@ -301,6 +305,7 @@ export async function slaForWorkItems(
       targetMs: r.targetMs,
       remainingMs: Math.max(0, r.targetMs - r.elapsedMs),
       breachAt: r.breachAt?.toISOString() ?? null,
+      breachedAt: r.breachedAt?.toISOString() ?? null,
       ratio: r.targetMs === 0 ? 1 : r.elapsedMs / r.targetMs,
       isBreached: r.isBreached,
     });

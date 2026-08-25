@@ -36,8 +36,16 @@ export interface SlaStatus {
   targetMs: number;
   /** เวลาทำการที่เหลือ — 0 เมื่อหลุดแล้ว */
   remainingMs: number;
-  /** จุดที่จะหลุด (เวลาจริง) — null เมื่อหยุดนาฬิกาอยู่ หรือจบแล้ว */
+  /** จุดที่จะหลุด (เวลาจริง) — null เมื่อหยุดนาฬิกาอยู่ หรือหลุดไปแล้ว */
   breachAt: UtcDate | null;
+  /**
+   * จุดที่ **หลุดไปแล้ว** (เวลาจริง) — null เมื่อยังไม่หลุด
+   *
+   * ต่างจาก `breachAt` ซึ่งเป็นกำหนดในอนาคตและกลายเป็น null ทันทีที่หลุด
+   * ถ้าไม่เก็บค่านี้ ระบบจะรู้ว่า "หลุดแล้ว" แต่ตอบไม่ได้ว่า "หลุดตอนไหน"
+   * ซึ่งทำให้กู้การแจ้งเตือนที่ตกหล่นไม่ได้ และรายงานบอกไม่ได้ว่าช้าไปเท่าไร
+   */
+  breachedAt: UtcDate | null;
   /** สัดส่วนที่ใช้ไป 0–1 (เกิน 1 ได้เมื่อหลุดแล้ว) */
   ratio: number;
   /** true เมื่อเลยเป้าไปแล้ว ไม่ว่าจะจบหรือยัง */
@@ -78,6 +86,26 @@ export function computeSla(
   let started = false;
   let stopped = false;
 
+  let breachedAt: UtcDate | null = null;
+
+  /**
+   * บวกเวลาทำการของช่วงหนึ่ง พร้อมจับ **จุดที่ข้ามเป้าพอดี**
+   *
+   * ต้องจับตอนบวก ไม่ใช่คำนวณย้อนหลังจากยอดรวม เพราะเป้าอาจเปลี่ยนกลางทาง
+   * และเวลาที่ใช้ไปกระจายอยู่หลายช่วงที่คั่นด้วยการพักและวันหยุด
+   */
+  const accrue = (from: UtcDate, to: UtcDate): void => {
+    const segMs = elapsedWorkingMs(cal, from, to);
+    if (breachedAt === null && elapsedMs + segMs > targetMs) {
+      // เป้าที่แคบกว่าที่ใช้ไปแล้ว = ข้ามเป้าไปตั้งแต่ต้นช่วงนี้
+      // ต้องดักไว้ ไม่งั้นจะเรียก addWorkingMs ด้วยระยะเวลาติดลบ
+      // ซึ่งคืนค่าที่ดูถูกโดยบังเอิญ แต่ไม่มีใครรับประกันว่าจะถูกต่อไป
+      breachedAt =
+        targetMs <= elapsedMs ? from : addWorkingMs(cal, from, targetMs - elapsedMs);
+    }
+    elapsedMs += segMs;
+  };
+
   for (let i = 0; i < events.length; i += 1) {
     const e = events[i];
     if (e === undefined) continue;
@@ -98,7 +126,7 @@ export function computeSla(
 
       case 'pause':
         if (runningSince !== null) {
-          elapsedMs += elapsedWorkingMs(cal, runningSince, e.at);
+          accrue(runningSince, e.at);
           runningSince = null;
         }
         break;
@@ -110,7 +138,7 @@ export function computeSla(
 
       case 'stop':
         if (runningSince !== null) {
-          elapsedMs += elapsedWorkingMs(cal, runningSince, e.at);
+          accrue(runningSince, e.at);
           runningSince = null;
         }
         stopped = true;
@@ -121,7 +149,19 @@ export function computeSla(
         // ตั๋วที่ยกระดับเป็น P1 หลังผ่านไป 3 ชั่วโมง อาจหลุดทันทีที่เปลี่ยน
         // ซึ่งถูกต้อง — ความเร่งด่วนที่สูงขึ้นย้อนหลังไปด้วย
         if (e.newTargetMs === undefined) throw new MissingTargetError();
+        // ปิดยอดของช่วงที่ผ่านมาก่อนเปลี่ยนเป้า
+        // แต่ละช่วงต้องถูกวัดกับเป้าที่ใช้อยู่จริงในช่วงนั้น ไม่ใช่เป้าล่าสุด
+        // ถ้าไม่ปิดยอด `elapsedMs` ตรงนี้จะยังเป็นยอดของเหตุการณ์ก่อนหน้า
+        // แล้วการเทียบข้างล่างจะตัดสินจากตัวเลขที่ล้าสมัย
+        if (runningSince !== null) {
+          accrue(runningSince, e.at);
+          runningSince = e.at;
+        }
         targetMs = e.newTargetMs;
+        // เป้าที่เปลี่ยนย้อนหลังไปถึงเวลาที่ใช้ไปแล้ว จุดที่หลุดจึงต้องคิดใหม่
+        // เป้าที่แคบลงจนต่ำกว่าที่ใช้ไปแล้ว = หลุด ณ วินาทีที่เปลี่ยนนั่นเอง
+        // เป้าที่กว้างขึ้นจนเกินที่ใช้ไปแล้ว = กลับมาไม่หลุด ต้องล้างค่าเดิมทิ้ง
+        breachedAt = elapsedMs > targetMs ? e.at : null;
         break;
       }
     }
@@ -129,7 +169,7 @@ export function computeSla(
 
   // นับต่อจากเหตุการณ์สุดท้ายถึงตอนนี้ ถ้านาฬิกายังเดินอยู่
   if (runningSince !== null && now.getTime() > runningSince.getTime()) {
-    elapsedMs += elapsedWorkingMs(cal, runningSince, now);
+    accrue(runningSince, now);
   }
 
   const remainingMs = Math.max(0, targetMs - elapsedMs);
@@ -153,6 +193,7 @@ export function computeSla(
     targetMs,
     remainingMs,
     breachAt,
+    breachedAt: isBreached ? breachedAt : null,
     ratio: targetMs === 0 ? 1 : elapsedMs / targetMs,
     isBreached,
   };

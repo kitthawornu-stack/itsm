@@ -93,3 +93,27 @@ export function createSlaWorker(connection: IORedis, handler: SlaJobHandler): Wo
     },
   );
 }
+
+/**
+ * ยิงงานที่ตัวกู้หามาได้
+ *
+ * ต่างจาก `scheduleSlaJobs` ตรงที่ **ไม่ลบของเดิมก่อน** โดยเจตนา
+ * ถ้ามีงานเดิมค้างอยู่แปลว่าคิวยังไม่ได้หาย และงานนั้นดีอยู่แล้ว
+ * การที่ BullMQ ไม่เพิ่มซ้ำเมื่อ jobId ซ้ำ — ซึ่งเป็นกับดักของ `scheduleSlaJobs` —
+ * กลายเป็นสิ่งที่ต้องการพอดีในบริบทนี้
+ */
+export async function enqueueReconciled(
+  queue: Queue<SlaJobPayload>,
+  planned: PlannedJob[],
+): Promise<void> {
+  for (const p of planned) {
+    await queue.add(SLA_QUEUE, p.payload, {
+      jobId: p.jobId,
+      delay: p.delayMs,
+      removeOnComplete: { age: 7 * 24 * 3600, count: 5_000 },
+      removeOnFail: { age: 30 * 24 * 3600 },
+      attempts: 3,
+      backoff: { type: 'exponential', delay: 30_000 },
+    });
+  }
+}

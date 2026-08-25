@@ -4,6 +4,7 @@ import type { ReactNode } from 'react';
 import '@itsm/ui/styles/tokens.css';
 import './app.css';
 
+import { NotificationTray } from '@/components/notification-tray';
 import { ThemeToggle } from '@/components/theme-toggle';
 
 export const metadata: Metadata = {
@@ -53,6 +54,7 @@ export default function RootLayout({ children }: { children: ReactNode }): React
             <a href="/">คิวงาน</a>
             <a href="/components">คลังคอมโพเนนต์</a>
           </nav>
+          <NotificationTray apiBase={process.env['API_BASE_URL'] ?? 'http://localhost:4000'} />
           <ThemeToggle />
         </header>
         <main className="app-main">{children}</main>

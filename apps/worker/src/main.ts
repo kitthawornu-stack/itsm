@@ -8,9 +8,17 @@
  * รันด้วย: pnpm --filter @itsm/worker dev
  */
 import { PrismaClient } from '@prisma/client';
+import { systemClock } from '@itsm/types';
 
 import { createSlaHandler } from './sla-handler';
-import { createConnection, createSlaWorker } from './sla-queue';
+import {
+  createConnection,
+  createSlaQueue,
+  createSlaWorker,
+  enqueueReconciled,
+  type PlannedJob,
+} from './sla-queue';
+import { runReconcile, type ClockRow } from './sla-reconciler';
 
 const prisma = new PrismaClient();
 
@@ -60,6 +68,9 @@ function text(p: {
   };
 }
 
+/** ทุกกี่มิลลิวินาทีจึงเทียบฐานข้อมูลกับคิวหนึ่งครั้ง */
+const RECONCILE_EVERY_MS = Number(process.env['SLA_RECONCILE_INTERVAL_MS'] ?? 5 * 60_000);
+
 async function main(): Promise<void> {
   const connection = createConnection();
   const handler = createSlaHandler({ prisma, recompute, dedupeKey, text });
@@ -72,11 +83,57 @@ async function main(): Promise<void> {
     console.error(`[sla] ${job?.id ?? '?'} ล้มเหลว:`, err.message);
   });
 
-  console.log('Worker พร้อมทำงาน — คิว sla-notification');
+  /**
+   * กู้การแจ้งเตือนที่หายไปกับคิว
+   *
+   * รันตอนเปิดเครื่องก่อนหนึ่งรอบ เพราะเหตุที่ทำให้งานหายคือ Redis หาย
+   * ซึ่งมักเกิดพร้อมกับการรีสตาร์ตพอดี — รอบแรกจึงสำคัญที่สุด
+   */
+  const queue = createSlaQueue(connection);
+  const reconcileDeps = {
+    loadOverdueClocks: async (limit: number): Promise<ClockRow[]> =>
+      // ข้ามขอบเขต tenant โดยเจตนา: นี่คืองานกวาดของระบบ ไม่ใช่คำขอของผู้ใช้
+      // ตัวจัดการงานจะอ่านซ้ำแบบผูก tenant อีกครั้งก่อนส่งจริง
+      prisma.workItemSla.findMany({
+        where: { state: { in: ['running', 'breached'] }, breachedAt: { lte: systemClock.nowUtc() } },
+        select: { id: true, tenantId: true, workItemId: true, state: true, breachedAt: true },
+        orderBy: { breachedAt: 'asc' },
+        take: limit,
+      }),
+    loadNotifiedKeys: async (candidates: string[]): Promise<string[]> => {
+      const rows = await prisma.notification.findMany({
+        where: { dedupeKey: { in: candidates } },
+        select: { dedupeKey: true },
+      });
+      return rows.map((r) => r.dedupeKey);
+    },
+    enqueue: async (jobs: PlannedJob[]): Promise<void> => enqueueReconciled(queue, jobs),
+    now: (): Date => systemClock.nowUtc(),
+  };
+
+  const reconcileOnce = async (): Promise<void> => {
+    try {
+      const r = await runReconcile(reconcileDeps);
+      if (r.enqueued > 0) {
+        console.log(`[กู้] พบนาฬิกาหลุดที่ยังไม่ได้แจ้ง ${String(r.enqueued)} เรือน จาก ${String(r.scanned)} ที่ตรวจ`);
+      }
+    } catch (err) {
+      // การกู้ล้มเหลวต้องไม่ทำให้ worker ตาย — งานปกติยังต้องเดินต่อ
+      console.error('[กู้] ล้มเหลว:', err instanceof Error ? err.message : String(err));
+    }
+  };
+
+  await reconcileOnce();
+  const reconcileTimer = setInterval(() => void reconcileOnce(), RECONCILE_EVERY_MS);
+
+  console.log(
+    `Worker พร้อมทำงาน — คิว sla-notification · กวาดหาที่ตกหล่นทุก ${String(Math.round(RECONCILE_EVERY_MS / 1000))} วินาที`,
+  );
 
   const shutdown = async (): Promise<void> => {
     console.log('\nกำลังปิด worker…');
     // ปิดอย่างนุ่มนวล — งานที่กำลังทำอยู่ต้องจบก่อน ไม่งั้นจะถูกลองใหม่โดยไม่จำเป็น
+    clearInterval(reconcileTimer);
     await worker.close();
     await connection.quit();
     await prisma.$disconnect();

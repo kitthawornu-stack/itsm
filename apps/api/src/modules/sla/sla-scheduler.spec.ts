@@ -70,8 +70,18 @@ describe('planSlaJobs', () => {
     expect(jobs).toEqual([]);
   });
 
+  it('นาฬิกาที่หลุดแล้วแต่ยังเดินอยู่ ตั้งงานเกณฑ์ 100% ทันที', () => {
+    // งาน 100% ถูกตั้งไว้ตอนยังไม่หลุด ถ้าระบบดับช่วงนั้นงานจะหายไป
+    // และไม่มีใครได้รับแจ้งเตือนเลย — เงียบในเคสที่สำคัญที่สุด
+    const jobs = planSlaJobs({ ...base, state: 'breached', notifications: [] });
+    expect(jobs).toHaveLength(1);
+    expect(jobs[0]?.jobId).toBe('sla:7:100');
+    expect(jobs[0]?.delayMs).toBe(0);
+    expect(jobs[0]?.payload.threshold).toBe(1);
+  });
+
   it('นาฬิกาที่ปิดแล้วไม่ตั้งงานเลย', () => {
-    for (const state of ['met', 'breached', 'not-started']) {
+    for (const state of ['met', 'not-started']) {
       expect(planSlaJobs({ ...base, state, notifications: [{ threshold: 1, at: at('2026-08-25T04:00:00Z') }] })).toEqual([]);
     }
   });

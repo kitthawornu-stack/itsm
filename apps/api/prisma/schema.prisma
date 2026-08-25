@@ -777,7 +777,12 @@ model WorkItemSla {
   state      String    @db.VarChar(16)
   elapsedMs  Int       @map("elapsed_ms")
   targetMs   Int       @map("target_ms")
+  /// กำหนดที่จะหลุดในอนาคต — null เมื่อนาฬิกาพัก จบ หรือหลุดไปแล้ว
   breachAt   DateTime? @map("breach_at") @db.DateTime(3)
+  /// เวลาที่หลุดไปแล้วจริง — null เมื่อยังไม่หลุด
+  /// ต้องเก็บแยกจาก breachAt เพราะ breachAt เป็น null ทันทีที่หลุด
+  /// ถ้าไม่มีค่านี้จะกู้การแจ้งเตือนที่ตกหล่นไม่ได้ และรายงานตอบไม่ได้ว่าช้าเท่าไร
+  breachedAt DateTime? @map("breached_at") @db.DateTime(3)
   isBreached Boolean   @default(false) @map("is_breached")
 
   createdAt DateTime @default(now()) @map("created_at") @db.DateTime(3)
@@ -790,6 +795,8 @@ model WorkItemSla {
   @@unique([workItemId, goalId])
   // คิว "ใกล้หลุด" เรียงตาม breachAt ของงานที่ยังเดินอยู่
   @@index([tenantId, isBreached, breachAt])
+  // ตัวกวาดหาการแจ้งเตือนที่ตกหล่น ค้นด้วย (state, breachedAt)
+  @@index([state, breachedAt])
   @@index([tenantId, workItemId])
   @@map("work_item_sla")
 }
@@ -830,7 +837,7 @@ model Notification {
   body       String?   @db.Text
   payload    Json?
   /// กันส่งซ้ำ — เหตุการณ์เดียวกันสร้างคีย์เดียวกันเสมอ
-  dedupeKey  String    @db.VarChar(191)
+  dedupeKey  String    @map("dedupe_key") @db.VarChar(191)
   readAt     DateTime? @map("read_at") @db.DateTime(3)
   createdAt  DateTime  @default(now()) @map("created_at") @db.DateTime(3)
 

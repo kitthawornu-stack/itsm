@@ -57,6 +57,31 @@ export function planSlaJobs(params: {
   notifications: Array<{ threshold: number; at: UtcDate }>;
   now: UtcDate;
 }): PlannedJob[] {
+  /**
+   * นาฬิกาที่หลุดไปแล้วแต่ยังเดินอยู่ ต้องแจ้งเตือนเกณฑ์ 100% **ทันที**
+   *
+   * ทำไมต้องมีเส้นทางนี้: งานเกณฑ์ 100% ถูกตั้งไว้ตอนที่ยังไม่หลุด
+   * ถ้าระบบดับหรือ Redis ถูกล้างในช่วงนั้น งานจะหายไปและไม่มีใครได้รับแจ้งเตือนเลย
+   * — ซึ่งเป็นการเงียบในเคสที่สำคัญที่สุด
+   *
+   * การส่งซ้ำไม่ใช่ปัญหา เพราะ dedupeKey บน unique index กันไว้อีกชั้น
+   */
+  if (params.state === 'breached') {
+    return [
+      {
+        jobId: slaJobId(params.workItemSlaId, 1),
+        delayMs: 0,
+        payload: {
+          tenantId: params.tenantId.toString(),
+          workItemId: params.workItemId.toString(),
+          workItemSlaId: params.workItemSlaId.toString(),
+          threshold: 1,
+          scheduledFor: params.now.toISOString(),
+        },
+      },
+    ];
+  }
+
   if (params.state !== 'running') return [];
 
   const out: PlannedJob[] = [];
