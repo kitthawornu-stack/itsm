@@ -18,6 +18,10 @@ import {
   type TransitionRule,
 } from './workflow-engine';
 
+/**
+ * ⚠️ โมดูล `workitem` มีคลาสชื่อเดียวกัน — คนละคลาสจริง ๆ
+ * `instanceof` ข้ามโมดูลจะไม่ตรง ต้องดักของโมดูลที่เรียกใช้เท่านั้น
+ */
 export class WorkItemNotFoundError extends Error {
   constructor(workItemId: bigint) {
     super(`ไม่พบงาน #${workItemId.toString()} ในขอบเขตของ tenant นี้`);

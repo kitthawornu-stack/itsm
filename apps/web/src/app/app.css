@@ -405,7 +405,7 @@
 .report-form {
   display: flex;
   flex-direction: column;
-  gap: var(--space-5);
+  gap: var(--space-6);
   max-width: 620px;
   margin-top: var(--space-6);
 }
@@ -468,4 +468,106 @@
   margin: var(--space-3) 0 0;
   font-size: 11.5px;
   color: var(--text-faint);
+}
+
+/* ---------- บทสนทนาบนงาน ---------- */
+
+.thread {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.thread-empty {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--text-muted);
+  line-height: var(--line-height-body);
+}
+
+.thread-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.thread-item {
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+}
+
+/* บันทึกภายในต่างด้วยแถบซ้ายและพื้นหลัง เพื่อให้ทีมเห็นทันทีว่าอันไหนห้ามอ้างถึงต่อ
+   นี่คือการบอก ไม่ใช่การซ่อน — การกรองจริงอยู่ที่ชั้น service */
+.thread-item[data-internal="true"] {
+  border-left: 3px solid var(--status-warning);
+  background: var(--surface-3);
+}
+
+.thread-meta {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  font-size: 11.5px;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+  flex-wrap: wrap;
+}
+
+.thread-internal {
+  padding: 1px 6px;
+  border-radius: 100px;
+  background: var(--status-warning);
+  color: var(--text-on-accent);
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.thread-body {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text);
+  line-height: var(--line-height-body);
+  white-space: pre-wrap;
+  /* ภาษาไทยไม่มีช่องว่างระหว่างคำ ข้อความยาวจะดันกล่องล้นถ้าไม่บังคับ */
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.thread-compose {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.thread-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.thread-internal-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.thread-error {
+  margin: 0;
+  font-size: 12px;
+  color: var(--status-critical);
+  line-height: var(--line-height-body);
+}
+
+/* ระยะห่างระหว่างสองส่วนในคอลัมน์เดียวกัน — ใช้ margin เพราะไม่ได้อยู่ใน flex/grid เดียวกัน */
+.detail-section-gap {
+  margin-top: var(--space-8);
 }

@@ -9,6 +9,7 @@ import {
   type StatusCategory,
 } from '@itsm/ui';
 
+import { CommentThread } from '@/components/comment-thread';
 import { toSlaBar, type SlaSnapshotView } from '@/lib/sla-label';
 
 import { TransitionButtons } from '@/components/transition-buttons';
@@ -137,7 +138,10 @@ export default async function WorkItemDetail({
 
       <div className="detail-body">
         <section>
-          <h2 className="detail-section-title">ไทม์ไลน์</h2>
+          <h2 className="detail-section-title">บทสนทนา</h2>
+          <CommentThread apiBase={API} itemKey={detail.itemKey} />
+
+          <h2 className="detail-section-title detail-section-gap">ไทม์ไลน์</h2>
           {detail.history.length === 0 ? (
             <p className="detail-no-action">
               ยังไม่มีการเปลี่ยนแปลง — ประวัติจะถูกบันทึกอัตโนมัติทุกครั้งที่สถานะหรือฟิลด์เปลี่ยน

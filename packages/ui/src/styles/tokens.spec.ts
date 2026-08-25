@@ -17,7 +17,10 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
-const css = readFileSync(fileURLToPath(new URL('./tokens.css', import.meta.url)), 'utf8');
+const read = (rel: string): string =>
+  readFileSync(fileURLToPath(new URL(rel, import.meta.url)), 'utf8');
+
+const css = read('./tokens.css');
 
 // ---------- แยกบล็อกออกจากกัน ----------
 
@@ -229,5 +232,34 @@ describe('tokens · กติกาภาษาไทย', () => {
   it('body ต้องตั้ง overflow-wrap เพื่อไม่ให้ข้อความไทยดันตารางล้น', () => {
     const body = blockBody(css, css.indexOf('\nbody {'));
     expect(body).toMatch(/overflow-wrap:\s*anywhere/);
+  });
+});
+
+/**
+ * 4. ตัวแปรที่ถูกใช้แต่ไม่มีใครนิยาม
+ *
+ * `var(--space-5)` ที่ไม่มีนิยาม **ไม่ error และไม่เตือน** — เบราว์เซอร์ทิ้ง
+ * ทั้งประกาศนั้นไปเงียบ ๆ ผลคือระยะห่างหายไปทั้งบล็อกโดยไม่มีสัญญาณอะไรเลย
+ * และ stylelint ก็ไม่จับ เพราะไวยากรณ์ถูกต้องทุกอย่าง
+ *
+ * เจอจริงสองจุด: `--space-5` ในฟอร์มแจ้งปัญหา (ระยะห่างระหว่างช่องกรอกหายไป)
+ * และ `--space-7` ในหน้ารายละเอียด — ทั้งคู่ผ่าน stylelint และ typecheck มาแล้ว
+ */
+describe('4 · ตัวแปรที่ใช้ต้องมีนิยาม', () => {
+  const CSS_GLOBS = [
+    '../components/primitives.css',
+    '../../../../apps/web/src/app/app.css',
+  ];
+
+  const defined = new Set<string>();
+  for (const src of [css, ...CSS_GLOBS.map(read)]) {
+    for (const m of src.matchAll(/(--[a-z0-9-]+)\s*:/g)) defined.add(m[1] as string);
+  }
+
+  it.each(CSS_GLOBS)('%s ไม่ใช้ตัวแปรที่ไม่มีใครนิยาม', (file) => {
+    const used = new Set<string>();
+    for (const m of read(file).matchAll(/var\((--[a-z0-9-]+)/g)) used.add(m[1] as string);
+    const missing = [...used].filter((v) => !defined.has(v)).sort();
+    expect(missing).toEqual([]);
   });
 });

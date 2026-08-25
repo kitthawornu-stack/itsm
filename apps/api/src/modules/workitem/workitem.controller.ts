@@ -35,8 +35,10 @@ import {
   IssueTypeNotConfiguredError,
   ProjectNotFoundError,
   SummaryRequiredError,
+  WorkItemNotFoundError,
   createWorkItem,
 } from './workitem.service';
+import { EmptyCommentError, addComment, listComments, type Viewer } from './comment.service';
 
 export interface WorkItemListRow {
   id: string;
@@ -329,6 +331,61 @@ export class WorkItemController {
         createdAt: h.createdAt.toISOString(),
       })),
     };
+  }
+
+  /**
+   * ความเห็นบนงาน
+   *
+   * `view=reporter` ตัดความเห็นภายในออก **ที่ชั้น service** ไม่ใช่ให้หน้าจอซ่อน
+   * (INVARIANT 3) ตอนนี้ผู้เรียกเป็นคนบอกมุมมองเพราะยังไม่มีโมดูล permission
+   * เมื่อ identity พร้อม ให้ตัดสินจากสิทธิ์จริงของผู้ใช้แทน — ดู ADR-003
+   */
+  @Get(':key/comments')
+  async comments(
+    @Param('key') key: string,
+    @Query('view') view?: string,
+  ): Promise<{ rows: unknown[] }> {
+    const ctx = await resolveDevTenantContext();
+    const viewer: Viewer = view === 'reporter' ? 'reporter' : 'agent';
+    try {
+      return { rows: await listComments(ctx, key, viewer) };
+    } catch (e) {
+      if (e instanceof WorkItemNotFoundError) {
+        throw new HttpException({ error: 'not_found', message: e.message }, HttpStatus.NOT_FOUND);
+      }
+      throw e;
+    }
+  }
+
+  @Post(':key/comments')
+  @HttpCode(HttpStatus.CREATED)
+  async comment(
+    @Param('key') key: string,
+    @Body() body: { body?: string; isInternal?: boolean | string },
+  ): Promise<unknown> {
+    const ctx = await resolveDevTenantContext();
+    if (ctx.actorId === null) {
+      throw new HttpException({ message: 'ไม่พบผู้ใช้สำหรับเขียนความเห็น' }, HttpStatus.FORBIDDEN);
+    }
+    try {
+      return await addComment(ctx, {
+        itemKey: key,
+        body: body.body ?? '',
+        // มาจาก JSON ดิบ — "true" เป็นสตริงได้ ต้องแปลงเอง ไม่ใช่เชื่อชนิดที่ประกาศ
+        isInternal: body.isInternal === true || body.isInternal === 'true',
+      });
+    } catch (e) {
+      if (e instanceof EmptyCommentError) {
+        throw new HttpException(
+          { error: 'validation_failed', message: 'ต้องพิมพ์ข้อความก่อนส่ง', missingFields: ['body'] },
+          HttpStatus.UNPROCESSABLE_ENTITY,
+        );
+      }
+      if (e instanceof WorkItemNotFoundError) {
+        throw new HttpException({ error: 'not_found', message: e.message }, HttpStatus.NOT_FOUND);
+      }
+      throw e;
+    }
   }
 
   /**

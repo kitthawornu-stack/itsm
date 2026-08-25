@@ -26,6 +26,21 @@ import { tenantScoped } from '../../infrastructure/prisma/tenant-scope';
 import { indexWorkItem } from '../search-index';
 import { startSlaFor } from '../sla';
 
+/**
+ * งานที่อ้างถึงไม่มีอยู่ (หรืออยู่คนละ tenant ซึ่งแยกไม่ออกโดยตั้งใจ)
+ *
+ * ⚠️ โมดูล `workflow` มีคลาสชื่อเดียวกันของตัวเอง เพราะโมดูลคุยกันผ่าน
+ * `index.ts` เท่านั้น (ADR-004) จึงแชร์คลาสข้ามโมดูลไม่ได้
+ * ผลคือ `instanceof` ข้ามโมดูล **จะไม่ตรง** — ผู้เรียกต้องดักของโมดูลที่ตัวเองเรียก
+ * ไม่ใช่คิดว่าดักตัวเดียวแล้วครอบทั้งสองที่
+ */
+export class WorkItemNotFoundError extends Error {
+  constructor(keyOrId: string | bigint) {
+    super(`ไม่พบงาน ${keyOrId.toString()}`);
+    this.name = 'WorkItemNotFoundError';
+  }
+}
+
 export class ProjectNotFoundError extends Error {
   constructor(key: string) {
     super(`ไม่พบโปรเจกต์ ${key}`);
