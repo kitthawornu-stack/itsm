@@ -52,6 +52,7 @@ export default function RootLayout({ children }: { children: ReactNode }): React
           <b className="app-title">Helix</b>
           <nav className="app-nav">
             <a href="/">คิวงาน</a>
+            <a href="/new">แจ้งปัญหา</a>
             <a href="/components">คลังคอมโพเนนต์</a>
           </nav>
           <NotificationTray apiBase={process.env['API_BASE_URL'] ?? 'http://localhost:4000'} />

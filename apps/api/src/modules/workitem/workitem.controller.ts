@@ -139,6 +139,71 @@ export class WorkItemController {
   }
 
   /**
+   * ตัวเลือกสำหรับฟอร์มแจ้งงาน
+   *
+   * ชนิดงานมาจาก workflow scheme ของโปรเจกต์ ไม่ใช่รายการชนิดงานทั้งหมด
+   * — ชนิดที่โปรเจกต์ยังไม่ได้ผูก workflow ไว้ สร้างไม่ได้อยู่ดี
+   * การให้เลือกแล้วค่อยปฏิเสธทีหลังคือการโยนความผิดพลาดของเราไปให้ผู้ใช้
+   *
+   * ⚠️ ต้องประกาศ **ก่อน** `@Get(':key')` มิฉะนั้น Nest จะจับ "options" เป็นคีย์งาน
+   * (คีย์จริงเป็นรูปแบบ ABC-123 จึงไม่มีทางชนกัน แต่ลำดับยังต้องถูก)
+   */
+  @Get('options')
+  async options(@Query('project') projectKey?: string): Promise<{
+    projects: Array<{ key: string; name: string; type: string }>;
+    issueTypes: Array<{ name: string; icon: string }>;
+    priorities: Array<{ rank: number; name: string }>;
+  }> {
+    const ctx = await resolveDevTenantContext();
+    const db = tenantScoped(ctx);
+
+    const [unsorted, priorities] = await Promise.all([
+      // ตัดโปรเจกต์ที่เก็บเข้ากรุแล้วออก — ยังแจ้งเรื่องเข้าไปไม่ได้อยู่แล้ว
+      db.project.findMany({
+        where: { isArchived: false },
+        select: { key: true, name: true, type: true },
+        orderBy: { key: 'asc' },
+      }),
+      db.priority.findMany({ select: { rank: true, name: true }, orderBy: { rank: 'asc' } }),
+    ]);
+
+    /**
+     * Service Desk มาก่อนเสมอ เพราะฟอร์มแจ้งปัญหาเลือกตัวแรกเป็นค่าเริ่มต้น
+     * เรียงตามตัวอักษรเฉย ๆ จะได้ "PLAT" มาก่อน "SD" แล้วคนแจ้งปัญหาไอที
+     * จะไปลงโปรเจกต์พัฒนาซอฟต์แวร์โดยไม่รู้ตัว (เกิดขึ้นจริงตอนทดสอบฟอร์ม)
+     *
+     * เรียงที่นี่ ไม่ใช่ใน orderBy เพราะ MySQL เรียง enum ตามลำดับที่ประกาศ
+     * ซึ่งแปลว่าการสลับบรรทัดใน schema.prisma จะเปลี่ยนค่าเริ่มต้นของฟอร์มโดยเงียบ ๆ
+     *
+     * **เรียงก่อนเลือก `target`** — ตอนแรกเรียงเฉพาะตอนคืนค่า ผลคือชนิดงาน
+     * มาจากโปรเจกต์หนึ่งแต่ฟอร์มตั้งค่าเริ่มต้นเป็นอีกโปรเจกต์ แล้วกดส่งได้ 422 ทันที
+     */
+    const projects = [...unsorted].sort(
+      (a, b) => Number(b.type === 'SERVICE_DESK') - Number(a.type === 'SERVICE_DESK'),
+    );
+
+    const target = projectKey ?? projects[0]?.key;
+    const project =
+      target === undefined
+        ? null
+        : await db.project.findFirst({ where: { key: target }, select: { id: true } });
+
+    const schemes =
+      project === null
+        ? []
+        : await db.workflowScheme.findMany({
+            where: { projectId: project.id },
+            include: { issueType: { select: { name: true, iconKey: true } } },
+          });
+
+    return {
+      projects,
+      issueTypes: schemes.map((s) => ({ name: s.issueType.name, icon: s.issueType.iconKey })),
+      priorities,
+    };
+  }
+
+  /**
    * สร้างงานใหม่
    *
    * ตั้งใจไม่รับ `statusId` `rank` หรือ `itemKey` จากผู้เรียก — ทั้งสามอย่าง
@@ -219,9 +284,13 @@ export class WorkItemController {
         reporter: { select: { displayName: true } },
       },
     });
-    if (item === null) return { error: `ไม่พบงาน ${key}` };
+    // 404 ไม่ใช่ 200 พร้อม body ที่มีคำว่า error — ลูกค้าของ API ต้องแยกสองอย่างนี้ได้
+    // จากรหัสสถานะ ไม่ใช่จากการเดาว่ามีคีย์ชื่อ error อยู่ใน body หรือเปล่า
+    if (item === null) {
+      throw new HttpException({ error: 'not_found', message: `ไม่พบงาน ${key}` }, HttpStatus.NOT_FOUND);
+    }
 
-    const [transitions, history] = await Promise.all([
+    const [transitions, history, sla] = await Promise.all([
       ctx.actorId === null ? Promise.resolve([]) : availableTransitions(ctx, item.id, ctx.actorId),
       db.workItemHistory.findMany({
         where: { workItemId: item.id },
@@ -229,6 +298,10 @@ export class WorkItemController {
         take: 20,
         include: { actor: { select: { displayName: true } } },
       }),
+      // อ่านค่าที่ denormalise ไว้ เหมือนหน้าลิสต์ — ไม่คำนวณใหม่ตอน GET
+      // เพราะการคำนวณใหม่เขียนฐานข้อมูล และ GET ต้องไม่เขียน
+      // `breachAt` เป็นเวลาสัมบูรณ์อยู่แล้ว หน้าจอจึงนับถอยหลังเองได้ถูกต้อง
+      slaForWorkItems(ctx, [item.id]),
     ]);
 
     return {
@@ -242,6 +315,7 @@ export class WorkItemController {
       assignee: item.assignee?.displayName ?? null,
       reporter: item.reporter.displayName,
       fieldSnapshot: item.fieldSnapshot,
+      sla: sla.get(item.id.toString()) ?? null,
       createdAt: item.createdAt.toISOString(),
       updatedAt: item.updatedAt.toISOString(),
       // ปุ่มที่ผู้ใช้คนนี้เห็นได้จริง — ผ่าน CONDITION ชั้นแรกของ workflow engine แล้ว

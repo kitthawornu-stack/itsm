@@ -8,6 +8,8 @@ import {
   type StatusCategory,
 } from '@itsm/ui';
 
+import { toSlaBar } from '@/lib/sla-label';
+
 interface ApiRow {
   id: string;
   itemKey: string;
@@ -23,6 +25,7 @@ interface ApiRow {
     targetMs: number;
     remainingMs: number;
     breachAt: string | null;
+    breachedAt: string | null;
     ratio: number;
     isBreached: boolean;
   } | null;
@@ -48,49 +51,6 @@ async function fetchQueue(): Promise<{ rows: ApiRow[]; total: number } | { error
   } catch {
     return { error: `เชื่อมต่อ API ที่ ${API} ไม่ได้ — รัน \`pnpm --filter @itsm/api dev\` ก่อน` };
   }
-}
-
-/**
- * แปลงสถานะ SLA จาก API ให้เป็นรูปที่คอมโพเนนต์ SlaBar ใช้
- *
- * **เวลาที่เหลือคือเวลาทำการ ไม่ใช่เวลานาฬิกา** — เป้า 45 ชั่วโมงทำการ
- * กินเวลาปฏิทินราวหนึ่งสัปดาห์ ถ้าแสดงเป็นเวลานาฬิกาจะขึ้นว่า "เหลือ 160 ชม."
- * ซึ่งไม่ตรงกับที่ Agent คิด และไม่ช่วยให้ตัดสินใจว่าจะหยิบงานไหนก่อน
- *
- * เกิน 8 ชั่วโมงทำการขึ้นไปแสดงเป็น **วันเวลาที่ครบกำหนด** แทนจำนวนชั่วโมง
- * เพราะ "เหลือ 44 ชม." ก็ยังต้องคิดต่อว่าคือวันไหน
- */
-function toSlaBar(
-  sla: NonNullable<ApiRow['sla']>,
-): { elapsedRatio: number; state: 'ok' | 'warning' | 'critical' | 'paused'; label: string } {
-  if (sla.state === 'paused') {
-    return { elapsedRatio: Math.min(sla.ratio, 1), state: 'paused', label: '⏸ หยุดนาฬิกา' };
-  }
-  if (sla.isBreached) {
-    return { elapsedRatio: 1, state: 'critical', label: 'หลุด SLA แล้ว' };
-  }
-
-  const workingHoursLeft = sla.remainingMs / 3_600_000;
-  const state = sla.ratio >= 0.9 ? 'critical' : sla.ratio >= 0.7 ? 'warning' : 'ok';
-
-  let label: string;
-  if (workingHoursLeft < 1) {
-    label = `เหลือ ${Math.max(1, Math.round(workingHoursLeft * 60))} นาที`;
-  } else if (workingHoursLeft < 8) {
-    label = `เหลือ ${workingHoursLeft.toFixed(1)} ชม.`;
-  } else if (sla.breachAt !== null) {
-    label = `ครบ ${new Date(sla.breachAt).toLocaleString('th-TH', {
-      day: 'numeric',
-      month: 'short',
-      hour: '2-digit',
-      minute: '2-digit',
-      timeZone: 'Asia/Bangkok',
-    })}`;
-  } else {
-    label = `เหลือ ${Math.round(workingHoursLeft)} ชม.`;
-  }
-
-  return { elapsedRatio: Math.min(sla.ratio, 1), state, label };
 }
 
 export default async function QueuePage(): Promise<ReactNode> {

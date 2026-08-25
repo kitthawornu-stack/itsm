@@ -399,3 +399,73 @@
 }
 
 .tray-time { font-family: var(--font-mono); font-size: 9.5px; color: var(--text-faint); }
+
+/* ---------- หน้าแจ้งปัญหา ---------- */
+
+.report-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  max-width: 620px;
+  margin-top: var(--space-6);
+}
+
+/* สองคอลัมน์บนจอกว้าง ซ้อนกันบนจอแคบ — ไม่ใช้ media query เพราะ
+   ความกว้างที่ควรตัดขึ้นกับกล่อง ไม่ใช่ขนาดหน้าจอ */
+.report-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: var(--space-4);
+  /* ชิดล่าง — ช่องที่มีคำอธิบายกับช่องที่ไม่มี สูงไม่เท่ากัน
+     ถ้าไม่จัด กล่องเลือกสองอันจะเหลื่อมกันพอดีในระดับที่เห็นแล้วรู้สึกว่าพัง */
+  align-items: end;
+}
+
+.report-error {
+  margin: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--status-critical);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 12.5px;
+  line-height: var(--line-height-body);
+}
+
+.report-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.report-cancel {
+  font-size: 12.5px;
+  color: var(--text-muted);
+  text-decoration: none;
+}
+
+.report-cancel:hover {
+  color: var(--text);
+  text-decoration: underline;
+}
+
+/* ---------- SLA บนหน้ารายละเอียด ---------- */
+
+.detail-sla {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.detail-sla-goal {
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+
+.detail-sla-none {
+  margin: var(--space-3) 0 0;
+  font-size: 11.5px;
+  color: var(--text-faint);
+}

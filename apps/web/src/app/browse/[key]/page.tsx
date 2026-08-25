@@ -1,6 +1,15 @@
 import type { ReactNode } from 'react';
 
-import { Avatar, PriorityIndicator, StatusPill, type PriorityRank, type StatusCategory } from '@itsm/ui';
+import {
+  Avatar,
+  PriorityIndicator,
+  SlaBar,
+  StatusPill,
+  type PriorityRank,
+  type StatusCategory,
+} from '@itsm/ui';
+
+import { toSlaBar, type SlaSnapshotView } from '@/lib/sla-label';
 
 import { TransitionButtons } from '@/components/transition-buttons';
 
@@ -19,6 +28,7 @@ interface Detail {
   projectKey: string;
   issueType: string;
   status: { name: string; category: string };
+  sla: (SlaSnapshotView & { goalName: string }) | null;
   priority: { rank: number; name: string } | null;
   assignee: string | null;
   reporter: string;
@@ -107,6 +117,16 @@ export default async function WorkItemDetail({
             />
           </div>
           <h1 className="detail-title">{detail.summary}</h1>
+          {detail.sla === null ? (
+            // งานที่ไม่มีนาฬิกาต้องบอกให้รู้ ไม่ใช่ไม่แสดงอะไรเลย
+            // ช่องว่างตรงนี้ทำให้ดูเหมือน "ยังไม่หลุด" ทั้งที่แปลว่า "ไม่มีใครจับเวลาอยู่"
+            <p className="detail-sla-none">ยังไม่มีข้อตกลงบริการผูกกับงานใบนี้</p>
+          ) : (
+            <div className="detail-sla">
+              <span className="detail-sla-goal">{detail.sla.goalName}</span>
+              <SlaBar {...toSlaBar(detail.sla)} />
+            </div>
+          )}
         </div>
         <TransitionButtons
           itemKey={detail.itemKey}
