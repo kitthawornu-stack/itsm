@@ -841,8 +841,50 @@ model Notification {
   readAt     DateTime? @map("read_at") @db.DateTime(3)
   createdAt  DateTime  @default(now()) @map("created_at") @db.DateTime(3)
 
+  deliveries NotificationDelivery[]
+
   @@unique([tenantId, dedupeKey])
   @@index([tenantId, userId, readAt])
   @@index([tenantId, workItemId])
   @@map("notification")
+}
+
+/**
+ * การส่งออกช่องทางหนึ่ง ๆ ของการแจ้งเตือนหนึ่งใบ
+ *
+ * แยกตารางเพราะการแจ้งเตือนหนึ่งใบไปได้หลายช่องทาง และแต่ละช่องทาง
+ * สำเร็จหรือล้มเหลวคนละเวลา ถ้าเก็บสถานะไว้ในแถวเดียวกับ notification
+ * การที่อีเมลล้มจะทำให้ไม่รู้ว่า LINE ส่งไปแล้วหรือยัง
+ *
+ * **แถวนี้ถูกสร้างก่อนส่งเสมอ** — ถ้าสร้างหลังส่ง เครื่องดับกลางทาง
+ * จะทำให้ส่งซ้ำทุกรอบโดยไม่มีอะไรจำได้ว่าเคยพยายามแล้ว
+ * unique index บน (notificationId, channel) เป็นด่านสุดท้ายกันส่งซ้ำ
+ */
+model NotificationDelivery {
+  id             BigInt @id @default(autoincrement())
+  tenantId       BigInt @map("tenant_id")
+  notificationId BigInt @map("notification_id")
+
+  /// "email" · "line" · "webhook"
+  channel String @db.VarChar(16)
+  /// "pending" | "sent" | "failed" | "skipped"
+  state   String @db.VarChar(16)
+  /// ปลายทางที่ส่งไปจริง — เก็บไว้เพราะอีเมลของผู้ใช้เปลี่ยนได้ภายหลัง
+  /// ถ้าไม่เก็บ จะตอบไม่ได้ว่าตอนนั้นส่งไปที่ไหน
+  target  String? @db.VarChar(320)
+
+  attempts  Int       @default(0)
+  /// เหตุผลที่ล้ม หรือเหตุผลที่ข้าม — ต้องอ่านเข้าใจได้โดยไม่ต้องเปิด log
+  lastError String?   @map("last_error") @db.VarChar(500)
+  sentAt    DateTime? @map("sent_at") @db.DateTime(3)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.DateTime(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.DateTime(3)
+
+  notification Notification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+
+  @@unique([notificationId, channel])
+  // ตัวกวาดหาที่ยังไม่ได้ส่ง ค้นด้วย (tenant, ช่องทาง, สถานะ)
+  @@index([tenantId, channel, state])
+  @@map("notification_delivery")
 }
