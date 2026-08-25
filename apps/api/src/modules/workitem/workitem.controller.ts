@@ -17,7 +17,13 @@ import {
   Param,
   Post,
   Query,
+  Res,
+  UploadedFile,
+  UseFilters,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import type { Response } from 'express';
 
 /* eslint-disable @typescript-eslint/no-deprecated -- resolveDevTenantContext ถูกทำเครื่องหมาย deprecated โดยตั้งใจ
    เพื่อให้ทุกจุดที่ใช้มองเห็นได้ในทันทีเมื่อโมดูล identity พร้อม (ADR-003) จุดเหล่านี้คือรายการที่ต้องลบ */
@@ -39,6 +45,15 @@ import {
   createWorkItem,
 } from './workitem.service';
 import { EmptyCommentError, addComment, listComments, type Viewer } from './comment.service';
+import {
+  AttachmentNotFoundError,
+  AttachmentRejectedError,
+  downloadAttachment,
+  listAttachments,
+  uploadAttachment,
+} from './attachment.service';
+import { MAX_SIZE_BYTES, decodeMultipartFilename } from './attachment-policy';
+import { UploadErrorFilter } from '../../infrastructure/http/upload-error.filter';
 
 export interface WorkItemListRow {
   id: string;
@@ -382,6 +397,95 @@ export class WorkItemController {
         );
       }
       if (e instanceof WorkItemNotFoundError) {
+        throw new HttpException({ error: 'not_found', message: e.message }, HttpStatus.NOT_FOUND);
+      }
+      throw e;
+    }
+  }
+
+  /**
+   * ไฟล์แนบของงาน
+   */
+  @Get(':key/attachments')
+  async attachments(@Param('key') key: string): Promise<{ rows: unknown[] }> {
+    const ctx = await resolveDevTenantContext();
+    try {
+      return { rows: await listAttachments(ctx, key) };
+    } catch (e) {
+      if (e instanceof WorkItemNotFoundError) {
+        throw new HttpException({ error: 'not_found', message: e.message }, HttpStatus.NOT_FOUND);
+      }
+      throw e;
+    }
+  }
+
+  /**
+   * แนบไฟล์
+   *
+   * ไฟล์ผ่าน API ไม่ใช่ presigned URL ตรงเข้า bucket — ทำให้ตรวจขนาดและชนิด
+   * ได้จริงก่อนเก็บ · เพดานของ multer ตั้งไว้เท่ากับเพดานของ policy
+   * เพื่อไม่ให้ไฟล์ใหญ่มากกินหน่วยความจำก่อนถูกปฏิเสธ
+   */
+  @Post(':key/attachments')
+  @HttpCode(HttpStatus.CREATED)
+  @UseFilters(UploadErrorFilter)
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: MAX_SIZE_BYTES } }))
+  async upload(
+    @Param('key') key: string,
+    @UploadedFile() file: Express.Multer.File | undefined,
+  ): Promise<unknown> {
+    const ctx = await resolveDevTenantContext();
+    if (ctx.actorId === null) {
+      throw new HttpException({ message: 'ไม่พบผู้ใช้สำหรับแนบไฟล์' }, HttpStatus.FORBIDDEN);
+    }
+    if (file === undefined) {
+      throw new HttpException(
+        { error: 'validation_failed', message: 'ไม่พบไฟล์ในคำขอ', missingFields: ['file'] },
+        HttpStatus.UNPROCESSABLE_ENTITY,
+      );
+    }
+
+    try {
+      return await uploadAttachment(ctx, {
+        itemKey: key,
+        // ถอดรหัสชื่อใหม่ก่อน (busboy ถอดเป็น latin-1) แล้วจึงส่งต่อ
+        // การตัด path และอักขระอันตราย ทำที่ชั้น service ด้วย safeDisplayName
+        filename: decodeMultipartFilename(file.originalname),
+        mimeType: file.mimetype,
+        content: file.buffer,
+      });
+    } catch (e) {
+      if (e instanceof AttachmentRejectedError) {
+        // 413 เฉพาะไฟล์ใหญ่เกิน · ที่เหลือเป็น 422 เพราะคำขอถูกต้องแต่เนื้อหาไม่ผ่าน
+        throw new HttpException(
+          { error: e.code, message: e.message },
+          e.code === 'too_large' ? HttpStatus.PAYLOAD_TOO_LARGE : HttpStatus.UNPROCESSABLE_ENTITY,
+        );
+      }
+      if (e instanceof WorkItemNotFoundError) {
+        throw new HttpException({ error: 'not_found', message: e.message }, HttpStatus.NOT_FOUND);
+      }
+      throw e;
+    }
+  }
+
+  /**
+   * ดาวน์โหลดไฟล์แนบ
+   *
+   * ตั้ง `Content-Disposition: attachment` เสมอ และ `X-Content-Type-Options: nosniff`
+   * เพื่อไม่ให้เบราว์เซอร์เดาชนิดไฟล์เองแล้วเปิดสิ่งที่ไม่ควรเปิด
+   */
+  @Get('attachments/:id/download')
+  async download(@Param('id') id: string, @Res() res: Response): Promise<void> {
+    const ctx = await resolveDevTenantContext();
+    try {
+      const f = await downloadAttachment(ctx, BigInt(id));
+      res.setHeader('Content-Type', f.mimeType);
+      res.setHeader('Content-Disposition', f.disposition);
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+      res.send(f.content);
+    } catch (e) {
+      if (e instanceof AttachmentNotFoundError) {
         throw new HttpException({ error: 'not_found', message: e.message }, HttpStatus.NOT_FOUND);
       }
       throw e;
