@@ -177,6 +177,16 @@ AI ผลิต PR 2,000 บรรทัดได้ง่ายมาก แต
 — ทำแล้ว 102 เคส (`src/modules/sla/*.spec.ts`) อีก ~18 เคสที่เหลือรอสิ่งที่ยังไม่มี:
 รายการวันหยุดที่ตรวจสอบกับประกาศจริงรายปี และการต่อกับตาราง SLA Policy/Goal
 
+### กติกาเฉพาะของคิวแจ้งเตือน
+
+- **jobId ห้ามมีเวลาอยู่ในคีย์** — ต้องประกอบจาก (นาฬิกา, เกณฑ์) เท่านั้น
+  มิฉะนั้นการตั้งใหม่จะสร้างงานเพิ่มแทนที่จะแทนที่ของเดิม
+- **ต้องลบงานเดิมก่อนตั้งใหม่เสมอ** — BullMQ ไม่แทนที่ delayed job ที่มี id เดิม
+  แต่จะ ไม่เพิ่ม เฉย ๆ ทำให้เวลาเดิมค้างอยู่ (พิสูจน์ไว้ใน worker/src/smoke.ts ขั้นที่ 5)
+- **handler ต้องคำนวณใหม่และตรวจซ้ำก่อนส่ง** — job ตั้งล่วงหน้าเป็นชั่วโมง
+  สถานะเปลี่ยนได้ระหว่างรอ · ส่งข้อความที่ขัดกับหน้าจอแย่กว่าไม่ส่ง
+- ทุกการแจ้งเตือนมี  บน unique index เป็นด่านสุดท้าย
+
 ### กติกาเฉพาะของ SLA Engine
 
 - **คำนวณจากรายการเหตุการณ์ ไม่ใช่จากสถานะปัจจุบัน** — ตั๋วที่ถูกพัก เปิดใหม่
@@ -248,6 +258,8 @@ pnpm db:studio                # prisma studio
 pnpm --filter @itsm/api seed      # seed data 10,000 work item (~4 วินาที)
 pnpm --filter @itsm/api seed:sla  # SLA policy + ปฏิทิน + นาฬิกาให้งานที่เปิดอยู่
 pnpm --filter @itsm/api reindex   # สร้างดัชนีค้นหาใหม่จาก MySQL
+pnpm --filter @itsm/worker dev    # worker: คิวแจ้งเตือน SLA
+pnpm --filter @itsm/worker smoke  # ทดสอบคิวกับ Redis จริง
 pnpm lint                     # eslint + stylelint ทุก workspace
 pnpm typecheck                # tsc --noEmit ทุก workspace
 pnpm test                     # unit + integration

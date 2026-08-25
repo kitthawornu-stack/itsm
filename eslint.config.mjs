@@ -167,6 +167,9 @@ export default tseslint.config(
       // callback ของเทสต์ที่ไม่มี await เป็นเรื่องปกติ
       '@typescript-eslint/require-await': 'off',
       'no-console': 'off',
+      // vi.mocked(obj.method) เป็นรูปแบบปกติของ vitest — ไม่ใช่การหลุด this
+      '@typescript-eslint/unbound-method': 'off',
+      '@typescript-eslint/no-unnecessary-type-assertion': 'off',
     },
   },
 );

@@ -16,7 +16,8 @@ import {
   type BusinessCalendar,
   type WorkingWindow,
 } from './business-calendar';
-import { computeSla, type SlaEvent, type SlaStatus } from './sla-engine';
+import { computeSla, notificationTimes, type SlaEvent, type SlaStatus } from './sla-engine';
+import { SLA_THRESHOLDS, planSlaJobs, type PlannedJob } from './sla-scheduler';
 
 export class NoSlaPolicyError extends Error {
   constructor(projectKey: string) {
@@ -65,6 +66,23 @@ function goalMatches(match: GoalMatch | null, priorityRank: number | null, issue
     if (!match.issueTypeNames.includes(issueType)) return false;
   }
   return true;
+}
+
+/**
+ * ตัวส่งงานเข้าคิว — ฉีดเข้ามาแทนการ import BullMQ ตรง ๆ
+ *
+ * เหตุผล: `sla.service` เป็นโค้ดโดเมน ไม่ควรผูกกับ Redis · ทำให้เทสต์ที่มีอยู่
+ * ไม่ต้องมี Redis และทำให้แยก worker ออกเป็นเซอร์วิสได้ตามเกณฑ์ใน ADR-004
+ * โดยเปลี่ยนแค่ตัวที่ฉีดเข้ามา
+ */
+export interface SlaJobDispatcher {
+  schedule(workItemSlaId: bigint, jobs: PlannedJob[], thresholds: readonly number[]): Promise<void>;
+}
+
+let dispatcher: SlaJobDispatcher | null = null;
+
+export function setSlaJobDispatcher(d: SlaJobDispatcher | null): void {
+  dispatcher = d;
 }
 
 export interface SlaSnapshot {
@@ -225,6 +243,23 @@ export async function recomputeSla(
       isBreached: status.isBreached,
     },
   });
+
+  // ตั้งงานแจ้งเตือนใหม่ทุกครั้งที่คำนวณใหม่
+  //
+  // การตั้งใหม่ **แทนที่** ของเดิมเสมอ ไม่ใช่เพิ่มซ้อน — ถ้าไม่ทำ ตั๋วที่ถูกพัก
+  // สองวันแล้วกลับมาเดิน จะได้แจ้งเตือนตามเวลาเดิมที่ตั้งไว้ก่อนพัก
+  // (พิสูจน์ไว้ใน apps/worker/src/smoke.ts ขั้นที่ 5)
+  if (dispatcher !== null) {
+    const jobs = planSlaJobs({
+      tenantId: ctx.tenantId,
+      workItemId,
+      workItemSlaId: clock.id,
+      state: status.state,
+      notifications: notificationTimes(calendar, status, now, SLA_THRESHOLDS),
+      now,
+    });
+    await dispatcher.schedule(clock.id, jobs, SLA_THRESHOLDS);
+  }
 
   return {
     goalKey: clock.goal.key,

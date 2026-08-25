@@ -810,3 +810,32 @@ model SlaEvent {
   @@index([tenantId, workItemSlaId, at])
   @@map("sla_event")
 }
+
+/**
+ * การแจ้งเตือน — เก็บลงฐานข้อมูลก่อนส่งออกช่องทางใด ๆ
+ * ทำไมต้องเก็บ ไม่ยิงตรงไป LINE/อีเมล:
+ * 1. ส่งซ้ำได้เมื่อช่องทางล่ม โดยไม่ต้องคำนวณ SLA ใหม่
+ * 2. ผู้ใช้เห็นย้อนหลังได้ในแอป แม้ไม่ได้เปิดอีเมล
+ * 3. ตรวจสอบได้ว่าระบบเตือนแล้วจริงหรือไม่ ตอนมีข้อพิพาทเรื่อง SLA
+ */
+model Notification {
+  id         BigInt    @id @default(autoincrement())
+  tenantId   BigInt    @map("tenant_id")
+  /// ผู้รับ — null เมื่อเป็นการแจ้งเตือนระดับทีมที่ยังไม่ระบุตัวบุคคล
+  userId     BigInt?   @map("user_id")
+  workItemId BigInt?   @map("work_item_id")
+  /// e.g. "sla.threshold" · "workitem.assigned"
+  kind       String    @db.VarChar(64)
+  title      String    @db.VarChar(500)
+  body       String?   @db.Text
+  payload    Json?
+  /// กันส่งซ้ำ — เหตุการณ์เดียวกันสร้างคีย์เดียวกันเสมอ
+  dedupeKey  String    @db.VarChar(191)
+  readAt     DateTime? @map("read_at") @db.DateTime(3)
+  createdAt  DateTime  @default(now()) @map("created_at") @db.DateTime(3)
+
+  @@unique([tenantId, dedupeKey])
+  @@index([tenantId, userId, readAt])
+  @@index([tenantId, workItemId])
+  @@map("notification")
+}

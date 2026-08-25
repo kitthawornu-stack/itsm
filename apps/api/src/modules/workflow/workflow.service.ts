@@ -9,7 +9,7 @@ import { systemClock, type TenantContext } from '@itsm/types';
 
 import { auditedTransaction, change, type AuditEntry } from '../../infrastructure/audit/audited-transaction';
 import { tenantScoped } from '../../infrastructure/prisma/tenant-scope';
-import { recordSlaEvent } from '../sla';
+import { recomputeSla, recordSlaEvent } from '../sla';
 import {
   evaluateTransitions,
   validateTransition,
@@ -257,6 +257,13 @@ export async function applyTransition(
     await recordSlaEvent(ctx, item.id, 'pause', now);
   } else if (!toStatus.pausesSla && fromStatus?.pausesSla === true) {
     await recordSlaEvent(ctx, item.id, 'resume', now);
+  } else {
+    // transition ที่ไม่กระทบการพัก/เดินของนาฬิกา **ก็ยังต้องคำนวณใหม่**
+    //
+    // เวอร์ชันแรกข้ามกรณีนี้ไป ผลคือนาฬิกาที่เพิ่งเริ่ม (New -> Investigating)
+    // ไม่เคยตั้งงานแจ้งเตือนเลย เพราะงานถูกตั้งตอน recomputeSla เท่านั้น
+    // และ recomputeSla ถูกเรียกเฉพาะตอนมีเหตุการณ์พัก/เดินต่อ/ปิด
+    await recomputeSla(ctx, item.id, now);
   }
 
   return result;
