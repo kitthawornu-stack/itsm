@@ -9,6 +9,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { TenantContext } from '@itsm/types';
 
 import { prismaClient } from '../src/infrastructure/prisma/client';
+import { auditedTransaction } from '../src/infrastructure/audit/audited-transaction';
 import { EmptyCommentError, addComment, listComments } from '../src/modules/workitem/comment.service';
 import { WorkItemNotFoundError, createWorkItem } from '../src/modules/workitem/workitem.service';
 
@@ -37,6 +38,10 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  await prismaClient.notificationDelivery.deleteMany({
+    where: { notification: { workItemId: { in: createdIds } } },
+  });
+  await prismaClient.notification.deleteMany({ where: { workItemId: { in: createdIds } } });
   await prismaClient.workItemComment.deleteMany({ where: { workItemId: { in: createdIds } } });
   await prismaClient.slaEvent.deleteMany({ where: { sla: { workItemId: { in: createdIds } } } });
   await prismaClient.workItemSla.deleteMany({ where: { workItemId: { in: createdIds } } });
@@ -128,5 +133,79 @@ describe('listComments · INVARIANT 3', () => {
     expect(rows.some((r) => r.id === c.id)).toBe(false);
     // soft delete — audit ต้องยังตอบได้ว่าเคยมี
     expect(await prismaClient.workItemComment.findFirst({ where: { id: BigInt(c.id) } })).not.toBeNull();
+  });
+});
+
+describe('แจ้งเตือนเมื่อมีความเห็น', () => {
+  const notifsFor = async (commentId: string) =>
+    prismaClient.notification.findMany({
+      where: { dedupeKey: { startsWith: `comment:${commentId}:` } },
+    });
+
+  it('ทีมตอบ → ผู้แจ้งได้รับแจ้งเตือน', async () => {
+    const c = await addComment(ctx, { itemKey, body: 'กำลังดำเนินการให้อยู่ครับ' });
+    const rows = await notifsFor(c.id);
+    // ผู้เขียนคือ actor ซึ่งเป็นผู้แจ้งของงานนี้ด้วย จึงไม่แจ้งตัวเอง
+    // งานยังไม่มีผู้รับผิดชอบ → แจ้งระดับทีม
+    expect(rows.length).toBeGreaterThan(0);
+    expect(rows.every((r) => r.kind === 'comment.added')).toBe(true);
+  });
+
+  it('ตรวจก่อนเขียน — หัวข้อว่างไม่แตะฐานข้อมูลเลย', async () => {
+    // หมายเหตุ: เคสนี้ **ไม่ได้** พิสูจน์ขอบเขตทรานแซกชัน เพราะการตรวจข้อความว่าง
+    // เกิดก่อนเปิดทรานแซกชัน · การพิสูจน์ว่า notification ย้อนกลับพร้อมความเห็น
+    // อยู่ในเคส "ย้อนกลับพร้อมกัน" ข้างล่าง ซึ่งบังคับให้ล้มกลางทรานแซกชันจริง
+    const before = await prismaClient.notification.count();
+    await expect(addComment(ctx, { itemKey, body: '  ' })).rejects.toThrow();
+    expect(await prismaClient.notification.count()).toBe(before);
+  });
+
+  it('**แจ้งเตือนที่เขียนผ่าน tx ย้อนกลับพร้อมกันเมื่อทรานแซกชันล้ม**', async () => {
+    // บังคับให้ล้ม **หลัง** เขียนแจ้งเตือนไปแล้ว เพื่อพิสูจน์ว่ามันย้อนกลับจริง
+    // ถ้าเขียนผ่าน client นอกทรานแซกชัน แถวจะค้างอยู่ทั้งที่ทุกอย่างล้มไปแล้ว
+    const before = await prismaClient.notification.count();
+    const marker = `rollback-probe:${String(before)}`;
+
+    await expect(
+      auditedTransaction(ctx, 'test.rollback', async (tx) => {
+        await tx.notification.createMany({
+          data: [
+            {
+              tenantId: ctx.tenantId,
+              userId: ctx.actorId,
+              kind: 'comment.added',
+              title: 'ควรถูกย้อนกลับ',
+              body: null,
+              dedupeKey: marker,
+            },
+          ],
+        });
+        throw new Error('ล้มโดยตั้งใจหลังเขียนแจ้งเตือนแล้ว');
+      }),
+    ).rejects.toThrow('ล้มโดยตั้งใจ');
+
+    expect(await prismaClient.notification.count()).toBe(before);
+    expect(await prismaClient.notification.findFirst({ where: { dedupeKey: marker } })).toBeNull();
+  });
+
+  it('เนื้อหาการแจ้งเตือนมีข้อความที่เพิ่งเขียน', async () => {
+    const c = await addComment(ctx, { itemKey, body: 'เปลี่ยนสายเรียบร้อยแล้วครับ' });
+    const rows = await notifsFor(c.id);
+    expect(rows[0]?.body).toContain('เปลี่ยนสายเรียบร้อยแล้วครับ');
+  });
+
+  it('**บันทึกภายในไม่สร้างแจ้งเตือนถึงผู้แจ้ง**', async () => {
+    const secret = 'ราคาต้นทุนจริงคือหนึ่งหมื่นห้า';
+    const c = await addComment(ctx, { itemKey, body: secret, isInternal: true });
+    const rows = await notifsFor(c.id);
+    const reporterRows = rows.filter((r) => r.userId === ctx.actorId);
+    expect(reporterRows).toEqual([]);
+  });
+
+  it('เขียนซ้ำได้แจ้งเตือนใหม่ ไม่ใช่ทับของเดิม — คีย์ผูกกับความเห็น ไม่ใช่กับงาน', async () => {
+    const a = await addComment(ctx, { itemKey, body: 'ข้อความหนึ่ง' });
+    const b = await addComment(ctx, { itemKey, body: 'ข้อความสอง' });
+    expect((await notifsFor(a.id)).length).toBeGreaterThan(0);
+    expect((await notifsFor(b.id)).length).toBeGreaterThan(0);
   });
 });

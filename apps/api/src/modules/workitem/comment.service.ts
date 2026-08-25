@@ -18,6 +18,11 @@ import {
 } from '../../infrastructure/audit/audited-transaction';
 import { tenantScoped } from '../../infrastructure/prisma/tenant-scope';
 import { WorkItemNotFoundError } from './workitem.service';
+import {
+  commentAudience,
+  commentDedupeKey,
+  commentNotificationText,
+} from './comment-audience';
 
 export class EmptyCommentError extends Error {
   constructor() {
@@ -64,7 +69,7 @@ export async function addComment(
   const db = tenantScoped(ctx);
   const item = await db.workItem.findFirst({
     where: { itemKey: input.itemKey },
-    select: { id: true },
+    select: { id: true, itemKey: true, summary: true, reporterId: true, assigneeId: true },
   });
   if (item === null) throw new WorkItemNotFoundError(input.itemKey);
 
@@ -88,6 +93,43 @@ export async function addComment(
       },
       select: { id: true, createdAt: true },
     });
+
+    /**
+     * แจ้งเตือน **ในทรานแซกชันเดียวกับความเห็น**
+     *
+     * ถ้าเขียนทีหลังนอกทรานแซกชัน ความเห็นที่บันทึกสำเร็จแต่แจ้งเตือนพลาด
+     * จะกลายเป็นคำถามที่ไม่มีใครเห็น โดยไม่มี error ให้ใครสังเกต
+     * ตัวส่งอีเมลอ่านจากตารางนี้อยู่แล้ว จึงได้ความทนทานมาฟรี
+     */
+    const audience = commentAudience({
+      authorId,
+      reporterId: item.reporterId,
+      assigneeId: item.assigneeId,
+      isInternal,
+    });
+    if (audience.length > 0) {
+      const text = commentNotificationText({
+        itemKey: item.itemKey,
+        summary: item.summary,
+        authorName: author?.displayName ?? 'ไม่ทราบชื่อ',
+        body,
+        isInternal,
+      });
+      await tx.notification.createMany({
+        data: audience.map((r) => ({
+          tenantId: ctx.tenantId,
+          userId: r.userId,
+          workItemId: item.id,
+          kind: isInternal ? 'comment.internal' : 'comment.added',
+          title: text.title,
+          body: text.body,
+          dedupeKey: commentDedupeKey(row.id, r.userId),
+        })),
+        // unique index บน (tenantId, dedupeKey) เป็นด่านสุดท้าย
+        // ถ้าชนแปลว่าเคยแจ้งไปแล้ว ซึ่งไม่ใช่ความผิดพลาดที่ต้องล้มทั้งความเห็น
+        skipDuplicates: true,
+      });
+    }
 
     /**
      * ประวัติบันทึกว่า "มีความเห็นเพิ่ม" ไม่ใช่เนื้อความ
