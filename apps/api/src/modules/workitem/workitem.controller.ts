@@ -7,7 +7,17 @@
  * ⚠️ ยังไม่มีการยืนยันตัวตน — ใช้ resolveDevTenantContext ซึ่งโยน error
  * เมื่อรันบน production ดู ADR-003
  */
-import { Controller, Get, HttpException, HttpStatus, Param, Post, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpException,
+  HttpStatus,
+  Param,
+  Post,
+  Query,
+} from '@nestjs/common';
 
 /* eslint-disable @typescript-eslint/no-deprecated -- resolveDevTenantContext ถูกทำเครื่องหมาย deprecated โดยตั้งใจ
    เพื่อให้ทุกจุดที่ใช้มองเห็นได้ในทันทีเมื่อโมดูล identity พร้อม (ADR-003) จุดเหล่านี้คือรายการที่ต้องลบ */
@@ -21,6 +31,12 @@ import {
   applyTransition,
   availableTransitions,
 } from '../workflow';
+import {
+  IssueTypeNotConfiguredError,
+  ProjectNotFoundError,
+  SummaryRequiredError,
+  createWorkItem,
+} from './workitem.service';
 
 export interface WorkItemListRow {
   id: string;
@@ -120,6 +136,72 @@ export class WorkItemController {
         sla: sla.get(w.id.toString()) ?? null,
       })),
     };
+  }
+
+  /**
+   * สร้างงานใหม่
+   *
+   * ตั้งใจไม่รับ `statusId` `rank` หรือ `itemKey` จากผู้เรียก — ทั้งสามอย่าง
+   * ระบบเป็นคนกำหนด ถ้ารับเข้ามา ลูกค้าของ API จะกำหนดสถานะเริ่มต้นเองได้
+   * ซึ่งข้าม workflow ไปทั้งอัน
+   */
+  @Post()
+  @HttpCode(HttpStatus.CREATED)
+  async create(
+    @Body()
+    // ชนิดที่นี่ต้องสะท้อน **สิ่งที่มาจากสาย** ไม่ใช่สิ่งที่เราหวังว่าจะได้
+    // Nest ไม่ตรวจ body ให้โดยปริยาย ลูกค้าส่ง "3" มาแทน 3 ได้เสมอ
+    // ถ้าประกาศเป็น number เฉย ๆ lint จะบอกว่า Number() ซ้ำซ้อน แล้วเราจะลบมันทิ้ง
+    // แล้วสตริงจะไหลเข้า Prisma โดยไม่มีอะไรกั้น (CLAUDE.md §4 — บทเรียนเรื่อง Prisma.Decimal)
+    body: {
+      project?: string;
+      issueType?: string;
+      summary?: string;
+      description?: string;
+      priorityRank?: number | string;
+      assigneeId?: string;
+    },
+  ): Promise<{ id: string; itemKey: string; status: string }> {
+    const ctx = await resolveDevTenantContext();
+    if (ctx.actorId === null) {
+      throw new HttpException({ message: 'ไม่พบผู้ใช้สำหรับแจ้งงาน' }, HttpStatus.FORBIDDEN);
+    }
+    if (body.project === undefined || body.issueType === undefined) {
+      throw new HttpException(
+        { error: 'validation_failed', message: 'ต้องระบุโปรเจกต์และชนิดของงาน' },
+        HttpStatus.UNPROCESSABLE_ENTITY,
+      );
+    }
+
+    try {
+      const created = await createWorkItem(ctx, {
+        projectKey: body.project,
+        issueTypeName: body.issueType,
+        summary: body.summary ?? '',
+        ...(body.description === undefined ? {} : { description: body.description }),
+        ...(body.priorityRank === undefined ? {} : { priorityRank: Number(body.priorityRank) }),
+        ...(body.assigneeId === undefined ? {} : { assigneeId: BigInt(body.assigneeId) }),
+      });
+      return { id: created.id.toString(), itemKey: created.itemKey, status: created.statusName };
+    } catch (e) {
+      if (e instanceof SummaryRequiredError) {
+        throw new HttpException(
+          { error: 'validation_failed', message: e.message, missingFields: ['summary'] },
+          HttpStatus.UNPROCESSABLE_ENTITY,
+        );
+      }
+      if (e instanceof ProjectNotFoundError) {
+        throw new HttpException({ error: 'not_found', message: e.message }, HttpStatus.NOT_FOUND);
+      }
+      if (e instanceof IssueTypeNotConfiguredError) {
+        // 422 ไม่ใช่ 404 — โปรเจกต์มีจริง แต่ยังตั้งค่าไม่ครบ ซึ่งแก้ได้ที่หน้า admin
+        throw new HttpException(
+          { error: 'issue_type_not_configured', message: e.message },
+          HttpStatus.UNPROCESSABLE_ENTITY,
+        );
+      }
+      throw e;
+    }
   }
 
   @Get(':key')
