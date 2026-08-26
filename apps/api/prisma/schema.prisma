@@ -69,11 +69,73 @@ model User {
   watching         WorkItemWatcher[]
   historyEntries   WorkItemHistory[]
   auditLogs        AuditLog[]
+  sessions         Session[]
+  loginAttempts    LoginAttempt[]
 
   @@unique([tenantId, email])
   @@index([tenantId, isActive])
   @@index([tenantId, externalId])
   @@map("user")
+}
+
+/**
+ * เซสชันฝั่งเซิร์ฟเวอร์ — ADR-003 เลือกสิ่งนี้แทน JWT
+ *
+ * JWT เพิกถอนไม่ได้ถ้าไม่มีบัญชีดำ ซึ่งเท่ากับมีตารางเซสชันอยู่ดี แต่ซับซ้อนกว่า
+ * และตอบไม่ได้ว่า "ตอนนี้ใครล็อกอินอยู่บ้าง" ซึ่งเป็นคำถามที่ผู้ดูแลระบบถามจริง
+ *
+ * **เก็บเฉพาะแฮชของโทเคน ไม่เก็บตัวโทเคน** — ฐานข้อมูลที่รั่วต้องไม่ทำให้
+ * ผู้อ่านสวมรอยเป็นใครได้ทันที เหมือนที่ไม่เก็บรหัสผ่านเป็นข้อความล้วน
+ */
+model Session {
+  id       BigInt @id @default(autoincrement())
+  tenantId BigInt @map("tenant_id")
+  userId   BigInt @map("user_id")
+
+  /// SHA-256 ของโทเคนที่ส่งให้ผู้ใช้ — ตัวโทเคนจริงไม่เคยถูกเก็บ
+  tokenHash String @map("token_hash") @db.VarChar(64)
+
+  /// บริบทตอนสร้าง เอาไว้ให้เจ้าของบัญชีดูว่ามีเซสชันแปลกปลอมหรือไม่
+  userAgent String? @map("user_agent") @db.VarChar(500)
+  ipAddress String? @map("ip_address") @db.VarChar(45)
+
+  expiresAt  DateTime  @map("expires_at") @db.DateTime(3)
+  /// เวลาที่ถูกเพิกถอน — null คือยังใช้ได้
+  /// เก็บเป็นเวลา ไม่ใช่ boolean เพราะต้องตอบได้ว่าถูกตัดตอนไหน
+  revokedAt  DateTime? @map("revoked_at") @db.DateTime(3)
+  lastSeenAt DateTime  @map("last_seen_at") @db.DateTime(3)
+  createdAt  DateTime  @default(now()) @map("created_at") @db.DateTime(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([tokenHash])
+  @@index([tenantId, userId, revokedAt])
+  @@index([expiresAt])
+  @@map("session")
+}
+
+/**
+ * บันทึกการพยายามล็อกอิน — ใช้จำกัดจำนวนครั้งที่เดารหัสผ่าน
+ *
+ * เก็บทั้งที่สำเร็จและล้มเหลว เพราะการนับเฉพาะที่ล้มเหลวทำให้ผู้โจมตี
+ * ที่เดาถูกหนึ่งครั้งกลางทาง ล้างประวัติของตัวเองได้
+ *
+ * `identifier` คืออีเมลที่กรอกมา **ไม่ใช่ userId** เพราะต้องนับการเดาบัญชี
+ * ที่ไม่มีอยู่จริงด้วย ไม่งั้นการยิงสุ่มอีเมลจะไม่ถูกจำกัดเลย
+ */
+model LoginAttempt {
+  id         BigInt   @id @default(autoincrement())
+  tenantId   BigInt   @map("tenant_id")
+  identifier String   @db.VarChar(320)
+  userId     BigInt?  @map("user_id")
+  succeeded  Boolean
+  ipAddress  String?  @map("ip_address") @db.VarChar(45)
+  createdAt  DateTime @default(now()) @map("created_at") @db.DateTime(3)
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, identifier, createdAt])
+  @@map("login_attempt")
 }
 
 model UserGroup {

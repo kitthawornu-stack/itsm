@@ -73,8 +73,20 @@ function injectIntoData(model: string, data: unknown, tenantId: bigint): unknown
  *
  * ส่ง `SYSTEM_SCOPE` ได้เฉพาะงาน admin ระดับระบบ และ **ต้องมีคอมเมนต์อธิบายเหตุผล**
  * ทุกจุดที่เรียก (CLAUDE.md §1.1)
+ *
+ * **ประกาศชนิดคืนค่าเป็น `PrismaClientRaw` โดยตั้งใจ ไม่ปล่อยให้ TypeScript อนุมาน**
+ *
+ * ชนิดที่ `$extends` คืนมาเป็น generic ที่ซ้อนลึกมาก และ TypeScript ต้องคลี่มันใหม่
+ * ทุกจุดที่เรียก · พอเพิ่มโมเดล `Session` กับ `LoginAttempt` เข้าสคีมา
+ * มันข้ามเพดานความลึกทันที แล้ว `tsc` พ่น "Excessive stack depth" 81 ข้อ
+ * กระจายไปทุกไฟล์ที่ใช้ client นี้ — รวมถึงไฟล์ที่ไม่ได้แก้อะไรเลย
+ *
+ * การประกาศชนิดตายตัวตัดการอนุมานซ้ำทิ้ง ราคาที่จ่ายคือชนิดไม่รู้ว่า extension
+ * เติม `tenantId` ให้ ผู้เรียกจึงต้องระบุ `tenantId` ตอน `create` เอง
+ * ซึ่ง **ดีกว่าในแง่การอ่านโค้ด** — เห็นชัดว่าแถวนี้เป็นของ tenant ไหน
+ * และ extension ยังตรวจให้อยู่ดีว่าค่าที่ส่งมาตรงกับ scope (โยน CrossTenantAccessError)
  */
-export function tenantScoped(scope: QueryScope, base: PrismaClientRaw = prismaClient) {
+export function tenantScoped(scope: QueryScope, base: PrismaClientRaw = prismaClient): PrismaClientRaw {
   if (isSystemScope(scope)) return base;
   const { tenantId } = scope satisfies TenantContext;
 
@@ -125,7 +137,7 @@ export function tenantScoped(scope: QueryScope, base: PrismaClientRaw = prismaCl
         },
       },
     },
-  });
+  }) as unknown as PrismaClientRaw;
   /* eslint-enable @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unnecessary-condition */
 }
 
@@ -143,7 +155,7 @@ export async function withSystemScope<T>(
   if (reason.trim().length < 10) {
     throw new Error('withSystemScope ต้องระบุเหตุผลที่อ่านเข้าใจได้ อย่างน้อย 10 อักขระ');
   }
-  return fn(tenantScoped(SYSTEM_SCOPE) as PrismaClientRaw);
+  return fn(tenantScoped(SYSTEM_SCOPE));
 }
 
 /**
@@ -161,7 +173,7 @@ export async function tenantTransaction<T>(
   // Prisma ส่ง extension ต่อเข้าไปใน tx ให้ก็ต่อเมื่อเปิดจาก client ที่มี extension
   // ถ้าเปิดจาก client ดิบ ทุกคิวรีใน tx จะไม่มี tenant scope เลยทั้งก้อน
   // — พิสูจน์ไว้ใน test/tenant-isolation.spec.ts ข้อ 9
-  const scoped = tenantScoped(ctx) as unknown as PrismaClientRaw;
+  const scoped = tenantScoped(ctx);
   return scoped.$transaction(async (tx) => fn(tx));
 }
 

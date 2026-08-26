@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 
+import { IdentityController } from './modules/identity/identity.controller';
 import { HealthController } from './modules/health/health.controller';
 import { NotificationController } from './modules/notification/notification.controller';
 import { WorkItemController } from './modules/workitem/workitem.controller';
@@ -12,7 +13,12 @@ import { WorkItemController } from './modules/workitem/workitem.controller';
  */
 @Module({
   imports: [ConfigModule.forRoot({ isGlobal: true, envFilePath: ['../../.env'] })],
-  controllers: [HealthController, WorkItemController, NotificationController],
+  controllers: [
+    HealthController,
+    IdentityController,
+    WorkItemController,
+    NotificationController,
+  ],
 })
 // eslint-disable-next-line @typescript-eslint/no-extraneous-class -- NestJS ใช้ class เปล่าเป็น module descriptor
 export class AppModule {}

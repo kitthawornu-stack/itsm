@@ -15,6 +15,7 @@
 import type { Prisma} from '@prisma/client';
 import { PrismaClient, ProjectType, RuleKind, StatusCategory, FieldType } from '@prisma/client';
 import { distribute } from '@itsm/lexorank';
+import { hashPassword } from '../src/modules/identity/password';
 
 const prisma = new PrismaClient();
 
@@ -95,6 +96,12 @@ function subject(pool: readonly string[]): string {
 }
 
 // ============================================================
+/**
+ * รหัสผ่านของผู้ใช้ทุกคนในข้อมูลทดสอบ (ADR-003)
+ * ใช้ได้เฉพาะ dev — production ต้องตั้งรหัสผ่านรายคนผ่านหน้าจอผู้ดูแลระบบ
+ */
+const DEV_PASSWORD = 'helix-dev-2569-ปลาทู';
+
 async function main(): Promise<void> {
   const started = Date.now();
   console.log('เริ่ม seed…');
@@ -144,11 +151,22 @@ async function main(): Promise<void> {
     },
   });
 
+  /**
+   * รหัสผ่านสำหรับ dev เท่านั้น
+   *
+   * แฮชครั้งเดียวแล้วใช้ซ้ำทุกคน เพราะ scrypt ที่ N=65536 ใช้เวลาราวหนึ่งวินาที
+   * ต่อครั้ง — แฮชแยกให้ผู้ใช้ 22 คนทำให้ seed ช้าขึ้นเกือบครึ่งนาทีโดยไม่ได้อะไร
+   * ในข้อมูลทดสอบ · **ห้ามทำแบบนี้กับข้อมูลจริง** เกลือที่ต่างกันคือเหตุผล
+   * ที่ตารางรหัสผ่านที่รั่วไม่บอกว่าใครใช้รหัสเดียวกัน
+   */
+  const devPasswordHash = await hashPassword(DEV_PASSWORD);
+
   const mkUsers = (names: string[], prefix: string) =>
     names.map((displayName, i) => ({
       tenantId,
       email: `${prefix}${i + 1}@plusdentalclinic.co.th`,
       displayName,
+      passwordHash: devPasswordHash,
     }));
 
   await prisma.user.createMany({

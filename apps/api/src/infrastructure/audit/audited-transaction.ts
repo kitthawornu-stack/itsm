@@ -69,7 +69,7 @@ export async function auditedTransaction<T>(
 ): Promise<T> {
   // ค่าปริยายต้องเป็น client ที่ผูก tenant แล้ว ไม่ใช่ `prismaClient` ดิบ
   // มิฉะนั้นคิวรีทุกตัวใน tx จะข้าม INVARIANT 1 — ซึ่งเคยเป็นอย่างนั้นจริง
-  const client = base ?? (tenantScoped(ctx) as unknown as PrismaClientRaw);
+  const client = base ?? tenantScoped(ctx);
   return client.$transaction(async (tx) => {
     const { result, audit } = await fn(tx);
 

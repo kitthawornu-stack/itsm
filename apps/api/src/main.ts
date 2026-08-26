@@ -1,6 +1,7 @@
 import 'reflect-metadata';
 
 import { NestFactory } from '@nestjs/core';
+import cookieParser from 'cookie-parser';
 
 import { AppModule } from './app.module';
 import { initSlaDispatcher } from './infrastructure/queue/sla-dispatcher';
@@ -28,9 +29,15 @@ async function bootstrap(): Promise<void> {
 
   const app = await NestFactory.create(AppModule, { logger: ['error', 'warn', 'log'] });
   app.setGlobalPrefix('api/v1');
+  // โทเคนเซสชันอยู่ในคุกกี้ httpOnly (ADR-003) จึงต้องแกะคุกกี้ก่อนถึง controller
+  app.use(cookieParser());
   // dev เท่านั้น — production ให้ web กับ api อยู่หลัง reverse proxy เดียวกัน
   if (process.env['NODE_ENV'] !== 'production') {
-    app.enableCors({ origin: [`http://localhost:${process.env['WEB_PORT'] ?? 3000}`] });
+    app.enableCors({
+      origin: [`http://localhost:${process.env['WEB_PORT'] ?? 3000}`],
+      // ต้องเปิด ไม่งั้นเบราว์เซอร์ไม่ส่งคุกกี้เซสชันข้ามพอร์ตมาให้
+      credentials: true,
+    });
   }
   const port = Number(process.env['API_PORT'] ?? 4000);
   await app.listen(port);
