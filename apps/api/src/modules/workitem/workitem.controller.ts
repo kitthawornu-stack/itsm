@@ -44,7 +44,7 @@ import {
   WorkItemNotFoundError,
   createWorkItem,
 } from './workitem.service';
-import { EmptyCommentError, addComment, listComments, type Viewer } from './comment.service';
+import { EmptyCommentError, addComment, listComments } from './comment.service';
 import {
   AttachmentNotFoundError,
   AttachmentRejectedError,
@@ -360,11 +360,10 @@ export class WorkItemController {
   async comments(
     @Ctx() ctx: TenantContext,
     @Param('key') key: string,
-    @Query('view') view?: string,
   ): Promise<{ rows: unknown[] }> {
-    const viewer: Viewer = view === 'reporter' ? 'reporter' : 'agent';
     try {
-      return { rows: await listComments(ctx, key, viewer) };
+      // ไม่มีพารามิเตอร์ `view` อีกแล้ว — service ถามสิทธิ์เอง
+      return { rows: await listComments(ctx, key) };
     } catch (e) {
       if (e instanceof WorkItemNotFoundError) {
         throw new HttpException({ error: 'not_found', message: e.message }, HttpStatus.NOT_FOUND);

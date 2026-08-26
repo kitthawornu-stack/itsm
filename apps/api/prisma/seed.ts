@@ -229,11 +229,14 @@ async function main(): Promise<void> {
       { tenantId, schemeId: schemeSd.id, permission: 'ASSIGN_ITEM', groupId: groupIt.id },
       { tenantId, schemeId: schemeSd.id, permission: 'TRANSITION_ITEM', groupId: groupIt.id },
       { tenantId, schemeId: schemeSd.id, permission: 'BULK_EDIT', groupId: groupIt.id },
+      // เห็นบันทึกภายใน — ให้เฉพาะทีมไอที ไม่ให้ "พนักงานทั้งหมด"
+      { tenantId, schemeId: schemeSd.id, permission: 'VIEW_INTERNAL_COMMENT', groupId: groupIt.id },
       { tenantId, schemeId: schemeSw.id, permission: 'BROWSE_PROJECT', groupId: groupDev.id },
       { tenantId, schemeId: schemeSw.id, permission: 'CREATE_ITEM', groupId: groupDev.id },
       { tenantId, schemeId: schemeSw.id, permission: 'EDIT_ITEM', groupId: groupDev.id },
       { tenantId, schemeId: schemeSw.id, permission: 'TRANSITION_ITEM', groupId: groupDev.id },
       { tenantId, schemeId: schemeSw.id, permission: 'MANAGE_SPRINT', groupId: groupDev.id },
+      { tenantId, schemeId: schemeSw.id, permission: 'VIEW_INTERNAL_COMMENT', groupId: groupDev.id },
     ],
   });
 

@@ -211,6 +211,9 @@ enum PermissionKey {
   TRANSITION_ITEM
   ADD_COMMENT
   DELETE_COMMENT
+  /// เห็นบันทึกภายในของทีม — แยกจาก ADD_COMMENT โดยตั้งใจ
+  /// ผู้แจ้งต้องเขียนความเห็นได้ แต่ต้องไม่เห็นสิ่งที่ทีมคุยกันเอง
+  VIEW_INTERNAL_COMMENT
   MANAGE_ATTACHMENT
   LINK_ITEM
   BULK_EDIT

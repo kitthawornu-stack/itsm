@@ -14,6 +14,12 @@ import { EmptyCommentError, addComment, listComments } from '../src/modules/work
 import { WorkItemNotFoundError, createWorkItem } from '../src/modules/workitem/workitem.service';
 
 let ctx: TenantContext;
+/** อยู่กลุ่ม IT Support → มีสิทธิ์ VIEW_INTERNAL_COMMENT */
+let staffCtx: TenantContext;
+/** ไม่อยู่กลุ่มที่มีสิทธิ์นั้น → คือผู้ใช้ทั่วไปที่แจ้งเรื่องเข้ามา */
+let plainCtx: TenantContext;
+let tenantId: bigint;
+let itGroupId: bigint;
 let itemKey: string;
 const createdIds: bigint[] = [];
 
@@ -27,6 +33,30 @@ beforeAll(async () => {
     orderBy: { id: 'asc' },
   });
   ctx = { tenantId: tenant.id, actorId: actor.id };
+  tenantId = tenant.id;
+
+  const itGroup = await prismaClient.userGroup.findFirstOrThrow({
+    where: { tenantId: tenant.id, name: 'IT Support' },
+  });
+  itGroupId = itGroup.id;
+
+  const staff = await prismaClient.groupMember.findFirstOrThrow({
+    where: { groupId: itGroup.id },
+    select: { userId: true },
+  });
+  staffCtx = { tenantId: tenant.id, actorId: staff.userId };
+
+  const staffIds = (
+    await prismaClient.groupMember.findMany({
+      where: { groupId: itGroup.id },
+      select: { userId: true },
+    })
+  ).map((m) => m.userId);
+  const plain = await prismaClient.user.findFirstOrThrow({
+    where: { tenantId: tenant.id, isSystem: false, id: { notIn: staffIds } },
+    orderBy: { id: 'asc' },
+  });
+  plainCtx = { tenantId: tenant.id, actorId: plain.id };
 
   const created = await createWorkItem(ctx, {
     projectKey: 'SD',
@@ -99,26 +129,52 @@ describe('addComment', () => {
   });
 });
 
-describe('listComments · INVARIANT 3', () => {
-  it('**ผู้แจ้งไม่เห็นความเห็นภายใน** — กรองที่ service ไม่ใช่ที่หน้าจอ', async () => {
-    const forReporter = await listComments(ctx, itemKey, 'reporter');
-    expect(forReporter.every((c) => !c.isInternal)).toBe(true);
-    expect(JSON.stringify(forReporter)).not.toContain('ห้ามให้ผู้แจ้งเห็น');
+describe('listComments · INVARIANT 3 · สิทธิ์จริง ไม่ใช่พารามิเตอร์', () => {
+  /**
+   * เคสสำคัญที่สุดของทั้งไฟล์
+   *
+   * เดิม `listComments` รับ `viewer` มาจากผู้เรียก และ controller ก็รับต่อมาจาก
+   * `?view=` บน URL · วัดจริงกับระบบที่รันอยู่: ล็อกอินเป็นผู้ใช้ทั่วไปแล้วเรียก
+   * `/comments` **อ่านบันทึกภายในได้ครบทุกฉบับ** รวมถึงข้อความอย่าง
+   * "อย่าเพิ่งบอกลูกค้า" และ "ลูกค้ารายนี้ค้างชำระอยู่"
+   *
+   * ตอนนี้ตัดสินจากสิทธิ์ VIEW_INTERNAL_COMMENT บนโปรเจกต์ของงานใบนั้น
+   */
+  it('**ผู้ใช้ทั่วไปไม่เห็นบันทึกภายใน** แม้เรียก service ตรง ๆ', async () => {
+    const rows = await listComments(plainCtx, itemKey);
+    expect(rows.every((c) => !c.isInternal)).toBe(true);
+    expect(rows.map((c) => c.body).join(' ')).not.toContain('ห้ามให้ผู้แจ้งเห็น');
   });
 
-  it('ทีมเห็นทั้งหมด รวมความเห็นภายใน', async () => {
-    const forAgent = await listComments(ctx, itemKey, 'agent');
-    expect(forAgent.some((c) => c.isInternal)).toBe(true);
+  it('ทีมที่มีสิทธิ์เห็นทั้งหมด รวมบันทึกภายใน', async () => {
+    const rows = await listComments(staffCtx, itemKey);
+    expect(rows.some((c) => c.isInternal)).toBe(true);
   });
 
-  it('ผู้แจ้งเห็นน้อยกว่าทีมเสมอเมื่อมีความเห็นภายใน', async () => {
-    const a = await listComments(ctx, itemKey, 'agent');
-    const r = await listComments(ctx, itemKey, 'reporter');
-    expect(r.length).toBeLessThan(a.length);
+  it('ผู้ใช้ทั่วไปเห็นน้อยกว่าทีมเสมอเมื่อมีบันทึกภายใน', async () => {
+    const staff = await listComments(staffCtx, itemKey);
+    const plain = await listComments(plainCtx, itemKey);
+    expect(plain.length).toBeLessThan(staff.length);
+  });
+
+  it('ถอดคนออกจากกลุ่มแล้วเห็นบันทึกภายในไม่ได้ทันที', async () => {
+    // สิทธิ์มาจากกลุ่ม ไม่ใช่จากบทบาทที่ฝังในบัญชี — ถอดออกต้องมีผลทันที
+    const before = await listComments(staffCtx, itemKey);
+    expect(before.some((c) => c.isInternal)).toBe(true);
+
+    await prismaClient.groupMember.deleteMany({
+      where: { userId: staffCtx.actorId as bigint, groupId: itGroupId },
+    });
+    const after = await listComments(staffCtx, itemKey);
+    expect(after.some((c) => c.isInternal)).toBe(false);
+
+    await prismaClient.groupMember.create({
+      data: { tenantId, groupId: itGroupId, userId: staffCtx.actorId as bigint },
+    });
   });
 
   it('เรียงตามเวลาจากเก่าไปใหม่ — บทสนทนาต้องอ่านจากบนลงล่าง', async () => {
-    const rows = await listComments(ctx, itemKey, 'agent');
+    const rows = await listComments(staffCtx, itemKey);
     const ids = rows.map((r) => BigInt(r.id));
     expect([...ids].sort((x, y) => (x < y ? -1 : 1))).toEqual(ids);
   });
@@ -129,10 +185,12 @@ describe('listComments · INVARIANT 3', () => {
       where: { id: BigInt(c.id) },
       data: { deletedAt: new Date() },
     });
-    const rows = await listComments(ctx, itemKey, 'agent');
+    const rows = await listComments(staffCtx, itemKey);
     expect(rows.some((r) => r.id === c.id)).toBe(false);
     // soft delete — audit ต้องยังตอบได้ว่าเคยมี
-    expect(await prismaClient.workItemComment.findFirst({ where: { id: BigInt(c.id) } })).not.toBeNull();
+    expect(
+      await prismaClient.workItemComment.findFirst({ where: { id: BigInt(c.id) } }),
+    ).not.toBeNull();
   });
 });
 

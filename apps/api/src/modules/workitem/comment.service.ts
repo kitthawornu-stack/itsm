@@ -17,6 +17,7 @@ import {
   type AuditEntry,
 } from '../../infrastructure/audit/audited-transaction';
 import { tenantScoped } from '../../infrastructure/prisma/tenant-scope';
+import { can } from '../permission';
 import { WorkItemNotFoundError } from './workitem.service';
 import {
   commentAudience,
@@ -37,8 +38,11 @@ export const COMMENT_MAX = 10_000;
 /**
  * ผู้อ่านที่เห็นความเห็นภายในได้
  *
- * ตอนนี้ยังไม่มีโมดูล permission (ADR-003) จึงตัดสินจากบทบาทที่ส่งเข้ามา
- * เมื่อ permission พร้อม ให้เปลี่ยนมาถามสิทธิ์จริงแทน — จุดนี้คือรายการที่ต้องแก้
+ * เดิมรับมาจากพารามิเตอร์ `?view=` ซึ่งแปลว่าใครพิมพ์ `?view=agent`
+ * ก็อ่านบันทึกภายในได้ · วัดจริงแล้วผู้ใช้ทั่วไปอ่านได้ครบทุกฉบับ
+ *
+ * ตอนนี้ตัดสินจากสิทธิ์ `VIEW_INTERNAL_COMMENT` บนโปรเจกต์ของงานใบนั้น
+ * ผู้เรียกบอกไม่ได้อีกแล้ว
  */
 export type Viewer = 'agent' | 'reporter';
 
@@ -169,14 +173,18 @@ function textOf(value: unknown): string {
  * **กรองความเห็นภายในที่นี่ ไม่ใช่ที่หน้าจอ** — ถ้าส่งออกไปแล้วให้ UI ซ่อน
  * ข้อมูลจะยังอยู่ใน response ที่ใครก็เปิด DevTools ดูได้ (INVARIANT 3)
  */
-export async function listComments(
-  ctx: TenantContext,
-  itemKey: string,
-  viewer: Viewer,
-): Promise<CommentView[]> {
+export async function listComments(ctx: TenantContext, itemKey: string): Promise<CommentView[]> {
   const db = tenantScoped(ctx);
-  const item = await db.workItem.findFirst({ where: { itemKey }, select: { id: true } });
+  const item = await db.workItem.findFirst({
+    where: { itemKey },
+    select: { id: true, projectId: true },
+  });
   if (item === null) throw new WorkItemNotFoundError(itemKey);
+
+  // ถามสิทธิ์จริง — ไม่รับคำตอบนี้จากผู้เรียก (INVARIANT 3)
+  const viewer: Viewer = (await can(ctx, item.projectId, 'VIEW_INTERNAL_COMMENT'))
+    ? 'agent'
+    : 'reporter';
 
   const rows = await db.workItemComment.findMany({
     where: {

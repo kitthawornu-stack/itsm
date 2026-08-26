@@ -1,0 +1,90 @@
+/**
+ * อ่านสิทธิ์จริงจากฐานข้อมูล
+ *
+ * โครงสร้าง: โปรเจกต์ → permission scheme → grant → กลุ่ม → ผู้ใช้
+ * ผู้ใช้ได้สิทธิ์ผ่านกลุ่มเท่านั้น จึงตอบได้เสมอว่า "ได้เพราะอยู่กลุ่มไหน"
+ *
+ * กฎการตัดสินอยู่ใน `permission-rules.ts` ซึ่งเป็นฟังก์ชันบริสุทธิ์
+ * ไฟล์นี้มีแต่การอ่านข้อมูล
+ */
+import type { TenantContext } from '@itsm/types';
+
+import { tenantScoped } from '../../infrastructure/prisma/tenant-scope';
+import {
+  resolveGrants,
+  summarize,
+  type PermissionKey,
+  type PermissionSummary,
+} from './permission-rules';
+
+export class PermissionDeniedError extends Error {
+  constructor(
+    readonly permission: PermissionKey,
+    readonly projectKey?: string,
+  ) {
+    // ไม่บอกว่าขาดสิทธิ์อะไร — ผู้ใช้ทำอะไรกับข้อมูลนั้นไม่ได้อยู่ดี
+    // และการไล่บอกทีละสิทธิ์คือการวาดแผนที่ระบบสิทธิ์ให้คนที่กำลังลอง
+    super('ไม่มีสิทธิ์ดำเนินการนี้');
+    this.name = 'PermissionDeniedError';
+  }
+}
+
+/**
+ * สิทธิ์ทั้งหมดของผู้ใช้ปัจจุบันบนโปรเจกต์หนึ่ง
+ *
+ * คืนเซ็ตว่างเมื่อโปรเจกต์ไม่มี scheme ผูกอยู่ — **ไม่ใช่ให้ทุกสิทธิ์**
+ * โปรเจกต์ที่ตั้งค่าไม่ครบต้องใช้ไม่ได้ ไม่ใช่เปิดหมด
+ */
+export async function permissionsFor(
+  ctx: TenantContext,
+  projectId: bigint,
+): Promise<Set<PermissionKey>> {
+  if (ctx.actorId === null) return new Set();
+
+  const db = tenantScoped(ctx);
+  const project = await db.project.findFirst({
+    where: { id: projectId },
+    select: { permissionSchemeId: true },
+  });
+  if (project?.permissionSchemeId == null) return new Set();
+
+  const [grants, memberships] = await Promise.all([
+    db.permissionGrant.findMany({
+      where: { schemeId: project.permissionSchemeId },
+      select: { permission: true, groupId: true },
+    }),
+    db.groupMember.findMany({ where: { userId: ctx.actorId }, select: { groupId: true } }),
+  ]);
+
+  return resolveGrants(
+    grants,
+    memberships.map((m) => m.groupId),
+  );
+}
+
+export async function can(
+  ctx: TenantContext,
+  projectId: bigint,
+  permission: PermissionKey,
+): Promise<boolean> {
+  return (await permissionsFor(ctx, projectId)).has(permission);
+}
+
+/** โยนเมื่อไม่มีสิทธิ์ — ใช้ในจุดที่การไม่มีสิทธิ์ต้องหยุดการทำงาน */
+export async function assertCan(
+  ctx: TenantContext,
+  projectId: bigint,
+  permission: PermissionKey,
+): Promise<void> {
+  if (!(await can(ctx, projectId, permission))) {
+    throw new PermissionDeniedError(permission);
+  }
+}
+
+/** สรุปให้หน้าจอใช้ซ่อนปุ่มที่กดไม่ได้ — ไม่ใช่กลไกป้องกัน */
+export async function summaryFor(
+  ctx: TenantContext,
+  projectId: bigint,
+): Promise<PermissionSummary> {
+  return summarize(await permissionsFor(ctx, projectId));
+}
