@@ -25,6 +25,7 @@ import {
   validateUpload,
   type Rejection,
 } from './attachment-policy';
+import { can, assertCan, PermissionDeniedError } from '../permission';
 import { WorkItemNotFoundError } from './workitem.service';
 
 export class AttachmentRejectedError extends Error {
@@ -77,9 +78,15 @@ export async function uploadAttachment(
   const db = tenantScoped(ctx);
   const item = await db.workItem.findFirst({
     where: { itemKey: input.itemKey },
-    select: { id: true },
+    select: { id: true, projectId: true },
   });
   if (item === null) throw new WorkItemNotFoundError(input.itemKey);
+
+  // แนบไฟล์ได้ถ้ามีสิทธิ์แนบโดยตรง หรือแก้ไขงานได้อยู่แล้ว
+  const mayAttach =
+    (await can(ctx, item.projectId, 'MANAGE_ATTACHMENT')) ||
+    (await can(ctx, item.projectId, 'EDIT_ITEM'));
+  if (!mayAttach) throw new PermissionDeniedError('MANAGE_ATTACHMENT');
 
   const filename = safeDisplayName(input.filename);
   const uploader = await db.user.findFirst({
@@ -148,8 +155,13 @@ export async function listAttachments(
   itemKey: string,
 ): Promise<AttachmentView[]> {
   const db = tenantScoped(ctx);
-  const item = await db.workItem.findFirst({ where: { itemKey }, select: { id: true } });
+  const item = await db.workItem.findFirst({
+    where: { itemKey },
+    select: { id: true, projectId: true },
+  });
   if (item === null) throw new WorkItemNotFoundError(itemKey);
+
+  await assertCan(ctx, item.projectId, 'BROWSE_PROJECT');
 
   const rows = await db.workItemAttachment.findMany({
     // ไฟล์ที่ยังเก็บไบต์ไม่เสร็จ (storageKey ว่าง) ไม่แสดง — กดโหลดแล้วจะพัง
@@ -180,10 +192,16 @@ export async function downloadAttachment(
 ): Promise<DownloadResult> {
   const db = tenantScoped(ctx);
   // findFirst ผูก tenant ให้อยู่แล้ว — ไฟล์ของ tenant อื่นจึงหาไม่เจอ ไม่ใช่หาเจอแล้วปฏิเสธ
-  const row = await db.workItemAttachment.findFirst({ where: { id: attachmentId } });
+  const row = await db.workItemAttachment.findFirst({
+    where: { id: attachmentId },
+    include: { workItem: { select: { projectId: true } } },
+  });
   if (row === null || row.storageKey === '') {
     throw new AttachmentNotFoundError(attachmentId.toString());
   }
+
+  // ดาวน์โหลดได้เฉพาะคนที่เปิดดูโปรเจกต์นั้นได้ — id เดาได้ง่ายเกินกว่าจะปล่อย
+  await assertCan(ctx, row.workItem.projectId, 'BROWSE_PROJECT');
 
   return {
     content: await getObject(row.storageKey),

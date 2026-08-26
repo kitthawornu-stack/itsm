@@ -23,6 +23,7 @@ import {
   type AuditEntry,
 } from '../../infrastructure/audit/audited-transaction';
 import { tenantScoped } from '../../infrastructure/prisma/tenant-scope';
+import { assertCan } from '../permission';
 import { indexWorkItem } from '../search-index';
 import { startSlaFor } from '../sla';
 
@@ -112,6 +113,10 @@ export async function createWorkItem(
     select: { id: true, key: true },
   });
   if (project === null) throw new ProjectNotFoundError(input.projectKey);
+
+  // ตรวจสิทธิ์ที่ชั้น service ไม่ใช่ที่ controller — บริการนี้ถูกเรียกจากที่อื่นได้อีก
+  // (คิวอีเมลขาเข้า, automation) และทุกทางต้องผ่านด่านเดียวกัน
+  await assertCan(ctx, project.id, 'CREATE_ITEM');
 
   const issueType = await db.issueType.findFirst({
     where: { name: input.issueTypeName },

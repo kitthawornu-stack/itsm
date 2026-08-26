@@ -17,7 +17,7 @@ import {
   type AuditEntry,
 } from '../../infrastructure/audit/audited-transaction';
 import { tenantScoped } from '../../infrastructure/prisma/tenant-scope';
-import { can } from '../permission';
+import { PermissionDeniedError, assertCan, can } from '../permission';
 import { WorkItemNotFoundError } from './workitem.service';
 import {
   commentAudience,
@@ -66,6 +66,7 @@ export async function addComment(
   now: UtcDate = systemClock.nowUtc(),
 ): Promise<CommentView> {
   const body = input.body.trim();
+  const isInternalRequested = input.isInternal ?? false;
   if (body.length === 0) throw new EmptyCommentError();
   if (ctx.actorId === null) throw new Error('addComment ต้องมีผู้เขียน (actorId)');
   const authorId = ctx.actorId;
@@ -73,16 +74,34 @@ export async function addComment(
   const db = tenantScoped(ctx);
   const item = await db.workItem.findFirst({
     where: { itemKey: input.itemKey },
-    select: { id: true, itemKey: true, summary: true, reporterId: true, assigneeId: true },
+    select: {
+      id: true,
+      itemKey: true,
+      summary: true,
+      projectId: true,
+      reporterId: true,
+      assigneeId: true,
+    },
   });
   if (item === null) throw new WorkItemNotFoundError(input.itemKey);
+
+  await assertCan(ctx, item.projectId, 'ADD_COMMENT');
+  /**
+   * เขียนบันทึกภายในได้เฉพาะคนที่เห็นบันทึกภายใน
+   *
+   * ถ้าไม่กัน ผู้แจ้งจะส่ง `isInternal: true` มาเองแล้วเขียนบันทึกที่ตัวเอง
+   * มองไม่เห็นอีกต่อไป — ข้อความหายไปจากหน้าจอเจ้าของเองโดยไม่มีคำอธิบาย
+   */
+  if (isInternalRequested && !(await can(ctx, item.projectId, 'VIEW_INTERNAL_COMMENT'))) {
+    throw new PermissionDeniedError('VIEW_INTERNAL_COMMENT');
+  }
 
   const author = await db.user.findFirst({
     where: { id: authorId },
     select: { displayName: true },
   });
 
-  const isInternal = input.isInternal ?? false;
+  const isInternal = isInternalRequested;
 
   return auditedTransaction(ctx, 'workitem.comment', async (tx) => {
     const row = await tx.workItemComment.create({
@@ -180,6 +199,8 @@ export async function listComments(ctx: TenantContext, itemKey: string): Promise
     select: { id: true, projectId: true },
   });
   if (item === null) throw new WorkItemNotFoundError(itemKey);
+
+  await assertCan(ctx, item.projectId, 'BROWSE_PROJECT');
 
   // ถามสิทธิ์จริง — ไม่รับคำตอบนี้จากผู้เรียก (INVARIANT 3)
   const viewer: Viewer = (await can(ctx, item.projectId, 'VIEW_INTERNAL_COMMENT'))

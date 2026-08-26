@@ -5,6 +5,7 @@
 export {
   PermissionDeniedError,
   assertCan,
+  browsableProjectIds,
   can,
   permissionsFor,
   summaryFor,

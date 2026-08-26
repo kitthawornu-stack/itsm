@@ -1,7 +1,8 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { APP_GUARD } from '@nestjs/core';
+import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 
+import { PermissionDeniedFilter } from './infrastructure/http/permission-denied.filter';
 import { SessionGuard } from './infrastructure/http/session.guard';
 
 import { IdentityController } from './modules/identity/identity.controller';
@@ -26,7 +27,11 @@ import { WorkItemController } from './modules/workitem/workitem.controller';
    * ปิดทุก endpoint โดยปริยาย — endpoint สาธารณะต้องติด `@Public()` เอง
    * ทิศทางนี้ทำให้ endpoint ที่ลืมตั้งค่าพังทันที แทนที่จะเปิดโล่งเงียบ ๆ
    */
-  providers: [{ provide: APP_GUARD, useClass: SessionGuard }],
+  providers: [
+    { provide: APP_GUARD, useClass: SessionGuard },
+    // 403 ที่เดียวสำหรับทั้งแอป — handler ใหม่ไม่ต้องจำที่จะดักเอง
+    { provide: APP_FILTER, useClass: PermissionDeniedFilter },
+  ],
 })
 // eslint-disable-next-line @typescript-eslint/no-extraneous-class -- NestJS ใช้ class เปล่าเป็น module descriptor
 export class AppModule {}

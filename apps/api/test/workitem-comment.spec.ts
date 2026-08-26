@@ -20,6 +20,7 @@ let staffCtx: TenantContext;
 let plainCtx: TenantContext;
 let tenantId: bigint;
 let itGroupId: bigint;
+let allGroupId: bigint;
 let itemKey: string;
 const createdIds: bigint[] = [];
 
@@ -39,6 +40,11 @@ beforeAll(async () => {
     where: { tenantId: tenant.id, name: 'IT Support' },
   });
   itGroupId = itGroup.id;
+
+  const allGroup = await prismaClient.userGroup.findFirstOrThrow({
+    where: { tenantId: tenant.id, name: 'พนักงานทั้งหมด' },
+  });
+  allGroupId = allGroup.id;
 
   const staff = await prismaClient.groupMember.findFirstOrThrow({
     where: { groupId: itGroup.id },
@@ -158,19 +164,53 @@ describe('listComments · INVARIANT 3 · สิทธิ์จริง ไม�
   });
 
   it('ถอดคนออกจากกลุ่มแล้วเห็นบันทึกภายในไม่ได้ทันที', async () => {
-    // สิทธิ์มาจากกลุ่ม ไม่ใช่จากบทบาทที่ฝังในบัญชี — ถอดออกต้องมีผลทันที
-    const before = await listComments(staffCtx, itemKey);
-    expect(before.some((c) => c.isInternal)).toBe(true);
-
-    await prismaClient.groupMember.deleteMany({
-      where: { userId: staffCtx.actorId as bigint, groupId: itGroupId },
+    /**
+     * ใช้ผู้ใช้ชั่วคราวของเทสต์เอง **ไม่แตะสมาชิกกลุ่มของข้อมูล seed**
+     *
+     * เวอร์ชันแรกลบสมาชิกจริงออกแล้วค่อยใส่กลับตอนท้าย · ระหว่างที่ทดลอง
+     * ทำให้เทสต์แดงเพื่อพิสูจน์กลไก assertion กลางทางล้มก่อนถึงบรรทัดใส่กลับ
+     * ผลคือ agent1 และ agent2 หลุดจากกลุ่ม IT Support ค้างไว้จริงในฐานข้อมูล
+     * และทุกอย่างที่ตามมาก็ตอบ 403 ทั้งที่โค้ดถูก
+     *
+     * เทสต์ที่แก้ข้อมูลร่วมต้องแก้ของตัวเองเท่านั้น — คืนค่าตอนท้ายไม่พอ
+     * เพราะ "ตอนท้าย" ไม่ได้ถูกรันเมื่อกลางทางล้ม
+     */
+    const temp = await prismaClient.user.create({
+      data: {
+        tenantId,
+        email: `perm-probe-${String(Date.now())}@example.test`,
+        displayName: 'ผู้ใช้ชั่วคราวของเทสต์สิทธิ์',
+      },
+      select: { id: true },
     });
-    const after = await listComments(staffCtx, itemKey);
-    expect(after.some((c) => c.isInternal)).toBe(false);
+    const tempCtx = { tenantId, actorId: temp.id };
 
-    await prismaClient.groupMember.create({
-      data: { tenantId, groupId: itGroupId, userId: staffCtx.actorId as bigint },
-    });
+    try {
+      /**
+       * อยู่ "พนักงานทั้งหมด" ด้วย — จำลองผู้แจ้งจริงที่เปิดดูโปรเจกต์ได้อยู่แล้ว
+       *
+       * ถ้าอยู่แต่ IT Support พอถอดออกจะไม่เหลือสิทธิ์อะไรเลย แล้วจะถูกปฏิเสธ
+       * ตั้งแต่ขั้นเปิดดูโปรเจกต์ ซึ่งเป็นคนละเรื่องกับที่เทสต์นี้ต้องการวัด
+       */
+      await prismaClient.groupMember.createMany({
+        data: [
+          { tenantId, groupId: itGroupId, userId: temp.id },
+          { tenantId, groupId: allGroupId, userId: temp.id },
+        ],
+      });
+      const inGroup = await listComments(tempCtx, itemKey);
+      expect(inGroup.some((c) => c.isInternal)).toBe(true);
+
+      // สิทธิ์มาจากกลุ่ม ไม่ใช่จากบทบาทที่ฝังในบัญชี — ถอดออกต้องมีผลทันที
+      await prismaClient.groupMember.deleteMany({
+        where: { userId: temp.id, groupId: itGroupId },
+      });
+      const outOfGroup = await listComments(tempCtx, itemKey);
+      expect(outOfGroup.some((c) => c.isInternal)).toBe(false);
+    } finally {
+      await prismaClient.groupMember.deleteMany({ where: { userId: temp.id } });
+      await prismaClient.user.delete({ where: { id: temp.id } });
+    }
   });
 
   it('เรียงตามเวลาจากเก่าไปใหม่ — บทสนทนาต้องอ่านจากบนลงล่าง', async () => {

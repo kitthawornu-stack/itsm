@@ -88,3 +88,46 @@ export async function summaryFor(
 ): Promise<PermissionSummary> {
   return summarize(await permissionsFor(ctx, projectId));
 }
+
+/**
+ * โปรเจกต์ทั้งหมดที่ผู้ใช้คนนี้เปิดดูได้
+ *
+ * ใช้กรองรายการงาน — **กรองที่คิวรี ไม่ใช่กรองผลลัพธ์ทีหลัง**
+ * ถ้าดึงมาทั้งหมดแล้วค่อยคัดออก จำนวนรวมและการแบ่งหน้าจะผิด และงานของโปรเจกต์
+ * ที่ไม่มีสิทธิ์ยังถูกอ่านออกจากฐานข้อมูลมาแล้วหนึ่งรอบ
+ *
+ * คืนรายการว่างเมื่อไม่มีสิทธิ์ที่ไหนเลย ซึ่งแปลว่าเห็นงานศูนย์รายการ — ถูกต้อง
+ */
+export async function browsableProjectIds(ctx: TenantContext): Promise<bigint[]> {
+  if (ctx.actorId === null) return [];
+
+  const db = tenantScoped(ctx);
+  const [projects, memberships] = await Promise.all([
+    db.project.findMany({
+      where: { isArchived: false },
+      select: { id: true, permissionSchemeId: true },
+    }),
+    db.groupMember.findMany({ where: { userId: ctx.actorId }, select: { groupId: true } }),
+  ]);
+
+  const schemeIds = [
+    ...new Set(projects.map((p) => p.permissionSchemeId).filter((v) => v !== null)),
+  ];
+  if (schemeIds.length === 0) return [];
+
+  const grants = await db.permissionGrant.findMany({
+    where: { schemeId: { in: schemeIds }, permission: 'BROWSE_PROJECT' },
+    select: { schemeId: true, groupId: true },
+  });
+
+  const mine = new Set(memberships.map((m) => m.groupId.toString()));
+  const allowedSchemes = new Set(
+    grants
+      .filter((g) => g.groupId !== null && mine.has(g.groupId.toString()))
+      .map((g) => g.schemeId.toString()),
+  );
+
+  return projects
+    .filter((p) => p.permissionSchemeId !== null && allowedSchemes.has(p.permissionSchemeId.toString()))
+    .map((p) => p.id);
+}

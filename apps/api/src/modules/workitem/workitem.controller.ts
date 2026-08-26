@@ -26,6 +26,12 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import type { Response } from 'express';
 
 import { Ctx } from '../../infrastructure/http/session.guard';
+import {
+  assertCan,
+  browsableProjectIds,
+  can,
+  summaryFor,
+} from '../permission';
 import { tenantScoped } from '../../infrastructure/prisma/tenant-scope';
 import type { TenantContext } from '@itsm/types';
 
@@ -81,10 +87,25 @@ export class WorkItemController {
     const db = tenantScoped(ctx);
     const take = Math.min(Number(limit ?? 50) || 50, 200);
 
+    /**
+     * กรองด้วยโปรเจกต์ที่ผู้ใช้เปิดดูได้ **ที่ระดับคิวรี**
+     *
+     * ถ้าดึงมาทั้งหมดแล้วค่อยคัดออกทีหลัง ยอดรวมและการแบ่งหน้าจะผิด
+     * และแถวของโปรเจกต์ที่ไม่มีสิทธิ์ก็ถูกอ่านออกมาแล้วหนึ่งรอบอยู่ดี
+     */
+    const allowedProjectIds = await browsableProjectIds(ctx);
+
     const project =
       projectKey === undefined
         ? null
         : await db.project.findFirst({ where: { key: projectKey }, select: { id: true } });
+
+    // ขอโปรเจกต์ที่เปิดดูไม่ได้ = เห็นศูนย์รายการ ไม่ใช่ 403
+    // เพราะ 403 บอกว่าโปรเจกต์นี้มีอยู่จริง ซึ่งเป็นข้อมูลที่ไม่ควรบอก
+    const scopedProjectIds =
+      project === null
+        ? allowedProjectIds
+        : allowedProjectIds.filter((id) => id === project.id);
 
     // เมื่อมีคำค้น ให้ OpenSearch คัดก่อน แล้วดึงรายละเอียดจาก MySQL
     // MySQL เป็นแหล่งความจริงเสมอ — OpenSearch คืนแค่ลำดับและ key
@@ -111,7 +132,7 @@ export class WorkItemController {
     }
 
     const where = {
-      ...(project === null ? {} : { projectId: project.id }),
+      projectId: { in: scopedProjectIds },
       ...(openOnly === 'true' ? { resolvedAt: null } : {}),
       ...(keyFilter === undefined ? {} : { itemKey: { in: keyFilter } }),
     };
@@ -179,7 +200,9 @@ export class WorkItemController {
     const [unsorted, priorities] = await Promise.all([
       // ตัดโปรเจกต์ที่เก็บเข้ากรุแล้วออก — ยังแจ้งเรื่องเข้าไปไม่ได้อยู่แล้ว
       db.project.findMany({
-        where: { isArchived: false },
+        // เห็นเฉพาะโปรเจกต์ที่ตัวเองเปิดดูได้ — ฟอร์มแจ้งงานต้องไม่โฆษณา
+        // โปรเจกต์ที่ผู้ใช้เข้าไม่ถึง
+        where: { isArchived: false, id: { in: await browsableProjectIds(ctx) } },
         select: { key: true, name: true, type: true },
         orderBy: { key: 'asc' },
       }),
@@ -308,6 +331,12 @@ export class WorkItemController {
       throw new HttpException({ error: 'not_found', message: `ไม่พบงาน ${key}` }, HttpStatus.NOT_FOUND);
     }
 
+    // เปิดดูโปรเจกต์นี้ไม่ได้ = ตอบเหมือนไม่มีงานใบนี้
+    // ตอบ 403 เท่ากับยืนยันว่างานคีย์นี้มีอยู่จริง ซึ่งเป็นข้อมูลรั่วเล็ก ๆ ที่ไล่เก็บได้
+    if (!(await can(ctx, item.projectId, 'BROWSE_PROJECT'))) {
+      throw new HttpException({ error: 'not_found', message: `ไม่พบงาน ${key}` }, HttpStatus.NOT_FOUND);
+    }
+
     const [transitions, history, sla] = await Promise.all([
       ctx.actorId === null ? Promise.resolve([]) : availableTransitions(ctx, item.id, ctx.actorId),
       db.workItemHistory.findMany({
@@ -334,6 +363,8 @@ export class WorkItemController {
       reporter: item.reporter.displayName,
       fieldSnapshot: item.fieldSnapshot,
       sla: sla.get(item.id.toString()) ?? null,
+      // ให้หน้าจอซ่อนปุ่มที่กดไม่ได้ — ไม่ใช่กลไกป้องกัน เซิร์ฟเวอร์ปฏิเสธเองอยู่แล้ว
+      permissions: await summaryFor(ctx, item.projectId),
       createdAt: item.createdAt.toISOString(),
       updatedAt: item.updatedAt.toISOString(),
       // ปุ่มที่ผู้ใช้คนนี้เห็นได้จริง — ผ่าน CONDITION ชั้นแรกของ workflow engine แล้ว
@@ -513,10 +544,17 @@ export class WorkItemController {
       throw new HttpException({ message: 'ไม่พบผู้ใช้สำหรับดำเนินการ' }, HttpStatus.FORBIDDEN);
     }
     const db = tenantScoped(ctx);
-    const item = await db.workItem.findFirst({ where: { itemKey: key }, select: { id: true } });
+    const item = await db.workItem.findFirst({
+      where: { itemKey: key },
+      select: { id: true, projectId: true },
+    });
     if (item === null) {
       throw new HttpException({ message: `ไม่พบงาน ${key}` }, HttpStatus.NOT_FOUND);
     }
+
+    // workflow engine ตรวจ CONDITION ของ transition อยู่แล้ว แต่นั่นคือกฎของ workflow
+    // ไม่ใช่สิทธิ์ — โปรเจกต์ที่ไม่ตั้ง CONDITION ไว้จะเปิดให้ทุกคนกดโดยไม่มีอะไรกั้น
+    await assertCan(ctx, item.projectId, 'TRANSITION_ITEM');
 
     try {
       const result = await applyTransition(ctx, item.id, BigInt(transitionId), ctx.actorId);
