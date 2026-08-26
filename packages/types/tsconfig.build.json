@@ -1,0 +1,16 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    // apps ทั้งสองตัวเป็น CommonJS — package ต้องออกมาเป็นรูปแบบเดียวกัน
+    // ไม่งั้น `require()` ของ Node จะได้ object ที่ไม่มี named export
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "outDir": "dist",
+    "rootDir": "src",
+    "declaration": true,
+    "noEmit": false,
+    "sourceMap": true
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": ["src/**/*.spec.ts", "dist", "node_modules"]
+}

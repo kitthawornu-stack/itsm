@@ -1,0 +1,18 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "outDir": "dist",
+    "rootDir": "src",
+    "sourceMap": true,
+    // ชี้ไปที่ dist ของ package ไม่ใช่ source
+    // ถ้าชี้ไป source ตัว tsc จะคอมไพล์ไฟล์นอก rootDir เข้ามาด้วย
+    // แล้วโครงของ dist จะเพี้ยนจนหา entry point ไม่เจอ
+    "paths": {
+      "@itsm/types": ["../../packages/types/dist/index.d.ts"],
+      "@itsm/lexorank": ["../../packages/lexorank/dist/index.d.ts"]
+    }
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": ["src/**/*.spec.ts", "test", "prisma", "dist", "node_modules"]
+}

@@ -442,3 +442,39 @@ healthcheck ใน `docker-compose.yml` ใช้พอร์ต**ในคอ�
 · การคืนค่าตอนท้ายไม่พอ เพราะ "ตอนท้าย" ไม่ได้ถูกรันเมื่อกลางทางล้ม
 ถ้าจำเป็นต้องแก้จริง ให้ใช้ `try/finally`
 
+## 10. การส่งมอบ (on-prem)
+
+```bash
+pnpm build                      # คอมไพล์ packages + api + worker + web
+docker compose --env-file .env -f infra/compose/docker-compose.prod.yml up -d --build
+
+# ครั้งแรกเท่านั้น — ฐานข้อมูลใหม่ไม่มีผู้ใช้เลย ล็อกอินไม่ได้จนกว่าจะรันคำสั่งนี้
+docker compose -f infra/compose/docker-compose.prod.yml run --rm   -e BOOTSTRAP_ADMIN_EMAIL=you@company.co.th   -e BOOTSTRAP_ADMIN_PASSWORD='ประโยคที่ยาวพอ'   api node dist/scripts/bootstrap.js
+```
+
+- migration รันเป็น service แยกที่ต้องสำเร็จก่อน api จะขึ้น — ถ้าล้ม api ต้องไม่ขึ้น
+- `.dockerignore` จำเป็น: ถ้าไม่มี build context คือ 1.3 GB และ symlink ของ pnpm
+  ใน `node_modules` คัดข้ามเครื่องไม่ได้
+
+### บทเรียนจากการยกสแตกจริงครั้งแรก
+
+สามอย่างนี้ **build ผ่านหมด typecheck ผ่านหมด เทสต์เขียวหมด** แต่ระบบใช้ไม่ได้เลย
+ไม่มีอะไรจับได้นอกจากการยกขึ้นมาแล้วลองใช้:
+
+1. **ฐานข้อมูลใหม่ไม่มีผู้ใช้** — ปิดทุก endpoint เป็นค่าปริยายแปลว่าไม่มีใครล็อกอินได้
+   และไม่มีทางสร้างผู้ใช้คนแรกผ่านหน้าจอ · แก้ด้วย `bootstrap.js`
+2. **CORS ปิดใน production** โดยคิดว่าจะอยู่หลัง reverse proxy เสมอ
+   แต่ชุดที่ส่งมอบเปิดคนละพอร์ตโดยไม่มี proxy — เบราว์เซอร์บล็อกการล็อกอินทันที
+3. **Next standalone bind ตาม `HOSTNAME`** ซึ่ง Docker ตั้งเป็นรหัสคอนเทนเนอร์
+   เซิร์ฟเวอร์จึงไม่ฟังที่ `127.0.0.1` · พอร์ตที่ map ออกไปยังใช้ได้ แต่ healthcheck
+   ล้มตลอด ดูเหมือนแอปพังทั้งที่ทำงานปกติ · แก้ด้วย `ENV HOSTNAME=0.0.0.0`
+
+**กติกา**: "build ผ่าน" ไม่ใช่ "ติดตั้งได้" — ต้องยกสแตกจากภาพจริง
+แล้วล็อกอินด้วยเบราว์เซอร์จริงอย่างน้อยหนึ่งครั้งก่อนบอกว่าส่งมอบได้
+
+### ทำไมไม่ bundle ด้วย esbuild
+
+NestJS พึ่ง `design:paramtypes` ที่มาจาก `emitDecoratorMetadata` ซึ่ง esbuild ไม่ทำให้
+ผลคือ **DI พังทุก provider โดยที่ build ผ่าน** และ error ไปโผล่ตอนรันเท่านั้น
+(เจอมาแล้วกับ `Reflector` ตอนทำ `SessionGuard`)
+

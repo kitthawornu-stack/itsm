@@ -1,0 +1,179 @@
+# Helix — ชุดที่ส่งมอบให้ลูกค้าติดตั้งเอง (on-prem)
+#
+# ต่างจาก `docker-compose.yml` ซึ่งมีแต่ของที่ dev ต้องใช้ (ฐานข้อมูล, คิว, ที่เก็บไฟล์)
+# ไฟล์นี้รวม **แอปทั้งสามตัวที่คอมไพล์แล้ว** ด้วย จึงเป็นชุดที่รันได้จริงโดยไม่ต้องมี
+# Node หรือ pnpm บนเครื่องปลายทาง
+#
+# รัน:  docker compose --env-file .env -f infra/compose/docker-compose.prod.yml up -d --build
+#
+# **ทุกพอร์ตในไฟล์นี้เป็นพอร์ตในคอนเทนเนอร์** ส่วนพอร์ตที่เปิดออกมาอ่านจาก .env
+# (ดู CLAUDE.md §9) — อย่าแก้ฝั่งขวาของ `ports:` ตามพอร์ตที่เปลี่ยนข้างนอก
+
+name: helix
+
+services:
+  mysql:
+    image: mysql:8.4
+    restart: unless-stopped
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_0900_ai_ci
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-itsm_root_dev}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-itsm}
+      MYSQL_USER: ${MYSQL_USER:-itsm}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-itsm_dev}
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ['CMD', 'mysqladmin', 'ping', '-h', '127.0.0.1', '-p${MYSQL_ROOT_PASSWORD:-itsm_root_dev}']
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    # คิวไม่ใช่ที่เก็บถาวร แต่เปิด persistence ไว้ลดจำนวนงานที่ต้องกู้หลังรีสตาร์ต
+    # ตัวกวาดใน worker ยังเป็นด่านหลักเสมอ (ดู sla-reconciler.ts)
+    command: ['redis-server', '--appendonly', 'yes']
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  opensearch:
+    image: opensearchproject/opensearch:2.17.1
+    restart: unless-stopped
+    environment:
+      discovery.type: single-node
+      DISABLE_SECURITY_PLUGIN: 'true'
+      OPENSEARCH_JAVA_OPTS: -Xms512m -Xmx512m
+    ulimits:
+      memlock: { soft: -1, hard: -1 }
+      nofile: { soft: 65536, hard: 65536 }
+    volumes:
+      - opensearch-data:/usr/share/opensearch/data
+    healthcheck:
+      test: ['CMD-SHELL', 'curl -sf http://localhost:9200/_cluster/health || exit 1']
+      interval: 15s
+      timeout: 5s
+      retries: 20
+
+  minio:
+    image: minio/minio:RELEASE.2024-10-13T13-34-11Z
+    restart: unless-stopped
+    command: ['server', '/data', '--console-address', ':9001']
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-itsm}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-itsm_dev_secret}
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ['CMD', 'mc', 'ready', 'local']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # ---------- migration ----------
+  #
+  # แยกเป็น service ที่รันครั้งเดียวแล้วจบ ไม่ใช่รวมใน command ของ api
+  #
+  # เหตุผล: ถ้า migrate ล้ม มันต้องล้มแบบเห็นได้ชัดและ api ต้องไม่ขึ้น
+  # การรวมไว้ใน `sh -c "migrate || true; start"` ทำให้ระบบขึ้นมาบนสคีมาที่ผิด
+  # แล้วพังทีหลังในที่ที่ดูไม่เกี่ยวกับ migration เลย
+  #
+  # ใช้ภาพเดียวกับ api — prisma CLI อยู่ใน dependencies เพราะ on-prem
+  # ต้องอัปเกรดสคีมาตัวเองได้โดยไม่ต้องมีเครื่องมือเพิ่ม
+  migrate:
+    build:
+      context: ../..
+      dockerfile: infra/docker/api.Dockerfile
+    restart: 'no'
+    depends_on:
+      mysql: { condition: service_healthy }
+    environment:
+      DATABASE_URL: mysql://${MYSQL_USER:-itsm}:${MYSQL_PASSWORD:-itsm_dev}@mysql:3306/${MYSQL_DATABASE:-itsm}
+    command: ['./node_modules/.bin/prisma', 'migrate', 'deploy', '--schema', 'prisma/schema.prisma']
+
+  api:
+    build:
+      context: ../..
+      dockerfile: infra/docker/api.Dockerfile
+    restart: unless-stopped
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      mysql: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      opensearch: { condition: service_healthy }
+      minio: { condition: service_healthy }
+    environment:
+      NODE_ENV: production
+      API_PORT: 4400
+      # ชื่อ service คือชื่อ host ในเครือข่ายของ compose — ไม่ใช่ localhost
+      DATABASE_URL: mysql://${MYSQL_USER:-itsm}:${MYSQL_PASSWORD:-itsm_dev}@mysql:3306/${MYSQL_DATABASE:-itsm}
+      REDIS_URL: redis://redis:6379
+      OPENSEARCH_URL: http://opensearch:9200
+      S3_ENDPOINT: http://minio:9000
+      S3_BUCKET: ${S3_BUCKET:-itsm-attachments}
+      S3_REGION: ${S3_REGION:-ap-southeast-1}
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-itsm}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-itsm_dev_secret}
+      DEFAULT_TENANT_KEY: ${DEFAULT_TENANT_KEY:-default}
+      # ต้นทางที่เบราว์เซอร์ใช้เปิดหน้าเว็บ — ไม่ใช่ชื่อ service ภายใน
+      # เมื่อมี reverse proxy ให้ทั้งสองอยู่โดเมนเดียวกัน ค่านี้ไม่ต้องใช้อีก
+      CORS_ORIGINS: ${PUBLIC_WEB_URL:-http://localhost:4300}
+      WEB_PORT: 4300
+    ports:
+      - '${API_PORT:-4400}:4400'
+
+  worker:
+    build:
+      context: ../..
+      dockerfile: infra/docker/worker.Dockerfile
+    restart: unless-stopped
+    depends_on:
+      mysql: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: mysql://${MYSQL_USER:-itsm}:${MYSQL_PASSWORD:-itsm_dev}@mysql:3306/${MYSQL_DATABASE:-itsm}
+      REDIS_URL: redis://redis:6379
+      SMTP_HOST: ${SMTP_HOST:-mailpit}
+      SMTP_PORT: ${SMTP_PORT_INTERNAL:-1025}
+      SMTP_FROM: ${SMTP_FROM:-Helix Service Desk <no-reply@itsm.local>}
+      WEB_BASE_URL: ${WEB_BASE_URL:-http://localhost:4300}
+
+  web:
+    build:
+      context: ../..
+      dockerfile: infra/docker/web.Dockerfile
+      args:
+        # เบราว์เซอร์เรียก API ตรง จึงต้องเป็นที่อยู่ที่ **เบราว์เซอร์** เข้าถึงได้
+        # ไม่ใช่ชื่อ service ภายในเครือข่ายของ compose
+        API_BASE_URL: ${PUBLIC_API_URL:-http://localhost:4400}
+    restart: unless-stopped
+    depends_on:
+      api: { condition: service_started }
+    environment:
+      NODE_ENV: production
+      PORT: 4300
+      API_BASE_URL: ${PUBLIC_API_URL:-http://localhost:4400}
+    ports:
+      - '${WEB_PORT:-4300}:4300'
+
+  mailpit:
+    image: axllent/mailpit:latest
+    restart: unless-stopped
+    # dev/pilot เท่านั้น — production จริงต้องชี้ SMTP_HOST ไปเซิร์ฟเวอร์เมลขององค์กร
+    ports:
+      - '${MAILPIT_UI_PORT:-4825}:8025'
+
+volumes:
+  mysql-data:
+  redis-data:
+  opensearch-data:
+  minio-data:

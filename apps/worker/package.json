@@ -8,7 +8,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "dotenv -e ../../.env -- vitest run",
     "smoke": "dotenv -e ../../.env -- tsx src/smoke.ts",
-    "prisma:generate": "prisma generate --schema ../api/prisma/schema.prisma"
+    "prisma:generate": "prisma generate --schema ../api/prisma/schema.prisma",
+    "build": "tsc -p tsconfig.build.json"
   },
   "dependencies": {
     "@itsm/types": "workspace:*",

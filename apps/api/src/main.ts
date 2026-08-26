@@ -31,14 +31,31 @@ async function bootstrap(): Promise<void> {
   app.setGlobalPrefix('api/v1');
   // โทเคนเซสชันอยู่ในคุกกี้ httpOnly (ADR-003) จึงต้องแกะคุกกี้ก่อนถึง controller
   app.use(cookieParser());
-  // dev เท่านั้น — production ให้ web กับ api อยู่หลัง reverse proxy เดียวกัน
-  if (process.env['NODE_ENV'] !== 'production') {
-    app.enableCors({
-      origin: [`http://localhost:${process.env['WEB_PORT'] ?? 3000}`],
-      // ต้องเปิด ไม่งั้นเบราว์เซอร์ไม่ส่งคุกกี้เซสชันข้ามพอร์ตมาให้
-      credentials: true,
-    });
-  }
+  /**
+   * ต้นทางที่เรียก API ข้ามพอร์ตได้
+   *
+   * เดิมเปิด CORS เฉพาะตอนไม่ใช่ production โดยคิดว่า production จะอยู่หลัง
+   * reverse proxy เดียวกันเสมอ · แต่ชุดที่ส่งมอบ (docker-compose.prod.yml)
+   * เปิด web ที่ 4300 และ api ที่ 4400 โดยไม่มี proxy — เบราว์เซอร์จึงบล็อก
+   * การล็อกอินทันทีที่ยกสแตกขึ้น **ระบบที่ build ผ่านทุกอย่างแต่ใช้ไม่ได้เลย**
+   *
+   * ตั้งค่าได้ด้วย `CORS_ORIGINS` (คั่นด้วยจุลภาค) ถ้าไม่ตั้งจะเดาจาก WEB_PORT
+   * ไม่ใช้ `*` เพราะคำขอที่พาคุกกี้ไปด้วยต้องระบุต้นทางให้ชัด
+   * (เบราว์เซอร์ปฏิเสธ `*` คู่กับ credentials อยู่แล้ว)
+   */
+  const configured = process.env['CORS_ORIGINS'];
+  const origins =
+    configured === undefined || configured.trim() === ''
+      ? [`http://localhost:${process.env['WEB_PORT'] ?? 4300}`]
+      : configured.split(',').map((o) => o.trim()).filter((o) => o !== '');
+
+  app.enableCors({
+    origin: origins,
+    // ต้องเปิด ไม่งั้นเบราว์เซอร์ไม่ส่งคุกกี้เซสชันข้ามพอร์ตมาให้
+    credentials: true,
+  });
+  console.log(`CORS อนุญาต: ${origins.join(', ')}`);
+
   const port = Number(process.env['API_PORT'] ?? 4000);
   await app.listen(port);
   console.log(`Helix API listening on http://localhost:${port}/api/v1`);

@@ -74,6 +74,9 @@ importers:
       ioredis:
         specifier: ^5.4.2
         version: 5.11.1
+      prisma:
+        specifier: ^6.1.0
+        version: 6.19.3(magicast@0.3.5)(typescript@5.9.3)
       reflect-metadata:
         specifier: ^0.2.2
         version: 0.2.2
@@ -102,9 +105,6 @@ importers:
       dotenv-cli:
         specifier: ^7.4.4
         version: 7.4.4
-      prisma:
-        specifier: ^6.1.0
-        version: 6.19.3(magicast@0.3.5)(typescript@5.9.3)
       supertest:
         specifier: ^7.0.0
         version: 7.2.2

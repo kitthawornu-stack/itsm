@@ -1,0 +1,36 @@
+# ไม่ส่งของที่สร้างใหม่ได้เข้า build context
+#
+# ก่อนมีไฟล์นี้ context คือ 1.3 GB และ build ล้มเพราะ symlink ของ pnpm
+# ใน node_modules คัดข้ามเครื่องไม่ได้ · Dockerfile ติดตั้ง dependency เองอยู่แล้ว
+node_modules
+**/node_modules
+
+# ผลลัพธ์ของการ build — ภาพต้องคอมไพล์เองจาก source เสมอ
+# ไม่งั้นภาพที่ได้อาจมาจากโค้ดคนละรุ่นกับที่อยู่ใน git
+dist
+**/dist
+.next
+**/.next
+.turbo
+**/.turbo
+storybook-static
+
+# ของที่ไม่เกี่ยวกับการรัน
+.git
+.github
+docs
+*.md
+!README.md
+.vscode
+.idea
+
+# ความลับ — ส่งเข้าไปตอนรัน ไม่ฝังในภาพ
+.env
+.env.*
+!.env.example
+
+# ผลการทดสอบและ log
+coverage
+*.log
+test-results
+playwright-report
