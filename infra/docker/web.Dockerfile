@@ -27,6 +27,8 @@ COPY . .
 ARG API_BASE_URL=http://localhost:4400
 ENV API_BASE_URL=$API_BASE_URL
 ENV NEXT_TELEMETRY_DISABLED=1
+# เปิด output standalone เฉพาะที่นี่ — ดูเหตุผลใน next.config.mjs
+ENV NEXT_STANDALONE=1
 RUN pnpm --filter @itsm/web build
 
 FROM base AS runtime

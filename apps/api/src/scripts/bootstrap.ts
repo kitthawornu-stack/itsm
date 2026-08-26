@@ -7,6 +7,12 @@
  *
  * เจอตอนยกสแตก production ขึ้นครั้งแรกจริง ๆ ไม่ใช่จากการอ่านโค้ด
  *
+ * **สร้างโปรเจกต์เริ่มต้นด้วย** ไม่ใช่แค่ผู้ใช้
+ *
+ * ครั้งแรกที่ยกสแตกขึ้นแล้วล็อกอินสำเร็จ พบว่าหน้าจอว่างเปล่า: ไม่มีโปรเจกต์
+ * ไม่มี workflow ไม่มีชนิดงาน จึงแจ้งเรื่องไม่ได้และคิวไม่มีอะไรให้ดู
+ * ติดตั้งเสร็จแล้วเข้าได้ แต่ยังใช้ไม่ได้ — ซึ่งไม่ต่างจากใช้ไม่ได้เลย
+ *
  * รันซ้ำได้ — ถ้ามีองค์กรหรือผู้ดูแลอยู่แล้วจะไม่แตะของเดิม
  *
  *   docker compose -f infra/compose/docker-compose.prod.yml run --rm \
@@ -105,8 +111,131 @@ async function main(): Promise<void> {
   });
 
   process.stdout.write(`สร้างผู้ดูแลระบบ: ${email}\n`);
+
+  await ensureStarterProject(tenant.id, group.id, scheme.id);
+
   process.stdout.write('เข้าสู่ระบบแล้วเพิ่มผู้ใช้คนอื่นได้ที่หน้า "ผู้ใช้และสิทธิ์"\n');
   await prismaClient.$disconnect();
+}
+
+/**
+ * โปรเจกต์ Service Desk ที่ใช้งานได้ทันที
+ *
+ * เล็กที่สุดเท่าที่ยังแจ้งเรื่องและปิดงานได้จริง — สามสถานะ สองปุ่ม
+ * ไม่ใช่ workflow ตัวอย่างที่สวยแต่ต้องรื้อทิ้ง
+ *
+ * ทุกคนในองค์กรเปิดดูและแจ้งเรื่องได้ · ทีมผู้ดูแลแก้ไขและเปลี่ยนสถานะได้
+ * เมื่อมีหน้าจอตั้งค่าโปรเจกต์แล้ว ส่วนนี้จะกลายเป็นค่าเริ่มต้นที่แก้ต่อได้
+ */
+async function ensureStarterProject(
+  tenantId: bigint,
+  adminGroupId: bigint,
+  schemeId: bigint,
+): Promise<void> {
+  const existing = await prismaClient.project.findFirst({ where: { tenantId }, select: { id: true } });
+  if (existing !== null) {
+    process.stdout.write('มีโปรเจกต์อยู่แล้ว — ไม่สร้างเพิ่ม\n');
+    return;
+  }
+
+  // กลุ่มที่ทุกคนอยู่ — ผู้แจ้งต้องเปิดดูและสร้างงานได้
+  const everyone = await prismaClient.userGroup.upsert({
+    where: { tenantId_name: { tenantId, name: 'พนักงานทั้งหมด' } },
+    create: { tenantId, name: 'พนักงานทั้งหมด' },
+    update: {},
+    select: { id: true },
+  });
+
+  const workflow = await prismaClient.workflow.create({
+    data: { tenantId, name: 'Service Desk', version: 1, isActive: true },
+    select: { id: true },
+  });
+
+  const mkStatus = async (
+    name: string,
+    category: 'TODO' | 'IN_PROGRESS' | 'DONE',
+    position: number,
+    isInitial = false,
+    pausesSla = false,
+  ): Promise<bigint> => {
+    const r = await prismaClient.workflowStatus.create({
+      data: { tenantId, workflowId: workflow.id, name, category, position, isInitial, pausesSla },
+      select: { id: true },
+    });
+    return r.id;
+  };
+
+  const isNew = await mkStatus('รับเรื่องแล้ว', 'TODO', 1, true);
+  const doing = await mkStatus('กำลังดำเนินการ', 'IN_PROGRESS', 2);
+  const done = await mkStatus('เสร็จแล้ว', 'DONE', 3);
+
+  await prismaClient.workflowTransition.createMany({
+    data: [
+      { tenantId, workflowId: workflow.id, name: 'เริ่มดำเนินการ', fromStatusId: isNew, toStatusId: doing, position: 1 },
+      { tenantId, workflowId: workflow.id, name: 'ปิดงาน', fromStatusId: doing, toStatusId: done, position: 2 },
+    ],
+  });
+
+  const project = await prismaClient.project.create({
+    data: {
+      tenantId,
+      key: 'SD',
+      name: 'ศูนย์บริการไอที',
+      type: 'SERVICE_DESK',
+      permissionSchemeId: schemeId,
+      notifyGroupId: adminGroupId,
+    },
+    select: { id: true },
+  });
+  // ตัวนับคีย์ต้องมีตั้งแต่แรก — ไม่งั้นงานใบแรกสร้างไม่ได้
+  await prismaClient.projectCounter.create({ data: { tenantId, projectId: project.id, lastValue: 0 } });
+
+  const issueType = await prismaClient.issueType.create({
+    data: { tenantId, name: 'Incident', iconKey: 'incident', isSubtask: false },
+    select: { id: true },
+  });
+  await prismaClient.workflowScheme.create({
+    data: { tenantId, projectId: project.id, issueTypeId: issueType.id, workflowId: workflow.id },
+  });
+
+  // สิทธิ์: ทุกคนแจ้งและคุยได้ · ผู้ดูแลจัดการงานได้
+  const grants: Array<[string, bigint]> = [
+    ['BROWSE_PROJECT', everyone.id],
+    ['CREATE_ITEM', everyone.id],
+    ['ADD_COMMENT', everyone.id],
+    ['EDIT_ITEM', adminGroupId],
+    ['ASSIGN_ITEM', adminGroupId],
+    ['TRANSITION_ITEM', adminGroupId],
+    ['MANAGE_ATTACHMENT', adminGroupId],
+    ['VIEW_INTERNAL_COMMENT', adminGroupId],
+  ];
+  for (const [permission, groupId] of grants) {
+    const already = await prismaClient.permissionGrant.findFirst({
+      where: { schemeId, permission: permission as never, groupId },
+      select: { id: true },
+    });
+    if (already === null) {
+      await prismaClient.permissionGrant.create({
+        data: { tenantId, schemeId, permission: permission as never, groupId },
+      });
+    }
+  }
+
+  // ผู้ดูแลต้องอยู่กลุ่มพนักงานทั้งหมดด้วย ไม่งั้นเปิดดูโปรเจกต์ตัวเองไม่ได้
+  const admins = await prismaClient.groupMember.findMany({
+    where: { groupId: adminGroupId },
+    select: { userId: true },
+  });
+  for (const a of admins) {
+    // คีย์หลักของตารางนี้คือ (groupId, userId) จึงใช้ upsert ได้ตรง ๆ
+    await prismaClient.groupMember.upsert({
+      where: { groupId_userId: { groupId: everyone.id, userId: a.userId } },
+      create: { tenantId, groupId: everyone.id, userId: a.userId },
+      update: {},
+    });
+  }
+
+  process.stdout.write('สร้างโปรเจกต์ SD · ศูนย์บริการไอที (3 สถานะ · 2 ปุ่ม)\n');
 }
 
 void main().catch((err: unknown) => {

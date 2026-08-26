@@ -1,5 +1,5 @@
 import { ReportForm } from '@/components/report-form';
-import { apiFetch } from '@/lib/api';
+import { API_BASE, apiFetch } from '@/lib/api';
 
 export const dynamic = 'force-dynamic';
 
@@ -9,7 +9,8 @@ interface Options {
   priorities: Array<{ rank: number; name: string }>;
 }
 
-const API = process.env['API_BASE_URL'] ?? 'http://localhost:4400';
+// ที่อยู่ฝั่งเบราว์เซอร์ — ต่างจากที่ server component ใช้ ดู lib/api.ts
+const API = API_BASE;
 
 /**
  * หน้าแจ้งปัญหา

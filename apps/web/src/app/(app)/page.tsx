@@ -9,7 +9,7 @@ import {
 } from '@itsm/ui';
 
 import { toSlaBar } from '@/lib/sla-label';
-import { apiFetch } from '@/lib/api';
+import { API_BASE, apiFetch } from '@/lib/api';
 
 interface ApiRow {
   id: string;
@@ -32,7 +32,8 @@ interface ApiRow {
   } | null;
 }
 
-const API = process.env['API_BASE_URL'] ?? 'http://localhost:4400';
+// ที่อยู่ฝั่งเบราว์เซอร์ — ต่างจากที่ server component ใช้ ดู lib/api.ts
+const API = API_BASE;
 
 /**
  * หน้า Agent Queue — หน้าจอที่ Agent เปิดค้างไว้ทั้งวัน

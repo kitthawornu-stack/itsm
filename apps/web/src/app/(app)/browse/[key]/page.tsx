@@ -14,7 +14,7 @@ import { CommentThread } from '@/components/comment-thread';
 import { toSlaBar, type SlaSnapshotView } from '@/lib/sla-label';
 
 import { TransitionButtons } from '@/components/transition-buttons';
-import { apiFetch } from '@/lib/api';
+import { API_BASE, apiFetch } from '@/lib/api';
 
 interface HistoryRow {
   id: string;
@@ -42,7 +42,8 @@ interface Detail {
   history: HistoryRow[];
 }
 
-const API = process.env['API_BASE_URL'] ?? 'http://localhost:4400';
+// ที่อยู่ฝั่งเบราว์เซอร์ — ต่างจากที่ server component ใช้ ดู lib/api.ts
+const API = API_BASE;
 
 const FIELD_LABEL: Record<string, string> = {
   status: 'สถานะ',

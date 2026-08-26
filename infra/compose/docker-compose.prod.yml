@@ -161,7 +161,12 @@ services:
     environment:
       NODE_ENV: production
       PORT: 4300
+      # ที่อยู่ที่ **เบราว์เซอร์** ใช้ — ส่งต่อไปให้ client component
       API_BASE_URL: ${PUBLIC_API_URL:-http://localhost:4400}
+      # ที่อยู่ที่ **เซิร์ฟเวอร์ Next** ใช้ — ชื่อ service ในเครือข่ายของ compose
+      # ถ้าไม่แยกสองค่านี้ server component จะยิงไป localhost ของตัวเอง
+      # แล้วหน้าคิวกับหน้าแจ้งปัญหาจะว่างเปล่าโดยไม่มี error ที่ไหนเลย
+      API_INTERNAL_URL: http://api:4400
     ports:
       - '${WEB_PORT:-4300}:4300'
 

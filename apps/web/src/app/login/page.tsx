@@ -2,10 +2,12 @@ import type { ReactNode } from 'react';
 
 import { LoginForm } from '@/components/login-form';
 import { ThemeToggle } from '@/components/theme-toggle';
+import { API_BASE } from '@/lib/api';
 
 export const dynamic = 'force-dynamic';
 
-const API = process.env['API_BASE_URL'] ?? 'http://localhost:4400';
+// ที่อยู่ฝั่งเบราว์เซอร์ — ต่างจากที่ server component ใช้ ดู lib/api.ts
+const API = API_BASE;
 
 export default async function LoginPage({
   searchParams,

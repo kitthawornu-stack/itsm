@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { NotificationTray } from '@/components/notification-tray';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { UserMenu } from '@/components/user-menu';
+import { API_BASE } from '@/lib/api';
 
 /**
  * เปลือกของหน้าที่ต้องล็อกอิน
@@ -12,7 +13,8 @@ import { UserMenu } from '@/components/user-menu';
  * ออกไปหลายอัน — เปลืองเปล่า และทำให้ console เต็มไปด้วย error ที่ไม่ใช่ปัญหาจริง
  * จนกลบ error ที่เป็นปัญหาจริง
  */
-const API = process.env['API_BASE_URL'] ?? 'http://localhost:4400';
+// ที่อยู่ฝั่งเบราว์เซอร์ — ต่างจากที่ server component ใช้ ดู lib/api.ts
+const API = API_BASE;
 
 export default function AppLayout({ children }: { children: ReactNode }): ReactNode {
   return (
