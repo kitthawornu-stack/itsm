@@ -40,7 +40,7 @@ interface Detail {
   history: HistoryRow[];
 }
 
-const API = process.env['API_BASE_URL'] ?? 'http://localhost:4000';
+const API = process.env['API_BASE_URL'] ?? 'http://localhost:4400';
 
 const FIELD_LABEL: Record<string, string> = {
   status: 'สถานะ',

@@ -12,7 +12,7 @@
   "scripts": {
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
-    "storybook": "storybook dev -p 6006 --no-open",
+    "storybook": "storybook dev -p 4606 --no-open",
     "build-storybook": "storybook build"
   },
   "devDependencies": {

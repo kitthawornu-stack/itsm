@@ -10,7 +10,7 @@ import { cookies } from 'next/headers';
  *
  * ต่างจากฝั่ง client ที่แค่ใส่ `credentials: 'include'` แล้วเบราว์เซอร์จัดการให้
  */
-export const API_BASE = process.env['API_BASE_URL'] ?? 'http://localhost:4000';
+export const API_BASE = process.env['API_BASE_URL'] ?? 'http://localhost:4400';
 
 export async function apiFetch(path: string, init: RequestInit = {}): Promise<Response> {
   const jar = await cookies();

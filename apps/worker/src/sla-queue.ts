@@ -34,7 +34,7 @@ export interface PlannedJob {
 }
 
 export function createConnection(): IORedis {
-  return new IORedis(process.env['REDIS_URL'] ?? 'redis://localhost:6379', {
+  return new IORedis(process.env['REDIS_URL'] ?? 'redis://localhost:4379', {
     maxRetriesPerRequest: null,
   });
 }

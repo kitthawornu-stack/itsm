@@ -65,6 +65,8 @@ services:
     volumes:
       - opensearch-data:/usr/share/opensearch/data
     healthcheck:
+      # 9200 คือพอร์ตในคอนเทนเนอร์ ไม่ใช่พอร์ตบนเครื่อง — healthcheck รันข้างใน
+      # จึงต้องคงไว้แม้จะ map ออกมาเป็น ${OPENSEARCH_PORT} ข้างนอก
       test: ["CMD-SHELL", "curl -sf http://localhost:9200/_cluster/health || exit 1"]
       interval: 10s
       timeout: 5s

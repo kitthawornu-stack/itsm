@@ -5,7 +5,7 @@ import { ThemeToggle } from '@/components/theme-toggle';
 
 export const dynamic = 'force-dynamic';
 
-const API = process.env['API_BASE_URL'] ?? 'http://localhost:4000';
+const API = process.env['API_BASE_URL'] ?? 'http://localhost:4400';
 
 export default async function LoginPage({
   searchParams,

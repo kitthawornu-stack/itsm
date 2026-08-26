@@ -27,7 +27,7 @@ export class HealthController {
     }
 
     try {
-      const url = process.env['OPENSEARCH_URL'] ?? 'http://localhost:9200';
+      const url = process.env['OPENSEARCH_URL'] ?? 'http://localhost:4200';
       const res = await fetch(`${url}/_cluster/health`, { signal: AbortSignal.timeout(3000) });
       components['opensearch'] = res.ok ? { status: 'up' } : { status: 'down', detail: `HTTP ${res.status}` };
     } catch (e) {

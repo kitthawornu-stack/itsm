@@ -32,7 +32,7 @@ interface ApiRow {
   } | null;
 }
 
-const API = process.env['API_BASE_URL'] ?? 'http://localhost:4000';
+const API = process.env['API_BASE_URL'] ?? 'http://localhost:4400';
 
 /**
  * หน้า Agent Queue — หน้าจอที่ Agent เปิดค้างไว้ทั้งวัน

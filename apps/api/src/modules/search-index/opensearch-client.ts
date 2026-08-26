@@ -6,7 +6,7 @@
  * ถ้าวันหนึ่งต้องใช้ฟีเจอร์ลึกกว่านี้ ค่อยเปลี่ยน — จุดสัมผัสอยู่ในไฟล์เดียว
  */
 
-const BASE = process.env['OPENSEARCH_URL'] ?? 'http://localhost:9200';
+const BASE = process.env['OPENSEARCH_URL'] ?? 'http://localhost:4200';
 
 export class OpenSearchError extends Error {
   constructor(

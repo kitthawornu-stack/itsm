@@ -32,7 +32,7 @@ let client: S3Client | null = null;
 function s3(): S3Client {
   client ??= new S3Client({
     region: process.env['S3_REGION'] ?? 'ap-southeast-1',
-    endpoint: process.env['S3_ENDPOINT'] ?? 'http://localhost:9000',
+    endpoint: process.env['S3_ENDPOINT'] ?? 'http://localhost:4900',
     // MinIO ไม่รองรับ virtual-host style addressing โดยปริยาย
     forcePathStyle: true,
     credentials: {

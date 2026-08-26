@@ -12,7 +12,7 @@ import { UserMenu } from '@/components/user-menu';
  * ออกไปหลายอัน — เปลืองเปล่า และทำให้ console เต็มไปด้วย error ที่ไม่ใช่ปัญหาจริง
  * จนกลบ error ที่เป็นปัญหาจริง
  */
-const API = process.env['API_BASE_URL'] ?? 'http://localhost:4000';
+const API = process.env['API_BASE_URL'] ?? 'http://localhost:4400';
 
 export default function AppLayout({ children }: { children: ReactNode }): ReactNode {
   return (

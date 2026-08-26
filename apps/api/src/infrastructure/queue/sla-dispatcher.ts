@@ -15,7 +15,7 @@ let queue: Queue | null = null;
 let connection: IORedis | null = null;
 
 export function initSlaDispatcher(): SlaJobDispatcher {
-  connection = new IORedis(process.env['REDIS_URL'] ?? 'redis://localhost:6379', {
+  connection = new IORedis(process.env['REDIS_URL'] ?? 'redis://localhost:4379', {
     maxRetriesPerRequest: null,
   });
   queue = new Queue(QUEUE_NAME, { connection });

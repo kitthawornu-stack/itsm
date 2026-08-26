@@ -85,7 +85,7 @@ const RECONCILE_EVERY_MS = Number(process.env['SLA_RECONCILE_INTERVAL_MS'] ?? 5 
  * แต่ไม่ถี่จนกลายเป็นการ poll ฐานข้อมูลทุกวินาที — ครึ่งนาทีคือจุดที่รับได้ทั้งสองทาง
  */
 const EMAIL_EVERY_MS = Number(process.env['EMAIL_DELIVERY_INTERVAL_MS'] ?? 30_000);
-const WEB_BASE_URL = process.env['WEB_BASE_URL'] ?? 'http://localhost:3000';
+const WEB_BASE_URL = process.env['WEB_BASE_URL'] ?? 'http://localhost:4300';
 
 async function main(): Promise<void> {
   const connection = createConnection();
