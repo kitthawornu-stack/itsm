@@ -23,6 +23,7 @@ export default function AppLayout({ children }: { children: ReactNode }): ReactN
           <nav className="app-nav">
             <a href="/">คิวงาน</a>
             <a href="/new">แจ้งปัญหา</a>
+            <a href="/admin/users">ผู้ใช้</a>
             <a href="/components">คลังคอมโพเนนต์</a>
           </nav>
           <NotificationTray apiBase={API} />

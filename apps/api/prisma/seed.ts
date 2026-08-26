@@ -182,9 +182,19 @@ async function main(): Promise<void> {
   const groupIt = await prisma.userGroup.create({ data: { tenantId, name: 'IT Support' } });
   const groupDev = await prisma.userGroup.create({ data: { tenantId, name: 'Engineering' } });
   const groupAll = await prisma.userGroup.create({ data: { tenantId, name: 'พนักงานทั้งหมด' } });
+  /**
+   * กลุ่มผู้ดูแลระบบแยกจาก IT Support โดยตั้งใจ
+   *
+   * การเพิ่มคน ตั้งรหัสผ่านให้คนอื่น และปิดบัญชี เป็นคนละอำนาจกับการรับแจ้งงาน
+   * ทีมไอทีทุกคนไม่จำเป็นต้องรีเซ็ตรหัสผ่านของใครก็ได้
+   */
+  const groupAdmin = await prisma.userGroup.create({ data: { tenantId, name: 'ผู้ดูแลระบบ' } });
   await prisma.groupMember.createMany({
     data: [
       ...agents.map((u) => ({ tenantId, groupId: groupIt.id, userId: u.id })),
+      // หัวหน้าทีมไอทีเป็นผู้ดูแลระบบคนแรก — ต้องมีอย่างน้อยหนึ่งคน
+      // ไม่งั้นไม่มีใครเพิ่มผู้ใช้ได้เลยหลังติดตั้ง
+      { tenantId, groupId: groupAdmin.id, userId: agents[0]!.id },
       ...devs.map((u) => ({ tenantId, groupId: groupDev.id, userId: u.id })),
       ...allUsers.map((u) => ({ tenantId, groupId: groupAll.id, userId: u.id })),
     ],
@@ -231,6 +241,9 @@ async function main(): Promise<void> {
       { tenantId, schemeId: schemeSd.id, permission: 'BULK_EDIT', groupId: groupIt.id },
       // เห็นบันทึกภายใน — ให้เฉพาะทีมไอที ไม่ให้ "พนักงานทั้งหมด"
       { tenantId, schemeId: schemeSd.id, permission: 'VIEW_INTERNAL_COMMENT', groupId: groupIt.id },
+      // ADMINISTER_TENANT ผูกกับ scheme หนึ่ง แต่มีผลทั้ง tenant — ดู isTenantAdmin()
+      { tenantId, schemeId: schemeSd.id, permission: 'ADMINISTER_TENANT', groupId: groupAdmin.id },
+      { tenantId, schemeId: schemeSd.id, permission: 'BROWSE_PROJECT', groupId: groupAdmin.id },
       { tenantId, schemeId: schemeSw.id, permission: 'BROWSE_PROJECT', groupId: groupDev.id },
       { tenantId, schemeId: schemeSw.id, permission: 'CREATE_ITEM', groupId: groupDev.id },
       { tenantId, schemeId: schemeSw.id, permission: 'EDIT_ITEM', groupId: groupDev.id },

@@ -5,8 +5,10 @@
 export {
   PermissionDeniedError,
   assertCan,
+  assertTenantAdmin,
   browsableProjectIds,
   can,
+  isTenantAdmin,
   permissionsFor,
   summaryFor,
 } from './permission.service';

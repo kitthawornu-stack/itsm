@@ -1,0 +1,172 @@
+/**
+ * หน้าจัดการผู้ใช้ (ผู้ดูแลระบบ) และการเปลี่ยนรหัสผ่านของตัวเอง
+ *
+ * ทุก endpoint ที่ขึ้นต้นด้วย `/admin` ต้องเป็นผู้ดูแลระบบ ยกเว้น
+ * `/me/password` ซึ่งเป็นการกระทำกับบัญชีตัวเอง — แยกออกมาโดยตั้งใจ
+ * เพราะการเปลี่ยนรหัสผ่านตัวเองต้องทำได้โดยไม่ต้องมีสิทธิ์ผู้ดูแล
+ */
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpException,
+  HttpStatus,
+  Param,
+  Post,
+} from '@nestjs/common';
+import type { TenantContext } from '@itsm/types';
+
+import { Ctx } from '../../infrastructure/http/session.guard';
+import { assertTenantAdmin } from '../permission';
+import { PASSWORD_MIN_LENGTH, WeakPasswordError } from './password';
+import {
+  CannotDeactivateSelfError,
+  EmailInUseError,
+  UserNotFoundError,
+  WrongCurrentPasswordError,
+  changeOwnPassword,
+  createUser,
+  listGroups,
+  listUsers,
+  setActive,
+  setGroups,
+  setPassword,
+} from './user-admin.service';
+
+/** แปลง error ของโดเมนเป็นรหัสสถานะ — ที่เดียวสำหรับทั้ง controller */
+function toHttp(e: unknown): never {
+  if (e instanceof WeakPasswordError) {
+    throw new HttpException(
+      { error: 'weak_password', message: e.message, minLength: PASSWORD_MIN_LENGTH },
+      HttpStatus.UNPROCESSABLE_ENTITY,
+    );
+  }
+  if (e instanceof EmailInUseError) {
+    throw new HttpException({ error: 'email_in_use', message: e.message }, HttpStatus.CONFLICT);
+  }
+  if (e instanceof UserNotFoundError) {
+    throw new HttpException({ error: 'not_found', message: e.message }, HttpStatus.NOT_FOUND);
+  }
+  if (e instanceof CannotDeactivateSelfError) {
+    throw new HttpException({ error: 'cannot_self', message: e.message }, HttpStatus.CONFLICT);
+  }
+  if (e instanceof WrongCurrentPasswordError) {
+    // 401 ไม่ใช่ 403 — นี่คือการยืนยันตัวตนล้มเหลว ไม่ใช่ขาดสิทธิ์
+    throw new HttpException({ error: 'wrong_password', message: e.message }, HttpStatus.UNAUTHORIZED);
+  }
+  throw e;
+}
+
+function str(v: unknown): string {
+  return typeof v === 'string' ? v : '';
+}
+
+@Controller('admin/users')
+export class UserAdminController {
+  @Get()
+  async list(@Ctx() ctx: TenantContext): Promise<{ rows: unknown[] }> {
+    await assertTenantAdmin(ctx);
+    return { rows: await listUsers(ctx) };
+  }
+
+  @Get('groups')
+  async groups(@Ctx() ctx: TenantContext): Promise<{ rows: unknown[] }> {
+    await assertTenantAdmin(ctx);
+    return { rows: await listGroups(ctx) };
+  }
+
+  @Post()
+  @HttpCode(HttpStatus.CREATED)
+  async create(
+    @Ctx() ctx: TenantContext,
+    @Body() body: { email?: unknown; displayName?: unknown; password?: unknown; groupIds?: unknown },
+  ): Promise<unknown> {
+    await assertTenantAdmin(ctx);
+    const email = str(body.email).trim();
+    if (email === '' || !email.includes('@')) {
+      throw new HttpException(
+        { error: 'validation_failed', message: 'ต้องระบุอีเมลที่ถูกต้อง' },
+        HttpStatus.UNPROCESSABLE_ENTITY,
+      );
+    }
+    try {
+      return await createUser(ctx, {
+        email,
+        displayName: str(body.displayName),
+        password: str(body.password),
+        groupIds: Array.isArray(body.groupIds) ? body.groupIds.map((g) => BigInt(String(g))) : [],
+      });
+    } catch (e) {
+      toHttp(e);
+    }
+  }
+
+  @Post(':id/password')
+  @HttpCode(HttpStatus.OK)
+  async resetPassword(
+    @Ctx() ctx: TenantContext,
+    @Param('id') id: string,
+    @Body() body: { password?: unknown },
+  ): Promise<unknown> {
+    await assertTenantAdmin(ctx);
+    try {
+      return await setPassword(ctx, BigInt(id), str(body.password));
+    } catch (e) {
+      toHttp(e);
+    }
+  }
+
+  @Post(':id/active')
+  @HttpCode(HttpStatus.OK)
+  async setActiveState(
+    @Ctx() ctx: TenantContext,
+    @Param('id') id: string,
+    @Body() body: { isActive?: unknown },
+  ): Promise<unknown> {
+    await assertTenantAdmin(ctx);
+    try {
+      return await setActive(ctx, BigInt(id), body.isActive === true || body.isActive === 'true');
+    } catch (e) {
+      toHttp(e);
+    }
+  }
+
+  @Post(':id/groups')
+  @HttpCode(HttpStatus.OK)
+  async updateGroups(
+    @Ctx() ctx: TenantContext,
+    @Param('id') id: string,
+    @Body() body: { groupIds?: unknown },
+  ): Promise<unknown> {
+    await assertTenantAdmin(ctx);
+    const ids = Array.isArray(body.groupIds) ? body.groupIds.map((g) => BigInt(String(g))) : [];
+    try {
+      return await setGroups(ctx, BigInt(id), ids);
+    } catch (e) {
+      toHttp(e);
+    }
+  }
+}
+
+@Controller('me')
+export class SelfServiceController {
+  /**
+   * เปลี่ยนรหัสผ่านของตัวเอง — ไม่ต้องเป็นผู้ดูแล
+   *
+   * ตัดเซสชันอื่นทั้งหมดรวมถึงของตัวเอง ผู้ใช้ต้องล็อกอินใหม่ ซึ่งเป็นสิ่งที่
+   * คนคาดหวังหลังเปลี่ยนรหัสผ่าน และเป็นสิ่งที่ต้องเกิดถ้าเปลี่ยนเพราะถูกยึดบัญชี
+   */
+  @Post('password')
+  @HttpCode(HttpStatus.OK)
+  async changePassword(
+    @Ctx() ctx: TenantContext,
+    @Body() body: { currentPassword?: unknown; newPassword?: unknown },
+  ): Promise<unknown> {
+    try {
+      return await changeOwnPassword(ctx, str(body.currentPassword), str(body.newPassword));
+    } catch (e) {
+      toHttp(e);
+    }
+  }
+}

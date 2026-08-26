@@ -131,3 +131,39 @@ export async function browsableProjectIds(ctx: TenantContext): Promise<bigint[]>
     .filter((p) => p.permissionSchemeId !== null && allowedSchemes.has(p.permissionSchemeId.toString()))
     .map((p) => p.id);
 }
+
+/**
+ * เป็นผู้ดูแลระบบของ tenant นี้หรือไม่
+ *
+ * `ADMINISTER_TENANT` ไม่ผูกกับโปรเจกต์ แต่โครงสร้าง grant ในสคีมาผูกกับ
+ * permission scheme ซึ่งผูกกับโปรเจกต์อีกที · จึงตีความว่า **มีคีย์นี้ใน
+ * scheme ใดก็ตาม = เป็นผู้ดูแลทั้ง tenant**
+ *
+ * เขียนไว้ให้ชัดเพราะมันไม่ตรงไปตรงมา: การให้ ADMINISTER_TENANT
+ * ใน scheme ของโปรเจกต์เดียว ให้สิทธิ์ระดับ tenant ทั้งก้อน
+ * ถ้าวันหนึ่งต้องการผู้ดูแลระดับโปรเจกต์ ต้องแยกคีย์ใหม่ ไม่ใช่ตีความคีย์นี้ใหม่
+ */
+export async function isTenantAdmin(ctx: TenantContext): Promise<boolean> {
+  if (ctx.actorId === null) return false;
+
+  const db = tenantScoped(ctx);
+  const memberships = await db.groupMember.findMany({
+    where: { userId: ctx.actorId },
+    select: { groupId: true },
+  });
+  if (memberships.length === 0) return false;
+
+  const grant = await db.permissionGrant.findFirst({
+    where: {
+      permission: 'ADMINISTER_TENANT',
+      groupId: { in: memberships.map((m) => m.groupId) },
+    },
+    select: { id: true },
+  });
+  return grant !== null;
+}
+
+/** โยนเมื่อไม่ใช่ผู้ดูแลระบบ */
+export async function assertTenantAdmin(ctx: TenantContext): Promise<void> {
+  if (!(await isTenantAdmin(ctx))) throw new PermissionDeniedError('ADMINISTER_TENANT');
+}

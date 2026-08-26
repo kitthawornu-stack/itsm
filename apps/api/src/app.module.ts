@@ -6,6 +6,10 @@ import { PermissionDeniedFilter } from './infrastructure/http/permission-denied.
 import { SessionGuard } from './infrastructure/http/session.guard';
 
 import { IdentityController } from './modules/identity/identity.controller';
+import {
+  SelfServiceController,
+  UserAdminController,
+} from './modules/identity/user-admin.controller';
 import { HealthController } from './modules/health/health.controller';
 import { NotificationController } from './modules/notification/notification.controller';
 import { WorkItemController } from './modules/workitem/workitem.controller';
@@ -20,6 +24,8 @@ import { WorkItemController } from './modules/workitem/workitem.controller';
   controllers: [
     HealthController,
     IdentityController,
+    UserAdminController,
+    SelfServiceController,
     WorkItemController,
     NotificationController,
   ],

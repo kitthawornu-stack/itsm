@@ -632,3 +632,108 @@
   justify-content: flex-end;
   margin-bottom: var(--space-4);
 }
+
+/* ---------- จัดการผู้ใช้ ---------- */
+
+.admin {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  margin-top: var(--space-6);
+}
+
+.admin-empty {
+  margin: var(--space-6) 0 0;
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+
+.admin-error,
+.admin-notice {
+  margin: 0;
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  font-size: 12.5px;
+  line-height: var(--line-height-body);
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.admin-error {
+  border-color: var(--status-critical);
+}
+
+.admin-notice {
+  border-color: var(--status-success);
+}
+
+.admin-add-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--space-4);
+  align-items: end;
+  margin-top: var(--space-3);
+}
+
+/* ตารางกว้างต้องเลื่อนในกล่องตัวเอง ไม่ใช่ดันทั้งหน้าให้เลื่อนแนวนอน */
+.admin-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  margin-top: var(--space-3);
+}
+
+.admin-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+
+.admin-table th,
+.admin-table td {
+  text-align: left;
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--border);
+  line-height: var(--line-height-body);
+  /* ภาษาไทยไม่มีช่องว่างระหว่างคำ — ต้องบังคับ ไม่งั้นดันตารางล้น */
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.admin-table th {
+  font-weight: 600;
+  color: var(--text-muted);
+  font-size: 11.5px;
+  background: var(--surface-2);
+}
+
+.admin-table tr[data-inactive='true'] td {
+  color: var(--text-faint);
+}
+
+.admin-when {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.admin-actions {
+  display: flex;
+  gap: var(--space-3);
+  white-space: nowrap;
+}
+
+.admin-actions button {
+  border: none;
+  background: none;
+  padding: 0;
+  font-family: var(--font-body);
+  font-size: 11.5px;
+  color: var(--accent-service);
+  cursor: pointer;
+}
+
+.admin-actions button:hover {
+  text-decoration: underline;
+}
