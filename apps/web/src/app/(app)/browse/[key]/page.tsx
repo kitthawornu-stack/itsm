@@ -10,6 +10,7 @@ import {
 } from '@itsm/ui';
 
 import { AssignControl } from '@/components/assign-control';
+import { EditItem } from '@/components/edit-item';
 import { CommentThread } from '@/components/comment-thread';
 import { toSlaBar, type SlaSnapshotView } from '@/lib/sla-label';
 
@@ -34,7 +35,9 @@ interface Detail {
   sla: (SlaSnapshotView & { goalName: string }) | null;
   priority: { rank: number; name: string } | null;
   assignee: string | null;
-  permissions?: { canAssign: boolean };
+  description: string | null;
+  permissions?: { canAssign: boolean; canEdit: boolean };
+  priorities?: Array<{ rank: number; name: string }>;
   reporter: string;
   createdAt: string;
   updatedAt: string;
@@ -121,7 +124,21 @@ export default async function WorkItemDetail({
               category={detail.status.category as StatusCategory}
             />
           </div>
-          <h1 className="detail-title">{detail.summary}</h1>
+          <div className="detail-title-row">
+            <h1 className="detail-title">{detail.summary}</h1>
+            {detail.permissions?.canEdit === true ? (
+              <EditItem
+                apiBase={API}
+                itemKey={detail.itemKey}
+                initial={{
+                  summary: detail.summary,
+                  description: detail.description ?? '',
+                  priorityRank: detail.priority?.rank ?? null,
+                }}
+                priorities={detail.priorities ?? []}
+              />
+            ) : null}
+          </div>
           {detail.sla === null ? (
             // งานที่ไม่มีนาฬิกาต้องบอกให้รู้ ไม่ใช่ไม่แสดงอะไรเลย
             // ช่องว่างตรงนี้ทำให้ดูเหมือน "ยังไม่หลุด" ทั้งที่แปลว่า "ไม่มีใครจับเวลาอยู่"
@@ -142,7 +159,14 @@ export default async function WorkItemDetail({
 
       <div className="detail-body">
         <section>
-          <h2 className="detail-section-title">บทสนทนา</h2>
+          {detail.description === null ? null : (
+            <>
+              <h2 className="detail-section-title">รายละเอียด</h2>
+              <p className="detail-description">{detail.description}</p>
+            </>
+          )}
+
+          <h2 className="detail-section-title detail-section-gap">บทสนทนา</h2>
           <CommentThread apiBase={API} itemKey={detail.itemKey} />
 
           <h2 className="detail-section-title detail-section-gap">ไทม์ไลน์</h2>

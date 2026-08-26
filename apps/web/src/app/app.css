@@ -853,3 +853,70 @@
   font-weight: 600;
   border-bottom-color: var(--accent-service);
 }
+
+/* ---------- แก้ไขงาน ---------- */
+
+.detail-title-row {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.edit-open {
+  border: none;
+  background: none;
+  padding: 0;
+  font-family: var(--font-body);
+  font-size: 12px;
+  color: var(--accent-service);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.edit-open:hover {
+  text-decoration: underline;
+}
+
+.edit-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  width: 100%;
+  max-width: 620px;
+  margin-top: var(--space-3);
+}
+
+.edit-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.edit-cancel {
+  border: none;
+  background: none;
+  padding: 0;
+  font-family: var(--font-body);
+  font-size: 12.5px;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.edit-error {
+  margin: 0;
+  font-size: 12px;
+  color: var(--status-critical);
+  line-height: var(--line-height-body);
+}
+
+.detail-description {
+  margin: 0 0 var(--space-2);
+  font-size: 13px;
+  color: var(--text);
+  line-height: var(--line-height-body);
+  white-space: pre-wrap;
+  /* ภาษาไทยไม่มีช่องว่างระหว่างคำ — ต้องบังคับ ไม่งั้นดันคอลัมน์ล้น */
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}

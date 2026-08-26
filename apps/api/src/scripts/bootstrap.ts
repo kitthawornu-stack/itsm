@@ -112,10 +112,50 @@ async function main(): Promise<void> {
 
   process.stdout.write(`สร้างผู้ดูแลระบบ: ${email}\n`);
 
+  await ensureLookups(tenant.id);
   await ensureStarterProject(tenant.id, group.id, scheme.id);
 
   process.stdout.write('เข้าสู่ระบบแล้วเพิ่มผู้ใช้คนอื่นได้ที่หน้า "ผู้ใช้และสิทธิ์"\n');
   await prismaClient.$disconnect();
+}
+
+/**
+ * ระดับความสำคัญและผลการแก้ไข
+ *
+ * สองตารางนี้เป็นตัวเลือกที่หน้าจอต้องมี ไม่ใช่ข้อมูลตัวอย่าง — ถ้าว่าง
+ * ช่อง "ความสำคัญ" ในฟอร์มแจ้งปัญหาจะไม่มีอะไรให้เลือก และปิดงานแล้ว
+ * ตอบไม่ได้ว่าจบอย่างไร ซึ่งทำให้รายงานทุกตัวที่แยกตามผลลัพธ์ใช้ไม่ได้
+ *
+ * สีเก็บเป็น **semantic token** ไม่ใช่ค่าสีดิบ (CLAUDE.md §6)
+ */
+async function ensureLookups(tenantId: bigint): Promise<void> {
+  const priorities: Array<[string, number, string]> = [
+    ['P1 วิกฤต', 1, 'status-critical'],
+    ['P2 สูง', 2, 'status-warning'],
+    ['P3 ปานกลาง', 3, 'status-info'],
+    ['P4 ต่ำ', 4, 'status-neutral'],
+    ['P5 เล็กน้อย', 5, 'status-neutral'],
+  ];
+  for (const [name, rank, colorToken] of priorities) {
+    await prismaClient.priority.upsert({
+      where: { tenantId_name: { tenantId, name } },
+      create: { tenantId, name, rank, colorToken },
+      update: {},
+    });
+  }
+
+  const resolutions = ['แก้ไขแล้ว', 'ทำตามที่ขอแล้ว', 'ไม่พบปัญหา', 'ซ้ำกับเรื่องอื่น', 'ยกเลิก'];
+  for (const name of resolutions) {
+    await prismaClient.resolution.upsert({
+      where: { tenantId_name: { tenantId, name } },
+      create: { tenantId, name },
+      update: {},
+    });
+  }
+
+  process.stdout.write(
+    `ตั้งค่าความสำคัญ ${String(priorities.length)} ระดับ · ผลการแก้ไข ${String(resolutions.length)} แบบ\n`,
+  );
 }
 
 /**

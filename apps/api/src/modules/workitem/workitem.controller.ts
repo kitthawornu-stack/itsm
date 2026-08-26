@@ -57,6 +57,12 @@ import {
   assignableUsers,
 } from './assign.service';
 import {
+  InvalidFieldValueError,
+  NothingToUpdateError,
+  editWorkItem,
+  listPriorities,
+} from './edit.service';
+import {
   AttachmentNotFoundError,
   AttachmentRejectedError,
   downloadAttachment,
@@ -77,6 +83,20 @@ export interface WorkItemListRow {
   resolvedAt: string | null;
   /** null เมื่อโปรเจกต์ยังไม่ได้ตั้ง SLA Policy หรืองานยังไม่มีนาฬิกา */
   sla: SlaSnapshot | null;
+}
+
+
+/**
+ * ดึงข้อความล้วนออกจาก `description` ที่เก็บเป็น structured document
+ *
+ * รูปแบบ rich text ยังไม่ได้ตัดสิน (ดู CreateWorkItemInput) ตอนนี้จึงเก็บเป็น
+ * `{ format: 'text', text }` และหน้าจอแสดงเป็นข้อความล้วน
+ */
+function descriptionText(value: unknown): string | null {
+  if (typeof value === 'string') return value === '' ? null : value;
+  if (value === null || typeof value !== 'object') return null;
+  const doc = value as Record<string, unknown>;
+  return typeof doc['text'] === 'string' && doc['text'] !== '' ? doc['text'] : null;
 }
 
 @Controller('work-items')
@@ -231,7 +251,7 @@ export class WorkItemController {
         select: { key: true, name: true, type: true },
         orderBy: { key: 'asc' },
       }),
-      db.priority.findMany({ select: { rank: true, name: true }, orderBy: { rank: 'asc' } }),
+      listPriorities(ctx),
     ]);
 
     /**
@@ -380,6 +400,14 @@ export class WorkItemController {
       id: item.id.toString(),
       itemKey: item.itemKey,
       summary: item.summary,
+      /**
+       * คำอธิบายไม่เคยถูกส่งออกมาเลยจนถึงตอนนี้
+       *
+       * ผู้แจ้งพิมพ์ลงฟอร์ม ระบบเก็บลงฐานข้อมูลและจัดดัชนีให้ค้นเจอ
+       * แต่หน้ารายละเอียดไม่แสดง — ข้อมูลที่สำคัญที่สุดของการแจ้งเรื่อง
+       * มองไม่เห็นด้วยตา เห็นได้ทางการค้นหาอย่างเดียว
+       */
+      description: descriptionText(item.description),
       projectKey: item.project.key,
       issueType: item.issueType.name,
       status: { name: item.status.name, category: item.status.category },
@@ -390,6 +418,8 @@ export class WorkItemController {
       sla: sla.get(item.id.toString()) ?? null,
       // ให้หน้าจอซ่อนปุ่มที่กดไม่ได้ — ไม่ใช่กลไกป้องกัน เซิร์ฟเวอร์ปฏิเสธเองอยู่แล้ว
       permissions: await summaryFor(ctx, item.projectId),
+      // ตัวเลือกสำหรับฟอร์มแก้ไข ส่งมาพร้อมหน้าเลย ไม่ต้องยิงอีกคำขอ
+      priorities: await listPriorities(ctx),
       createdAt: item.createdAt.toISOString(),
       updatedAt: item.updatedAt.toISOString(),
       // ปุ่มที่ผู้ใช้คนนี้เห็นได้จริง — ผ่าน CONDITION ชั้นแรกของ workflow engine แล้ว
@@ -621,6 +651,65 @@ export class WorkItemController {
     }
     await assertCan(ctx, item.projectId, 'ASSIGN_ITEM');
     return { rows: await assignableUsers(ctx, item.projectId) };
+  }
+
+  /**
+   * แก้ไขงานที่แจ้งไปแล้ว
+   *
+   * ฟิลด์ที่ไม่ส่งมา = ไม่แตะ · ส่ง null = ล้างค่า
+   * แยกสองอย่างนี้ให้ชัด ไม่งั้น "ไม่ได้แก้ช่องนี้" กับ "ตั้งใจลบค่าในช่องนี้"
+   * จะกลายเป็นสิ่งเดียวกัน แล้วการบันทึกหนึ่งครั้งจะล้างข้อมูลที่ไม่ได้ตั้งใจแตะ
+   */
+  @Post(':key/edit')
+  @HttpCode(HttpStatus.OK)
+  async edit(
+    @Ctx() ctx: TenantContext,
+    @Param('key') key: string,
+    @Body()
+    body: { summary?: unknown; description?: unknown; priorityRank?: unknown },
+  ): Promise<unknown> {
+    const input: Parameters<typeof editWorkItem>[2] = {};
+    if (typeof body.summary === 'string') input.summary = body.summary;
+    if (body.description === null || typeof body.description === 'string') {
+      input.description = body.description;
+    }
+    if (body.priorityRank === null) {
+      input.priorityRank = null;
+    } else if (typeof body.priorityRank === 'string' || typeof body.priorityRank === 'number') {
+      const n = Number(body.priorityRank);
+      if (!Number.isInteger(n)) {
+        throw new HttpException(
+          { error: 'validation_failed', message: 'ระดับความสำคัญไม่ถูกต้อง' },
+          HttpStatus.UNPROCESSABLE_ENTITY,
+        );
+      }
+      input.priorityRank = n;
+    }
+
+    try {
+      return await editWorkItem(ctx, key, input);
+    } catch (e) {
+      if (e instanceof NothingToUpdateError) {
+        // 200 ไม่ใช่ error — ผู้ใช้กดบันทึกโดยไม่ได้แก้อะไร ซึ่งไม่ใช่ความผิดพลาด
+        return { itemKey: key, changed: [] };
+      }
+      if (e instanceof SummaryRequiredError) {
+        throw new HttpException(
+          { error: 'validation_failed', message: e.message, missingFields: ['summary'] },
+          HttpStatus.UNPROCESSABLE_ENTITY,
+        );
+      }
+      if (e instanceof InvalidFieldValueError) {
+        throw new HttpException(
+          { error: 'validation_failed', message: e.message, missingFields: [e.field] },
+          HttpStatus.UNPROCESSABLE_ENTITY,
+        );
+      }
+      if (e instanceof WorkItemNotFoundError) {
+        throw new HttpException({ error: 'not_found', message: e.message }, HttpStatus.NOT_FOUND);
+      }
+      throw e;
+    }
   }
 
   /**
