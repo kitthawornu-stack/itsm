@@ -37,7 +37,7 @@ export function TransitionButtons({
     setBusy(t.id);
     setError(null);
     try {
-      const res = await fetch(`${apiBase}/api/v1/work-items/${itemKey}/transitions/${t.id}`, {
+      const res = await fetch(`${apiBase}/api/v1/work-items/${itemKey}/transitions/${t.id}`, { credentials: 'include',
         method: 'POST',
       });
       if (!res.ok) {

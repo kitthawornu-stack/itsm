@@ -1,5 +1,8 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { APP_GUARD } from '@nestjs/core';
+
+import { SessionGuard } from './infrastructure/http/session.guard';
 
 import { IdentityController } from './modules/identity/identity.controller';
 import { HealthController } from './modules/health/health.controller';
@@ -19,6 +22,11 @@ import { WorkItemController } from './modules/workitem/workitem.controller';
     WorkItemController,
     NotificationController,
   ],
+  /**
+   * ปิดทุก endpoint โดยปริยาย — endpoint สาธารณะต้องติด `@Public()` เอง
+   * ทิศทางนี้ทำให้ endpoint ที่ลืมตั้งค่าพังทันที แทนที่จะเปิดโล่งเงียบ ๆ
+   */
+  providers: [{ provide: APP_GUARD, useClass: SessionGuard }],
 })
 // eslint-disable-next-line @typescript-eslint/no-extraneous-class -- NestJS ใช้ class เปล่าเป็น module descriptor
 export class AppModule {}

@@ -1,14 +1,12 @@
 /**
  * การแจ้งเตือนในแอป
  *
- * ⚠️ ยังไม่มีการยืนยันตัวตน — ใช้ผู้ใช้จาก dev guard (ADR-003)
- * เมื่อโมดูล identity พร้อม ให้เปลี่ยนมาใช้ผู้ใช้จาก session แทน
+ * ผู้รับคือผู้ใช้ที่ล็อกอินอยู่จริง — มาจากเซสชันผ่าน `@Ctx()` (ADR-003)
  */
-/* eslint-disable @typescript-eslint/no-deprecated -- dev guard จนกว่าโมดูล identity จะพร้อม (ADR-003) */
 import { Controller, Get, HttpException, HttpStatus, Param, Post, Query } from '@nestjs/common';
-import { systemClock } from '@itsm/types';
+import { systemClock, type TenantContext } from '@itsm/types';
 
-import { resolveDevTenantContext } from '../../infrastructure/http/dev-tenant.guard';
+import { Ctx } from '../../infrastructure/http/session.guard';
 import { tenantScoped } from '../../infrastructure/prisma/tenant-scope';
 
 export interface NotificationRow {
@@ -31,10 +29,10 @@ export class NotificationController {
    */
   @Get()
   async list(
+    @Ctx() ctx: TenantContext,
     @Query('unread') unreadOnly?: string,
     @Query('limit') limit?: string,
   ): Promise<{ rows: NotificationRow[]; unreadCount: number }> {
-    const ctx = await resolveDevTenantContext();
     const db = tenantScoped(ctx);
     const take = Math.min(Number(limit ?? 20) || 20, 100);
 
@@ -73,8 +71,7 @@ export class NotificationController {
   }
 
   @Post(':id/read')
-  async markRead(@Param('id') id: string): Promise<{ ok: true }> {
-    const ctx = await resolveDevTenantContext();
+  async markRead(@Ctx() ctx: TenantContext, @Param('id') id: string): Promise<{ ok: true }> {
     const db = tenantScoped(ctx);
     const found = await db.notification.findFirst({ where: { id: BigInt(id) } });
     if (found === null) {
@@ -88,8 +85,7 @@ export class NotificationController {
   }
 
   @Post('read-all')
-  async markAllRead(): Promise<{ ok: true; count: number }> {
-    const ctx = await resolveDevTenantContext();
+  async markAllRead(@Ctx() ctx: TenantContext): Promise<{ ok: true; count: number }> {
     const db = tenantScoped(ctx);
     const r = await db.notification.updateMany({
       where: { OR: [{ userId: ctx.actorId }, { userId: null }], readAt: null },

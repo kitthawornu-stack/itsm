@@ -1,4 +1,5 @@
 import { ReportForm } from '@/components/report-form';
+import { apiFetch } from '@/lib/api';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,7 +20,7 @@ const API = process.env['API_BASE_URL'] ?? 'http://localhost:4000';
 export default async function NewItemPage(): Promise<React.ReactNode> {
   let options: Options | null = null;
   try {
-    const res = await fetch(`${API}/api/v1/work-items/options`, { cache: 'no-store' });
+    const res = await apiFetch('/api/v1/work-items/options');
     if (res.ok) options = (await res.json()) as Options;
   } catch {
     options = null;

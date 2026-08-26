@@ -30,7 +30,7 @@ export function NotificationTray({ apiBase }: { apiBase: string }): ReactNode {
 
   const load = useCallback(async (): Promise<void> => {
     try {
-      const res = await fetch(`${apiBase}/api/v1/notifications?limit=15`, { cache: 'no-store' });
+      const res = await fetch(`${apiBase}/api/v1/notifications?limit=15`, { credentials: 'include', cache: 'no-store' });
       if (!res.ok) {
         setError(`โหลดการแจ้งเตือนไม่ได้ (HTTP ${res.status})`);
         return;
@@ -70,12 +70,12 @@ export function NotificationTray({ apiBase }: { apiBase: string }): ReactNode {
   }, [open]);
 
   async function markAllRead(): Promise<void> {
-    await fetch(`${apiBase}/api/v1/notifications/read-all`, { method: 'POST' });
+    await fetch(`${apiBase}/api/v1/notifications/read-all`, { credentials: 'include', method: 'POST' });
     await load();
   }
 
   async function openItem(n: NotificationRow): Promise<void> {
-    await fetch(`${apiBase}/api/v1/notifications/${n.id}/read`, { method: 'POST' });
+    await fetch(`${apiBase}/api/v1/notifications/${n.id}/read`, { credentials: 'include', method: 'POST' });
     if (n.itemKey !== null) window.location.href = `/browse/${n.itemKey}`;
     else await load();
   }

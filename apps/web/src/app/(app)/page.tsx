@@ -9,6 +9,7 @@ import {
 } from '@itsm/ui';
 
 import { toSlaBar } from '@/lib/sla-label';
+import { apiFetch } from '@/lib/api';
 
 interface ApiRow {
   id: string;
@@ -41,7 +42,7 @@ const API = process.env['API_BASE_URL'] ?? 'http://localhost:4000';
  */
 async function fetchQueue(): Promise<{ rows: ApiRow[]; total: number } | { error: string }> {
   try {
-    const res = await fetch(`${API}/api/v1/work-items?project=SD&open=true&limit=50`, {
+    const res = await apiFetch('/api/v1/work-items?project=SD&open=true&limit=50', {
       cache: 'no-store',
     });
     if (!res.ok) {

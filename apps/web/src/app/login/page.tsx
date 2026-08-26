@@ -1,0 +1,38 @@
+import type { ReactNode } from 'react';
+
+import { LoginForm } from '@/components/login-form';
+import { ThemeToggle } from '@/components/theme-toggle';
+
+export const dynamic = 'force-dynamic';
+
+const API = process.env['API_BASE_URL'] ?? 'http://localhost:4000';
+
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ next?: string }>;
+}): Promise<ReactNode> {
+  const { next } = await searchParams;
+
+  /**
+   * รับเฉพาะ path ภายในเว็บเรา
+   *
+   * ถ้าส่งค่าอะไรก็ได้ต่อไปให้ `location.replace` จะกลายเป็น open redirect —
+   * ลิงก์ `/login?next=https://ปลอม.example` จะพาผู้ใช้ที่เพิ่งล็อกอินไปเว็บอื่น
+   * ทันที ซึ่งเป็นวิธีหลอกเอารหัสผ่านที่ได้ผลมาก เพราะมาจากโดเมนที่เขาเชื่อถือ
+   */
+  const safeNext = typeof next === 'string' && /^\/(?!\/)/.test(next) ? next : '/';
+
+  return (
+    <section className="page login-page">
+      {/* ปุ่มสลับธีมอยู่ที่นี่ ไม่ใช่ใน layout — หน้านี้ไม่มีแถบบนของแอป
+          แต่คนที่ตั้งธีมมืดไว้ ควรเห็นหน้าล็อกอินเป็นธีมมืดและปรับได้ */}
+      <div className="login-theme">
+        <ThemeToggle />
+      </div>
+      <h1 className="page-title">เข้าสู่ระบบ</h1>
+      <p className="page-sub">Helix · ศูนย์บริการไอที</p>
+      <LoginForm apiBase={API} next={safeNext} />
+    </section>
+  );
+}

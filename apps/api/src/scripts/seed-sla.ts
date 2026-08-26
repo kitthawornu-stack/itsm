@@ -4,10 +4,9 @@
  * แยกจาก seed หลักเพราะ SLA เป็นงาน Phase 1 — รันซ้ำได้ ไม่สร้างซ้ำ
  * รันด้วย: pnpm --filter @itsm/api seed:sla
  */
-/* eslint-disable @typescript-eslint/no-deprecated -- dev guard จนกว่าโมดูล identity จะพร้อม (ADR-003) */
 import { systemClock } from '@itsm/types';
 
-import { resolveDevTenantContext } from '../infrastructure/http/dev-tenant.guard';
+import { resolveOperatorContext } from './operator-context';
 import { prismaClient } from '../infrastructure/prisma/client';
 import { defaultThaiHolidays } from '../modules/sla/thai-holidays';
 import { startSlaFor } from '../modules/sla/sla.service';
@@ -21,7 +20,7 @@ const WEEKLY_8X5 = [[], OFFICE, OFFICE, OFFICE, OFFICE, OFFICE, []];
 const WEEKLY_24X7 = Array.from({ length: 7 }, () => [{ startMinute: 0, endMinute: 1440 }]);
 
 async function main(): Promise<void> {
-  const ctx = await resolveDevTenantContext();
+  const ctx = await resolveOperatorContext();
   const tenantId = ctx.tenantId;
 
   // ---------- ปฏิทิน ----------

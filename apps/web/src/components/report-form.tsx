@@ -47,7 +47,7 @@ export function ReportForm({ apiBase, options }: { apiBase: string; options: Opt
     try {
       const res = await fetch(
         `${apiBase}/api/v1/work-items/options?project=${encodeURIComponent(key)}`,
-        { cache: 'no-store' },
+        { credentials: 'include', cache: 'no-store' },
       );
       if (!res.ok) return;
       const d = (await res.json()) as Options;
@@ -67,7 +67,7 @@ export function ReportForm({ apiBase, options }: { apiBase: string; options: Opt
     setSending(true);
     setError(null);
     try {
-      const res = await fetch(`${apiBase}/api/v1/work-items`, {
+      const res = await fetch(`${apiBase}/api/v1/work-items`, { credentials: 'include',
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({

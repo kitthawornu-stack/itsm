@@ -13,6 +13,7 @@ import { CommentThread } from '@/components/comment-thread';
 import { toSlaBar, type SlaSnapshotView } from '@/lib/sla-label';
 
 import { TransitionButtons } from '@/components/transition-buttons';
+import { apiFetch } from '@/lib/api';
 
 interface HistoryRow {
   id: string;
@@ -75,7 +76,7 @@ export default async function WorkItemDetail({
   let detail: Detail | null = null;
   let error: string | null = null;
   try {
-    const res = await fetch(`${API}/api/v1/work-items/${key}`, { cache: 'no-store' });
+    const res = await apiFetch(`/api/v1/work-items/${key}`);
     if (res.ok) detail = (await res.json()) as Detail;
     else error = `API ตอบกลับ ${res.status}`;
   } catch {

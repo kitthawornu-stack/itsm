@@ -35,7 +35,7 @@ export function CommentThread({
 
   const load = useCallback(async (): Promise<void> => {
     try {
-      const res = await fetch(`${apiBase}/api/v1/work-items/${itemKey}/comments`, {
+      const res = await fetch(`${apiBase}/api/v1/work-items/${itemKey}/comments`, { credentials: 'include',
         cache: 'no-store',
       });
       if (!res.ok) {
@@ -59,7 +59,7 @@ export function CommentThread({
     setSending(true);
     setError(null);
     try {
-      const res = await fetch(`${apiBase}/api/v1/work-items/${itemKey}/comments`, {
+      const res = await fetch(`${apiBase}/api/v1/work-items/${itemKey}/comments`, { credentials: 'include',
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ body: draft, isInternal: internal }),

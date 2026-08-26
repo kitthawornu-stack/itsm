@@ -21,6 +21,7 @@ import {
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
 
+import { Public } from '../../infrastructure/http/session.guard';
 import { withSystemScope } from '../../infrastructure/prisma/tenant-scope';
 import {
   LoginFailedError,
@@ -58,6 +59,7 @@ function tokenFrom(req: Request): string {
 
 @Controller('auth')
 export class IdentityController {
+  @Public('ทางเข้าเดียวของระบบ — ถ้าต้องล็อกอินก่อนจะไม่มีใครล็อกอินได้เลย')
   @Post('login')
   @HttpCode(HttpStatus.OK)
   async signIn(
@@ -126,6 +128,7 @@ export class IdentityController {
     }
   }
 
+  @Public('ออกจากระบบต้องได้ผลเสมอ แม้เซสชันหมดอายุไปแล้ว')
   @Post('logout')
   @HttpCode(HttpStatus.OK)
   async signOut(

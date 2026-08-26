@@ -6,14 +6,12 @@
  *
  * รันด้วย: pnpm --filter @itsm/api reindex
  */
-/* eslint-disable @typescript-eslint/no-deprecated -- resolveDevTenantContext ถูกทำเครื่องหมาย deprecated โดยตั้งใจ
-   เพื่อให้ทุกจุดที่ใช้มองเห็นได้ในทันทีเมื่อโมดูล identity พร้อม (ADR-003) จุดเหล่านี้คือรายการที่ต้องลบ */
-import { resolveDevTenantContext } from '../infrastructure/http/dev-tenant.guard';
+import { resolveOperatorContext } from './operator-context';
 import { prismaClient } from '../infrastructure/prisma/client';
 import { reindexAll } from '../modules/search-index';
 
 async function main(): Promise<void> {
-  const ctx = await resolveDevTenantContext();
+  const ctx = await resolveOperatorContext();
   const result = await reindexAll(ctx, {
     batchSize: 2_000,
     onProgress: (done, total) => {

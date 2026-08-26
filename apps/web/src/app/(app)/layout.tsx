@@ -1,0 +1,35 @@
+import type { ReactNode } from 'react';
+
+import { NotificationTray } from '@/components/notification-tray';
+import { ThemeToggle } from '@/components/theme-toggle';
+import { UserMenu } from '@/components/user-menu';
+
+/**
+ * เปลือกของหน้าที่ต้องล็อกอิน
+ *
+ * แยกจาก root layout เพราะหน้าล็อกอิน **ต้องไม่มีกระดิ่งและเมนูผู้ใช้**
+ * ตอนที่ยังอยู่ใน layout เดียวกัน การเปิดหน้าล็อกอินหนึ่งครั้งยิงคำขอที่ได้ 401
+ * ออกไปหลายอัน — เปลืองเปล่า และทำให้ console เต็มไปด้วย error ที่ไม่ใช่ปัญหาจริง
+ * จนกลบ error ที่เป็นปัญหาจริง
+ */
+const API = process.env['API_BASE_URL'] ?? 'http://localhost:4000';
+
+export default function AppLayout({ children }: { children: ReactNode }): ReactNode {
+  return (
+    <>
+        <header className="app-header">
+          <span className="app-logo" aria-hidden="true" />
+          <b className="app-title">Helix</b>
+          <nav className="app-nav">
+            <a href="/">คิวงาน</a>
+            <a href="/new">แจ้งปัญหา</a>
+            <a href="/components">คลังคอมโพเนนต์</a>
+          </nav>
+          <NotificationTray apiBase={API} />
+          <ThemeToggle />
+          <UserMenu apiBase={API} />
+        </header>
+      <main className="app-main">{children}</main>
+    </>
+  );
+}

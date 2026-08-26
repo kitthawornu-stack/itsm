@@ -571,3 +571,64 @@
 .detail-section-gap {
   margin-top: var(--space-8);
 }
+
+/* ---------- เข้าสู่ระบบ ---------- */
+
+.login-page {
+  max-width: 380px;
+  margin: var(--space-8) auto 0;
+}
+
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  margin-top: var(--space-6);
+}
+
+.login-error {
+  margin: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--status-critical);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 12.5px;
+  line-height: var(--line-height-body);
+}
+
+/* ---------- ผู้ใช้ปัจจุบัน ---------- */
+
+.user-menu {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding-left: var(--space-3);
+  border-left: 1px solid var(--border);
+}
+
+.user-menu-name {
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.user-menu-out {
+  border: none;
+  background: none;
+  padding: 0;
+  font-family: var(--font-body);
+  font-size: 11.5px;
+  color: var(--accent-service);
+  cursor: pointer;
+}
+
+.user-menu-out:hover {
+  text-decoration: underline;
+}
+
+.login-theme {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: var(--space-4);
+}

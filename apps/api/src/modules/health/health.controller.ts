@@ -1,12 +1,14 @@
 import { Controller, Get } from '@nestjs/common';
 
 import { withSystemScope } from '../../infrastructure/prisma/tenant-scope';
+import { Public } from '../../infrastructure/http/session.guard';
 
 interface ComponentHealth {
   status: 'up' | 'down';
   detail?: string;
 }
 
+@Public('ตัวตรวจสุขภาพต้องเรียกได้โดยไม่ต้องล็อกอิน — load balancer และ Docker healthcheck ไม่มีบัญชี')
 @Controller('health')
 export class HealthController {
   @Get()

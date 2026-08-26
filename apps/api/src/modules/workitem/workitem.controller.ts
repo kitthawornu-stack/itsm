@@ -4,8 +4,8 @@
  * หลักคิดข้อ 5 (API-first): หน้าเว็บของเราคือลูกค้ารายแรกของ API ตัวเอง
  * ไม่มี endpoint ลับที่หน้าเว็บเรียกได้คนเดียว
  *
- * ⚠️ ยังไม่มีการยืนยันตัวตน — ใช้ resolveDevTenantContext ซึ่งโยน error
- * เมื่อรันบน production ดู ADR-003
+ * ทุก endpoint ต้องล็อกอิน — `SessionGuard` ระดับแอปปิดไว้เป็นค่าปริยาย
+ * บริบทของผู้ใช้มาทาง `@Ctx()` ซึ่งผูกกับเซสชันจริง (ADR-003)
  */
 import {
   Body,
@@ -25,10 +25,10 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import type { Response } from 'express';
 
-/* eslint-disable @typescript-eslint/no-deprecated -- resolveDevTenantContext ถูกทำเครื่องหมาย deprecated โดยตั้งใจ
-   เพื่อให้ทุกจุดที่ใช้มองเห็นได้ในทันทีเมื่อโมดูล identity พร้อม (ADR-003) จุดเหล่านี้คือรายการที่ต้องลบ */
-import { resolveDevTenantContext } from '../../infrastructure/http/dev-tenant.guard';
+import { Ctx } from '../../infrastructure/http/session.guard';
 import { tenantScoped } from '../../infrastructure/prisma/tenant-scope';
+import type { TenantContext } from '@itsm/types';
+
 import { SearchIndexNotReadyError, searchWorkItems } from '../search-index';
 import { slaForWorkItems, type SlaSnapshot } from '../sla';
 import {
@@ -72,12 +72,12 @@ export interface WorkItemListRow {
 export class WorkItemController {
   @Get()
   async list(
+    @Ctx() ctx: TenantContext,
     @Query('project') projectKey?: string,
     @Query('q') q?: string,
     @Query('open') openOnly?: string,
     @Query('limit') limit?: string,
   ): Promise<{ rows: WorkItemListRow[]; total: number }> {
-    const ctx = await resolveDevTenantContext();
     const db = tenantScoped(ctx);
     const take = Math.min(Number(limit ?? 50) || 50, 200);
 
@@ -166,12 +166,14 @@ export class WorkItemController {
    * (คีย์จริงเป็นรูปแบบ ABC-123 จึงไม่มีทางชนกัน แต่ลำดับยังต้องถูก)
    */
   @Get('options')
-  async options(@Query('project') projectKey?: string): Promise<{
+  async options(
+    @Ctx() ctx: TenantContext,
+    @Query('project') projectKey?: string,
+  ): Promise<{
     projects: Array<{ key: string; name: string; type: string }>;
     issueTypes: Array<{ name: string; icon: string }>;
     priorities: Array<{ rank: number; name: string }>;
   }> {
-    const ctx = await resolveDevTenantContext();
     const db = tenantScoped(ctx);
 
     const [unsorted, priorities] = await Promise.all([
@@ -230,6 +232,7 @@ export class WorkItemController {
   @Post()
   @HttpCode(HttpStatus.CREATED)
   async create(
+    @Ctx() ctx: TenantContext,
     @Body()
     // ชนิดที่นี่ต้องสะท้อน **สิ่งที่มาจากสาย** ไม่ใช่สิ่งที่เราหวังว่าจะได้
     // Nest ไม่ตรวจ body ให้โดยปริยาย ลูกค้าส่ง "3" มาแทน 3 ได้เสมอ
@@ -244,7 +247,6 @@ export class WorkItemController {
       assigneeId?: string;
     },
   ): Promise<{ id: string; itemKey: string; status: string }> {
-    const ctx = await resolveDevTenantContext();
     if (ctx.actorId === null) {
       throw new HttpException({ message: 'ไม่พบผู้ใช้สำหรับแจ้งงาน' }, HttpStatus.FORBIDDEN);
     }
@@ -287,8 +289,7 @@ export class WorkItemController {
   }
 
   @Get(':key')
-  async detail(@Param('key') key: string): Promise<unknown> {
-    const ctx = await resolveDevTenantContext();
+  async detail(@Ctx() ctx: TenantContext, @Param('key') key: string): Promise<unknown> {
     const db = tenantScoped(ctx);
     const item = await db.workItem.findFirst({
       where: { itemKey: key },
@@ -357,10 +358,10 @@ export class WorkItemController {
    */
   @Get(':key/comments')
   async comments(
+    @Ctx() ctx: TenantContext,
     @Param('key') key: string,
     @Query('view') view?: string,
   ): Promise<{ rows: unknown[] }> {
-    const ctx = await resolveDevTenantContext();
     const viewer: Viewer = view === 'reporter' ? 'reporter' : 'agent';
     try {
       return { rows: await listComments(ctx, key, viewer) };
@@ -375,10 +376,10 @@ export class WorkItemController {
   @Post(':key/comments')
   @HttpCode(HttpStatus.CREATED)
   async comment(
+    @Ctx() ctx: TenantContext,
     @Param('key') key: string,
     @Body() body: { body?: string; isInternal?: boolean | string },
   ): Promise<unknown> {
-    const ctx = await resolveDevTenantContext();
     if (ctx.actorId === null) {
       throw new HttpException({ message: 'ไม่พบผู้ใช้สำหรับเขียนความเห็น' }, HttpStatus.FORBIDDEN);
     }
@@ -407,8 +408,10 @@ export class WorkItemController {
    * ไฟล์แนบของงาน
    */
   @Get(':key/attachments')
-  async attachments(@Param('key') key: string): Promise<{ rows: unknown[] }> {
-    const ctx = await resolveDevTenantContext();
+  async attachments(
+    @Ctx() ctx: TenantContext,
+    @Param('key') key: string,
+  ): Promise<{ rows: unknown[] }> {
     try {
       return { rows: await listAttachments(ctx, key) };
     } catch (e) {
@@ -431,10 +434,10 @@ export class WorkItemController {
   @UseFilters(UploadErrorFilter)
   @UseInterceptors(FileInterceptor('file', { limits: { fileSize: MAX_SIZE_BYTES } }))
   async upload(
+    @Ctx() ctx: TenantContext,
     @Param('key') key: string,
     @UploadedFile() file: Express.Multer.File | undefined,
   ): Promise<unknown> {
-    const ctx = await resolveDevTenantContext();
     if (ctx.actorId === null) {
       throw new HttpException({ message: 'ไม่พบผู้ใช้สำหรับแนบไฟล์' }, HttpStatus.FORBIDDEN);
     }
@@ -476,8 +479,11 @@ export class WorkItemController {
    * เพื่อไม่ให้เบราว์เซอร์เดาชนิดไฟล์เองแล้วเปิดสิ่งที่ไม่ควรเปิด
    */
   @Get('attachments/:id/download')
-  async download(@Param('id') id: string, @Res() res: Response): Promise<void> {
-    const ctx = await resolveDevTenantContext();
+  async download(
+    @Ctx() ctx: TenantContext,
+    @Param('id') id: string,
+    @Res() res: Response,
+  ): Promise<void> {
     try {
       const f = await downloadAttachment(ctx, BigInt(id));
       res.setHeader('Content-Type', f.mimeType);
@@ -500,10 +506,10 @@ export class WorkItemController {
    */
   @Post(':key/transitions/:transitionId')
   async transition(
+    @Ctx() ctx: TenantContext,
     @Param('key') key: string,
     @Param('transitionId') transitionId: string,
   ): Promise<unknown> {
-    const ctx = await resolveDevTenantContext();
     if (ctx.actorId === null) {
       throw new HttpException({ message: 'ไม่พบผู้ใช้สำหรับดำเนินการ' }, HttpStatus.FORBIDDEN);
     }
