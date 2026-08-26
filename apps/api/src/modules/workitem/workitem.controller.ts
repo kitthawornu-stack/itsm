@@ -52,6 +52,11 @@ import {
 } from './workitem.service';
 import { EmptyCommentError, addComment, listComments } from './comment.service';
 import {
+  AssigneeNotEligibleError,
+  assignWorkItem,
+  assignableUsers,
+} from './assign.service';
+import {
   AttachmentNotFoundError,
   AttachmentRejectedError,
   downloadAttachment,
@@ -83,6 +88,7 @@ export class WorkItemController {
     @Query('q') q?: string,
     @Query('open') openOnly?: string,
     @Query('limit') limit?: string,
+    @Query('mine') mine?: string,
   ): Promise<{ rows: WorkItemListRow[]; total: number }> {
     const db = tenantScoped(ctx);
     const take = Math.min(Number(limit ?? 50) || 50, 200);
@@ -131,8 +137,27 @@ export class WorkItemController {
       if (keyFilter.length === 0) return { rows: [], total: 0 };
     }
 
+    /**
+     * `mine=assigned` งานที่ฉันรับผิดชอบ · `mine=reported` งานที่ฉันแจ้ง
+     *
+     * แยกสองอย่างโดยตั้งใจ — ผู้แจ้งกับผู้รับผิดชอบเป็นคนละบทบาท
+     * และคนคนเดียวกันอยากเห็นคนละรายการ ("งานที่ฉันต้องทำ" กับ "เรื่องที่ฉันแจ้งไว้")
+     *
+     * ค่าที่ไม่รู้จักถูกละเลย ไม่ใช่ตีความเป็น "ของฉัน" — ตัวกรองที่เดาเอง
+     * ทำให้ผู้ใช้เห็นรายการผิดโดยไม่รู้ว่าทำไม
+     */
+    const mineFilter =
+      ctx.actorId === null || mine === undefined
+        ? {}
+        : mine === 'assigned'
+          ? { assigneeId: ctx.actorId }
+          : mine === 'reported'
+            ? { reporterId: ctx.actorId }
+            : {};
+
     const where = {
       projectId: { in: scopedProjectIds },
+      ...mineFilter,
       ...(openOnly === 'true' ? { resolvedAt: null } : {}),
       ...(keyFilter === undefined ? {} : { itemKey: { in: keyFilter } }),
     };
@@ -526,6 +551,76 @@ export class WorkItemController {
       }
       throw e;
     }
+  }
+
+  /**
+   * มอบหมายงาน — ส่ง `assigneeId` เป็น null เพื่อคืนงานเข้ากอง
+   */
+  @Post(':key/assign')
+  @HttpCode(HttpStatus.OK)
+  async assign(
+    @Ctx() ctx: TenantContext,
+    @Param('key') key: string,
+    @Body() body: { assigneeId?: unknown },
+  ): Promise<unknown> {
+    // "me" คือการรับงานเอง ซึ่งเป็นการกระทำที่ต่างจากการจ่ายให้คนอื่น
+    // ในสายตาผู้ใช้ แต่เป็นเรื่องเดียวกันในระบบ
+    const raw = body.assigneeId;
+    let assigneeId: bigint | null;
+    if (raw === null || raw === undefined || raw === '') {
+      assigneeId = null;
+    } else if (raw === 'me') {
+      assigneeId = ctx.actorId;
+    } else if (typeof raw === 'string' || typeof raw === 'number') {
+      try {
+        assigneeId = BigInt(raw);
+      } catch {
+        throw new HttpException(
+          { error: 'validation_failed', message: 'รหัสผู้รับผิดชอบไม่ถูกต้อง' },
+          HttpStatus.UNPROCESSABLE_ENTITY,
+        );
+      }
+    } else {
+      // object หรือ array จะกลายเป็น "[object Object]" ถ้าปล่อยให้ String() จัดการ
+      // แล้ว BigInt() จะโยน error ที่ไม่บอกอะไรกับผู้เรียกเลย
+      throw new HttpException(
+        { error: 'validation_failed', message: 'รหัสผู้รับผิดชอบไม่ถูกต้อง' },
+        HttpStatus.UNPROCESSABLE_ENTITY,
+      );
+    }
+
+    try {
+      return await assignWorkItem(ctx, key, assigneeId);
+    } catch (e) {
+      if (e instanceof AssigneeNotEligibleError) {
+        throw new HttpException(
+          { error: 'assignee_not_eligible', message: e.message },
+          HttpStatus.UNPROCESSABLE_ENTITY,
+        );
+      }
+      if (e instanceof WorkItemNotFoundError) {
+        throw new HttpException({ error: 'not_found', message: e.message }, HttpStatus.NOT_FOUND);
+      }
+      throw e;
+    }
+  }
+
+  /** รายชื่อคนที่มอบหมายงานใบนี้ให้ได้ */
+  @Get(':key/assignable')
+  async assignable(
+    @Ctx() ctx: TenantContext,
+    @Param('key') key: string,
+  ): Promise<{ rows: unknown[] }> {
+    const db = tenantScoped(ctx);
+    const item = await db.workItem.findFirst({
+      where: { itemKey: key },
+      select: { projectId: true },
+    });
+    if (item === null) {
+      throw new HttpException({ error: 'not_found', message: `ไม่พบงาน ${key}` }, HttpStatus.NOT_FOUND);
+    }
+    await assertCan(ctx, item.projectId, 'ASSIGN_ITEM');
+    return { rows: await assignableUsers(ctx, item.projectId) };
   }
 
   /**

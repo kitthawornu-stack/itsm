@@ -40,9 +40,28 @@ const API = process.env['API_BASE_URL'] ?? 'http://localhost:4400';
  * Server Component: ดึงข้อมูลฝั่งเซิร์ฟเวอร์ ไม่มี loading spinner ตอนโหลดครั้งแรก
  * ยังไม่มี virtualization — จำเป็นเมื่อคิวเกิน ~200 แถว (ตอนนี้จำกัดที่ 50)
  */
-async function fetchQueue(): Promise<{ rows: ApiRow[]; total: number } | { error: string }> {
+/**
+ * มุมมองของคิว
+ *
+ * `assigned` กับ `reported` เป็นคนละคำถาม: "งานที่ฉันต้องทำ" กับ
+ * "เรื่องที่ฉันแจ้งไว้" · คนคนเดียวกันอยากเห็นทั้งสองอย่างในเวลาต่างกัน
+ */
+const VIEWS = [
+  { key: '', label: 'ทั้งหมด' },
+  { key: 'assigned', label: 'งานของฉัน' },
+  { key: 'reported', label: 'เรื่องที่ฉันแจ้ง' },
+] as const;
+
+type ViewKey = (typeof VIEWS)[number]['key'];
+
+async function fetchQueue(
+  mine: ViewKey,
+): Promise<{ rows: ApiRow[]; total: number } | { error: string }> {
   try {
-    const res = await apiFetch('/api/v1/work-items?project=SD&open=true&limit=50', {
+    const query = `/api/v1/work-items?project=SD&open=true&limit=50${
+      mine === '' ? '' : `&mine=${mine}`
+    }`;
+    const res = await apiFetch(query, {
       cache: 'no-store',
     });
     if (!res.ok) {
@@ -54,8 +73,15 @@ async function fetchQueue(): Promise<{ rows: ApiRow[]; total: number } | { error
   }
 }
 
-export default async function QueuePage(): Promise<ReactNode> {
-  const data = await fetchQueue();
+export default async function QueuePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ mine?: string }>;
+}): Promise<ReactNode> {
+  const { mine } = await searchParams;
+  // ค่าที่ไม่รู้จักตกกลับเป็น "ทั้งหมด" — ตัวกรองที่เดาเองทำให้เห็นรายการผิด
+  const view: ViewKey = mine === 'assigned' || mine === 'reported' ? mine : '';
+  const data = await fetchQueue(view);
 
   if ('error' in data) {
     return (
@@ -78,6 +104,20 @@ export default async function QueuePage(): Promise<ReactNode> {
         รายการแรก เรียงตามการอัปเดตล่าสุด
       </p>
 
+      {/* ลิงก์ธรรมดา ไม่ใช่ปุ่ม JavaScript — มุมมองคือสถานะของหน้า
+          จึงต้องอยู่ใน URL ให้บุ๊กมาร์กและกดย้อนกลับได้ */}
+      <nav className="queue-tabs" aria-label="มุมมองคิวงาน">
+        {VIEWS.map((v) => (
+          <a
+            key={v.key}
+            href={v.key === '' ? '/' : `/?mine=${v.key}`}
+            aria-current={v.key === view ? 'page' : undefined}
+          >
+            {v.label}
+          </a>
+        ))}
+      </nav>
+
       <div className="toolbar">
         <StatusPill label="ยังไม่เสร็จ" category="TODO" />
         <span style={{ fontSize: 12.5, color: 'var(--text-muted)' }}>
@@ -88,8 +128,18 @@ export default async function QueuePage(): Promise<ReactNode> {
 
       {data.rows.length === 0 ? (
         <EmptyState
-          title="ยังไม่มีงานในคิวนี้"
-          body="เมื่อมีผู้แจ้งปัญหาเข้ามา งานจะปรากฏที่นี่โดยอัตโนมัติ"
+          title={
+            view === 'assigned'
+              ? 'ยังไม่มีงานที่มอบหมายให้คุณ'
+              : view === 'reported'
+                ? 'คุณยังไม่ได้แจ้งเรื่องไว้'
+                : 'ยังไม่มีงานในคิวนี้'
+          }
+          body={
+            view === 'reported'
+              ? 'เมื่อแจ้งปัญหาเข้ามา เรื่องของคุณจะอยู่ที่นี่'
+              : 'เมื่อมีผู้แจ้งปัญหาเข้ามา งานจะปรากฏที่นี่โดยอัตโนมัติ'
+          }
         />
       ) : (
         <div className="queue">

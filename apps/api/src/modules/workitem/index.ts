@@ -7,3 +7,4 @@
 export * from './workitem.service';
 export * from './comment.service';
 export * from './attachment.service';
+export * from './assign.service';

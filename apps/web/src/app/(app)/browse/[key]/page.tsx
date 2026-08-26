@@ -9,6 +9,7 @@ import {
   type StatusCategory,
 } from '@itsm/ui';
 
+import { AssignControl } from '@/components/assign-control';
 import { CommentThread } from '@/components/comment-thread';
 import { toSlaBar, type SlaSnapshotView } from '@/lib/sla-label';
 
@@ -33,6 +34,7 @@ interface Detail {
   sla: (SlaSnapshotView & { goalName: string }) | null;
   priority: { rank: number; name: string } | null;
   assignee: string | null;
+  permissions?: { canAssign: boolean };
   reporter: string;
   createdAt: string;
   updatedAt: string;
@@ -193,7 +195,12 @@ export default async function WorkItemDetail({
               />
             </dd>
             <dt>ผู้รับผิดชอบ</dt>
-            <dd>{detail.assignee ?? <span className="detail-empty">ยังไม่มี</span>}</dd>
+            <dd>
+              {detail.assignee ?? <span className="detail-empty">ยังไม่มี</span>}
+              {detail.permissions?.canAssign === true ? (
+                <AssignControl apiBase={API} itemKey={detail.itemKey} current={detail.assignee} />
+              ) : null}
+            </dd>
             <dt>ผู้แจ้ง</dt>
             <dd>{detail.reporter}</dd>
             <dt>ประเภทงาน</dt>
