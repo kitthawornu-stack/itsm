@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
-import { Button, Field, Input, Select } from '@itsm/ui';
+import { Button, Field, Input, Select, Timestamp } from '@itsm/ui';
 
 interface UserRow {
   id: string;
@@ -212,14 +212,11 @@ export function UserAdmin({ apiBase }: { apiBase: string }): ReactNode {
                     <td>{u.displayName}</td>
                     <td>{u.groups.length === 0 ? '—' : u.groups.join(', ')}</td>
                     <td className="admin-when">
-                      {u.lastLoginAt === null
-                        ? 'ยังไม่เคย'
-                        : new Date(u.lastLoginAt).toLocaleDateString('th-TH', {
-                            day: 'numeric',
-                            month: 'short',
-                            year: 'numeric',
-                            timeZone: 'Asia/Bangkok',
-                          })}
+                      {u.lastLoginAt === null ? (
+                        'ยังไม่เคย'
+                      ) : (
+                        <Timestamp utc={u.lastLoginAt} precision="date" />
+                      )}
                     </td>
                     <td>{u.isActive ? 'ใช้งานอยู่' : 'ปิดแล้ว'}</td>
                     <td className="admin-actions">

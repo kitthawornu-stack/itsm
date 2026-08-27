@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 
-import { EmptyState, StatusPill } from '@itsm/ui';
+import { Alert, EmptyState, PageHeader, StatusPill } from '@itsm/ui';
 
 import { HqlBar } from '@/components/hql-bar';
 import { QueueBulk } from '@/components/queue-bulk';
@@ -131,39 +131,39 @@ export default async function QueuePage({
   if ('error' in data) {
     return (
       <>
-        <h1 className="page-title">คิวงาน</h1>
-        <div className="error-box">
-          <b>เชื่อมต่อระบบไม่ได้</b>
-          <br />
+        <PageHeader title="คิวงาน" />
+        <Alert tone="error" title="เชื่อมต่อระบบไม่ได้">
           {data.error}
-        </div>
+        </Alert>
       </>
     );
   }
 
   return (
     <>
-      <h1 className="page-title">คิวงาน · IT Service Desk</h1>
-      <p className="page-lead">
-        {query === '' ? (
-          <>
-            งานที่เปิดอยู่ทั้งหมด {data.total.toLocaleString('th-TH')} รายการ · แสดง{' '}
-            {data.rows.length} รายการแรก เรียงตามการอัปเดตล่าสุด
-          </>
-        ) : (
-          <>
-            {/*
-              **ไม่บอกยอดรวมตอนค้นด้วยคิวรี** — เพราะเราไม่รู้ยอดรวมจริง
-              เส้นทาง HQL คัดจากดัชนีมาไม่เกิน 50 คีย์ก่อน แล้วค่อยนับใน MySQL
-              ยอดที่ได้จึงเท่ากับจำนวนที่แสดงเสมอ · เขียนว่า "ทั้งหมด 50 รายการ"
-              คือการรายงานเพดานเป็นคำตอบ ซึ่งอ่านเหมือนข้อเท็จจริง
-            */}
-            แสดง {data.rows.length.toLocaleString('th-TH')} รายการ (สูงสุด 50 ต่อครั้ง) ·{' '}
-            <b>คิวรีแทนตัวกรองปริยายทั้งหมด</b> — ไม่ได้จำกัดเฉพาะโปรเจกต์ IT Service Desk
-            และไม่ได้ตัดงานที่ปิดแล้วออก
-          </>
-        )}
-      </p>
+      <PageHeader
+        title="คิวงาน · IT Service Desk"
+        lead={
+          query === '' ? (
+            <>
+              งานที่เปิดอยู่ทั้งหมด {data.total.toLocaleString('th-TH')} รายการ · แสดง{' '}
+              {data.rows.length} รายการแรก เรียงตามการอัปเดตล่าสุด
+            </>
+          ) : (
+            <>
+              {/*
+                **ไม่บอกยอดรวมตอนค้นด้วยคิวรี** — เพราะเราไม่รู้ยอดรวมจริง
+                เส้นทาง HQL คัดจากดัชนีมาไม่เกิน 50 คีย์ก่อน แล้วค่อยนับใน MySQL
+                ยอดที่ได้จึงเท่ากับจำนวนที่แสดงเสมอ · เขียนว่า "ทั้งหมด 50 รายการ"
+                คือการรายงานเพดานเป็นคำตอบ ซึ่งอ่านเหมือนข้อเท็จจริง
+              */}
+              แสดง {data.rows.length.toLocaleString('th-TH')} รายการ (สูงสุด 50 ต่อครั้ง) ·{' '}
+              <b>คิวรีแทนตัวกรองปริยายทั้งหมด</b> — ไม่ได้จำกัดเฉพาะโปรเจกต์ IT Service Desk
+              และไม่ได้ตัดงานที่ปิดแล้วออก
+            </>
+          )
+        }
+      />
 
       {/* ลิงก์ธรรมดา ไม่ใช่ปุ่ม JavaScript — มุมมองคือสถานะของหน้า
           จึงต้องอยู่ใน URL ให้บุ๊กมาร์กและกดย้อนกลับได้

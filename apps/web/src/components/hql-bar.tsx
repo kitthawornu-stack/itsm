@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import { Button, Input } from '@itsm/ui';
+import { Alert, Button, Checkbox, Input, LinkButton } from '@itsm/ui';
 
 interface FilterRow {
   id: string;
@@ -176,27 +176,23 @@ export function HqlBar({
           ค้นหา
         </Button>
         {text.trim() === '' ? null : (
-          <button
-            type="button"
-            className="admin-linkish"
+          <LinkButton
             onClick={() => {
               setOpen((v) => !v);
             }}
           >
             บันทึกเป็นตัวกรอง
-          </button>
+          </LinkButton>
         )}
         {value === '' ? null : (
-          <button
-            type="button"
-            className="admin-linkish"
+          <LinkButton
             onClick={() => {
               setText('');
               run('');
             }}
           >
             ล้าง
-          </button>
+          </LinkButton>
         )}
       </form>
 
@@ -205,19 +201,19 @@ export function HqlBar({
         คนกำลังพิมพ์อยู่ การพิมพ์ยังไม่จบไม่ใช่คำขอที่ผิด
       */}
       {error === undefined ? null : (
-        <p className="hql-error" role="alert">
+        <Alert tone="error" inline>
           {error}
-        </p>
+        </Alert>
       )}
       {saveError === null ? null : (
-        <p className="hql-error" role="alert">
+        <Alert tone="error" inline>
           {saveError}
-        </p>
+        </Alert>
       )}
       {notice === null ? null : (
-        <p className="admin-notice" role="status">
+        <Alert tone="success" inline>
           {notice}
-        </p>
+        </Alert>
       )}
 
       {open ? (
@@ -229,16 +225,9 @@ export function HqlBar({
           }}
         >
           <Input id="hql-name" value={name} onChange={setName} placeholder="ตั้งชื่อตัวกรอง" maxLength={128} />
-          <label className="grid-check">
-            <input
-              type="checkbox"
-              checked={shared}
-              onChange={() => {
-                setShared((v) => !v);
-              }}
-            />
+          <Checkbox checked={shared} onChange={setShared}>
             ให้คนอื่นเห็นด้วย
-          </label>
+          </Checkbox>
           <Button variant="primary" type="submit" disabled={saving || name.trim() === ''}>
             บันทึก
           </Button>

@@ -511,3 +511,171 @@
   color: var(--text-muted);
   line-height: var(--line-height-body);
 }
+
+/* ============================================================
+   Alert — รวมสามแบบที่ apps/web เคยเขียนเองแยกกัน
+   ============================================================ */
+.ui-alert {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-left-width: 3px;
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 12.5px;
+  line-height: var(--line-height-body);
+}
+
+/* แถบสีอยู่ที่ขอบซ้าย ไม่ใช่พื้นทั้งกล่อง — พื้นสีเต็มกล่องทำให้ข้อความไทย
+   ที่มีสระบนสองชั้นอ่านยากลงมากในธีมมืด และดังเกินกว่าที่เนื้อหาส่วนใหญ่ควรดัง */
+.ui-alert[data-tone='error'] { border-left-color: var(--status-critical); }
+.ui-alert[data-tone='warning'] { border-left-color: var(--status-warning); }
+.ui-alert[data-tone='success'] { border-left-color: var(--status-success); }
+.ui-alert[data-tone='info'] { border-left-color: var(--status-info); }
+
+.ui-alert-title {
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: var(--line-height-body);
+}
+
+.ui-alert[data-inline='true'] {
+  padding: 0;
+  border: none;
+  background: none;
+  gap: 0;
+}
+
+.ui-alert[data-inline='true'][data-tone='error'] { color: var(--status-critical); }
+.ui-alert[data-inline='true'][data-tone='warning'] { color: var(--status-warning); }
+.ui-alert[data-inline='true'][data-tone='success'] { color: var(--status-success); }
+.ui-alert[data-inline='true'][data-tone='info'] { color: var(--status-info); }
+
+/* ============================================================
+   PageHeader
+   ============================================================ */
+.ui-page-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-4);
+}
+
+.ui-page-header-text {
+  min-width: 0;
+}
+
+.ui-page-title {
+  font-family: var(--font-display);
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  line-height: var(--line-height-heading);
+  color: var(--text);
+  margin: 0;
+  /* ป้ายไทยยาวกว่าอังกฤษราว 1.3 เท่า และไม่มีช่องว่างให้ตัด */
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.ui-page-lead {
+  margin: var(--space-2) 0 0;
+  font-size: 12.5px;
+  line-height: var(--line-height-body);
+  color: var(--text-muted);
+  max-width: 78ch;
+}
+
+.ui-page-actions {
+  display: flex;
+  gap: var(--space-2);
+  flex-shrink: 0;
+}
+
+/* ============================================================
+   Timestamp
+   ============================================================ */
+.ui-when {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: var(--line-height-dense);
+  color: var(--text-muted);
+  white-space: nowrap;
+  /* ตัวเลขต้องเรียงตรงคอลัมน์เมื่ออยู่ในตาราง */
+  font-variant-numeric: tabular-nums;
+}
+
+/* ============================================================
+   Checkbox
+   ============================================================ */
+.ui-checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 12.5px;
+  line-height: var(--line-height-body);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.ui-checkbox[data-disabled='true'] {
+  color: var(--text-faint);
+  cursor: default;
+}
+
+.ui-checkbox-input {
+  /* accent-color ทำให้ช่องติ๊กใช้สีแบรนด์โดยไม่ต้องวาดเองทั้งตัว
+     ซึ่งแปลว่ายังได้พฤติกรรมและ focus ring ของระบบปฏิบัติการครบ */
+  accent-color: var(--accent-service);
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  cursor: inherit;
+}
+
+.ui-checkbox-input:disabled {
+  cursor: default;
+}
+
+.ui-checkbox-input:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+/* ============================================================
+   LinkButton
+   ============================================================ */
+.ui-linkbtn {
+  border: none;
+  background: none;
+  padding: 0;
+  font-family: var(--font-body);
+  font-size: 11.5px;
+  line-height: var(--line-height-body);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.ui-linkbtn[data-tone='default'] { color: var(--accent-service); }
+.ui-linkbtn[data-tone='danger'] { color: var(--status-critical); }
+
+.ui-linkbtn:hover:not(:disabled) {
+  text-decoration: underline;
+}
+
+.ui-linkbtn:disabled {
+  color: var(--text-faint);
+  cursor: default;
+  text-decoration: none;
+}
+
+.ui-linkbtn:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+  border-radius: var(--radius-sm);
+}

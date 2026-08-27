@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
-import { Button, Textarea } from '@itsm/ui';
+import { Button, Checkbox, Textarea, Timestamp } from '@itsm/ui';
 
 interface CommentRow {
   id: string;
@@ -91,15 +91,7 @@ export function CommentThread({
             <li key={c.id} className="thread-item" data-internal={c.isInternal ? 'true' : 'false'}>
               <div className="thread-meta">
                 <b>{c.author}</b>
-                <time dateTime={c.createdAt}>
-                  {new Date(c.createdAt).toLocaleString('th-TH', {
-                    day: 'numeric',
-                    month: 'short',
-                    hour: '2-digit',
-                    minute: '2-digit',
-                    timeZone: 'Asia/Bangkok',
-                  })}
-                </time>
+                <Timestamp utc={c.createdAt} />
                 {c.isInternal ? <span className="thread-internal">เห็นเฉพาะทีม</span> : null}
               </div>
               <p className="thread-body">{c.body}</p>
@@ -126,16 +118,9 @@ export function CommentThread({
           <Button variant="primary" type="button" disabled={sending} onClick={() => void send()}>
             {sending ? 'กำลังส่ง…' : 'ส่งความเห็น'}
           </Button>
-          <label className="thread-internal-toggle">
-            <input
-              type="checkbox"
-              checked={internal}
-              onChange={(e) => {
-                setInternal(e.target.checked);
-              }}
-            />
+          <Checkbox checked={internal} onChange={setInternal}>
             บันทึกภายใน — ผู้แจ้งจะไม่เห็น
-          </label>
+          </Checkbox>
         </div>
       </div>
     </div>

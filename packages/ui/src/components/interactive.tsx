@@ -369,3 +369,94 @@ export function Field({ label, htmlFor, required = false, hint, children }: Fiel
     </div>
   );
 }
+
+// ============================================================
+
+export interface CheckboxProps {
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+  /** ข้อความข้างช่อง — ไม่ใส่ต้องส่ง `label` แทนเพื่อให้สกรีนรีดเดอร์อ่านออก */
+  children?: ReactNode;
+  /** ชื่อสำหรับสกรีนรีดเดอร์เมื่อไม่มีข้อความข้างช่อง (เช่น ช่องติ๊กในตาราง) */
+  label?: string;
+  disabled?: boolean;
+  /**
+   * เลือกไว้บางส่วน — ไม่ใช่ทั้งหมดและไม่ใช่ไม่เลือกเลย
+   *
+   * ช่องที่ติ๊กเต็มทั้งที่เลือกไว้ 3 จาก 50 คือคำโกหก และ HTML ตั้งค่านี้
+   * ผ่าน attribute ไม่ได้ ต้องเซ็ตผ่าน DOM property เท่านั้น จึงพลาดกันบ่อย
+   */
+  indeterminate?: boolean;
+}
+
+export function Checkbox({
+  checked,
+  onChange,
+  children,
+  label,
+  disabled = false,
+  indeterminate = false,
+}: CheckboxProps): ReactNode {
+  const input = (
+    <input
+      type="checkbox"
+      className="ui-checkbox-input"
+      checked={checked}
+      disabled={disabled}
+      aria-label={children === undefined ? label : undefined}
+      ref={(el) => {
+        if (el !== null) el.indeterminate = indeterminate;
+      }}
+      onChange={(e) => {
+        onChange(e.target.checked);
+      }}
+    />
+  );
+  // ไม่มีข้อความข้างช่อง = ไม่ห่อ <label> เพราะ label เปล่าทำให้พื้นที่กดขยาย
+  // ไปคลุมเซลล์ข้าง ๆ ในตาราง แล้วคนกดลิงก์แล้วได้ติ๊กแทน
+  if (children === undefined) return input;
+  return (
+    <label className="ui-checkbox" data-disabled={disabled ? 'true' : 'false'}>
+      {input}
+      <span>{children}</span>
+    </label>
+  );
+}
+
+// ============================================================
+
+export interface LinkButtonProps {
+  children: ReactNode;
+  onClick: () => void;
+  disabled?: boolean;
+  /** งานที่ทำลายของ — แสดงเป็นสีวิกฤต */
+  tone?: 'default' | 'danger';
+}
+
+/**
+ * ปุ่มที่หน้าตาเป็นลิงก์
+ *
+ * **เป็น `<button>` เสมอ ไม่ใช่ `<a>`** — ของที่กดแล้วเปลี่ยนข้อมูลต้องเป็นปุ่ม
+ * ไม่งั้นเบราว์เซอร์กับสกรีนรีดเดอร์จะสัญญากับผู้ใช้ว่ามันคือการไปที่อื่น
+ * (เปิดแท็บใหม่ได้ · คัดลอกลิงก์ได้) ซึ่งไม่จริงสักข้อ
+ *
+ * ใช้กับงานรอง เช่น "ล้าง" หรือ "ยกเลิกการเลือก" — งานหลักใช้ `Button`
+ */
+export function LinkButton({
+  children,
+  onClick,
+  disabled = false,
+  tone = 'default',
+}: LinkButtonProps): ReactNode {
+  return (
+    <button
+      type="button"
+      className="ui-linkbtn"
+      data-tone={tone}
+      disabled={disabled}
+      onClick={onClick}
+    >
+      {children}
+    </button>
+  );
+}

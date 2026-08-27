@@ -2,7 +2,15 @@
 
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
-import { Button, WorkItemRow, type PriorityRank, type StatusCategory } from '@itsm/ui';
+import {
+  Alert,
+  Button,
+  Checkbox,
+  LinkButton,
+  WorkItemRow,
+  type PriorityRank,
+  type StatusCategory,
+} from '@itsm/ui';
 
 import { toSlaBar, type SlaSnapshotView } from '@/lib/sla-label';
 
@@ -201,28 +209,24 @@ export function QueueBulk({
           <Button variant="primary" disabled={busy || nothingChosen} onClick={() => void apply()}>
             {busy ? 'กำลังแก้…' : 'แก้ทั้งหมด'}
           </Button>
-          <button
-            type="button"
-            className="admin-linkish"
+          <LinkButton
             onClick={() => {
               setPicked(new Set());
             }}
           >
             ยกเลิกการเลือก
-          </button>
+          </LinkButton>
 
           {/* บอกเพดานตรงนี้ ไม่ใช่ปล่อยให้กดแล้วเจอ 422 */}
           {picked.size > max ? (
-            <span className="hql-error">แก้ได้ครั้งละไม่เกิน {max} เรื่อง</span>
+            <Alert tone="error" inline>
+              แก้ได้ครั้งละไม่เกิน {max} เรื่อง
+            </Alert>
           ) : null}
         </div>
       )}
 
-      {error === null ? null : (
-        <p className="hql-error" role="alert">
-          {error}
-        </p>
-      )}
+      {error === null ? null : <Alert tone="error">{error}</Alert>}
 
       {result === null ? null : (
         <div className="bulk-result" role="status">
@@ -251,15 +255,12 @@ export function QueueBulk({
         <div className="queue-head">
           {canSelect ? (
             <span className="queue-check">
-              <input
-                type="checkbox"
+              <Checkbox
                 checked={picked.size > 0 && picked.size === eligible.length}
                 // บางส่วนไม่ใช่ทั้งหมด — ช่องที่ติ๊กเต็มทั้งที่เลือกไว้ 3 จาก 50 คือคำโกหก
-                ref={(el) => {
-                  if (el !== null) el.indeterminate = picked.size > 0 && picked.size < eligible.length;
-                }}
+                indeterminate={picked.size > 0 && picked.size < eligible.length}
                 onChange={toggleAll}
-                aria-label="เลือกทั้งหมดในหน้านี้"
+                label="เลือกทั้งหมดในหน้านี้"
               />
             </span>
           ) : null}
@@ -286,13 +287,12 @@ export function QueueBulk({
               {canSelect ? (
                 <span className="queue-check">
                   {mine ? (
-                    <input
-                      type="checkbox"
+                    <Checkbox
                       checked={picked.has(r.itemKey)}
                       onChange={() => {
                         toggle(r.itemKey);
                       }}
-                      aria-label={`เลือก ${r.itemKey}`}
+                      label={`เลือก ${r.itemKey}`}
                     />
                   ) : null}
                 </span>

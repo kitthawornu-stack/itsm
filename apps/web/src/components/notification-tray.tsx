@@ -1,5 +1,7 @@
 'use client';
 
+import { Timestamp } from '@itsm/ui';
+
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 
 interface NotificationRow {
@@ -129,13 +131,7 @@ export function NotificationTray({ apiBase }: { apiBase: string }): ReactNode {
                     <span className="tray-title">{n.title}</span>
                     {n.body === null ? null : <span className="tray-body">{n.body}</span>}
                     <span className="tray-time">
-                      {new Date(n.createdAt).toLocaleString('th-TH', {
-                        day: 'numeric',
-                        month: 'short',
-                        hour: '2-digit',
-                        minute: '2-digit',
-                        timeZone: 'Asia/Bangkok',
-                      })}
+                      <Timestamp utc={n.createdAt} />
                     </span>
                   </button>
                 </li>

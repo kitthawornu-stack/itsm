@@ -5,6 +5,7 @@ import {
   PriorityIndicator,
   SlaBar,
   StatusPill,
+  Timestamp,
   type PriorityRank,
   type StatusCategory,
 } from '@itsm/ui';
@@ -61,14 +62,6 @@ const FIELD_LABEL: Record<string, string> = {
   description: 'รายละเอียด',
   priority: 'ความสำคัญ',
 };
-
-function formatTime(iso: string): string {
-  return new Date(iso).toLocaleString('th-TH', {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-    timeZone: 'Asia/Bangkok',
-  });
-}
 
 /**
  * หน้ารายละเอียดงาน — สามชั้นของการเปิดเผยข้อมูล (master-plan 7.1)
@@ -212,7 +205,9 @@ export default async function WorkItemDetail({
                   <div>
                     <div className="timeline-line">
                       <b>{h.actor}</b>
-                      <span className="timeline-time">{formatTime(h.createdAt)}</span>
+                      <span className="timeline-time">
+                        <Timestamp utc={h.createdAt} />
+                      </span>
                     </div>
                     <div className="timeline-detail">
                       {h.field === '__transition__' ? (
@@ -270,9 +265,13 @@ export default async function WorkItemDetail({
             <dt>ความสำคัญ</dt>
             <dd>{detail.priority?.name ?? <span className="detail-empty">ไม่ระบุ</span>}</dd>
             <dt>สร้างเมื่อ</dt>
-            <dd>{formatTime(detail.createdAt)}</dd>
+            <dd>
+              <Timestamp utc={detail.createdAt} />
+            </dd>
             <dt>อัปเดตล่าสุด</dt>
-            <dd>{formatTime(detail.updatedAt)}</dd>
+            <dd>
+              <Timestamp utc={detail.updatedAt} />
+            </dd>
           </dl>
         </aside>
       </div>

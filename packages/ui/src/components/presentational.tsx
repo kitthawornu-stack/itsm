@@ -189,3 +189,117 @@ export function WorkItemCard({
   );
 }
 
+// ============================================================
+
+export type AlertTone = 'error' | 'warning' | 'success' | 'info';
+
+export interface AlertProps {
+  tone: AlertTone;
+  children: ReactNode;
+  /** หัวข้อสั้น ๆ — ไม่ใส่ก็ได้เมื่อข้อความเดียวพอ */
+  title?: string;
+  /**
+   * แบบบรรทัดเดียวไม่มีกรอบ — ใช้ติดกับช่องกรอกที่มันอธิบาย
+   * กล่องมีกรอบข้างช่องกรอกเล็ก ๆ ดูหนักกว่าข้อความที่มันบอกเสียอีก
+   */
+  inline?: boolean;
+}
+
+/**
+ * ข้อความบอกผลหรือปัญหา
+ *
+ * รวมสามแบบที่ `apps/web` เคยเขียนเองแยกกัน (`.admin-error` · `.error-box` ·
+ * `.hql-error`) ซึ่งเป็นเรื่องเดียวกันแต่หน้าตาคนละอย่าง ผู้ใช้จึงต้องเรียนรู้
+ * ใหม่ทุกหน้าว่าอะไรคือคำเตือน
+ *
+ * `role` ผูกกับ tone ไม่ใช่ให้ผู้เรียกเลือก — ข้อความผิดพลาดต้องเป็น `alert`
+ * (สกรีนรีดเดอร์ขัดจังหวะทันที) ส่วนข้อความบอกผลสำเร็จเป็น `status`
+ * (อ่านเมื่อว่าง) · ปล่อยให้เลือกเองแปลว่าจะมีที่ที่เลือกผิด
+ */
+export function Alert({ tone, children, title, inline = false }: AlertProps): ReactNode {
+  return (
+    <div
+      className="ui-alert"
+      data-tone={tone}
+      data-inline={inline ? 'true' : 'false'}
+      role={tone === 'error' ? 'alert' : 'status'}
+    >
+      {title === undefined ? null : <b className="ui-alert-title">{title}</b>}
+      <span className="ui-alert-body">{children}</span>
+    </div>
+  );
+}
+
+// ============================================================
+
+export interface PageHeaderProps {
+  title: string;
+  /** ประโยคเดียวใต้หัวเรื่อง บอกว่าหน้านี้กำลังแสดงอะไรอยู่ */
+  lead?: ReactNode;
+  /** ปุ่มมุมขวา เช่น "แจ้งปัญหา" */
+  actions?: ReactNode;
+}
+
+/**
+ * หัวหน้าจอ
+ *
+ * `title` เป็น `string` ไม่ใช่ `ReactNode` โดยตั้งใจ — หัวเรื่องที่ยัด markup ได้
+ * จะกลายเป็นที่ทิ้งของทุกอย่างที่หาที่วางไม่ได้ และ `<h1>` จะมีหลายอันในหน้าเดียว
+ */
+export function PageHeader({ title, lead, actions }: PageHeaderProps): ReactNode {
+  return (
+    <header className="ui-page-header">
+      <div className="ui-page-header-text">
+        <h1 className="ui-page-title">{title}</h1>
+        {lead === undefined ? null : <p className="ui-page-lead">{lead}</p>}
+      </div>
+      {actions === undefined ? null : <div className="ui-page-actions">{actions}</div>}
+    </header>
+  );
+}
+
+// ============================================================
+
+export interface TimestampProps {
+  /** เวลาแบบ ISO 8601 UTC ตามที่ API ส่งมา */
+  utc: string;
+  /** `date` = วันเดือนปี · `time` = วันเดือน + เวลา (ค่าปริยาย) */
+  precision?: 'date' | 'time';
+}
+
+/**
+ * แสดงเวลาตามเขตเวลาไทย
+ *
+ * **INVARIANT 6: แปลง timezone ที่ชั้นแสดงผลเท่านั้น** — คอมโพเนนต์นี้คือชั้นนั้น
+ * ที่อื่นทั้งระบบเก็บและส่งเป็น UTC · การมีที่เดียวที่แปลง แปลว่าเวลาที่ผิด
+ * มีที่ให้ไปแก้ที่เดียว ไม่ใช่กระจายอยู่ในทุกหน้าจอที่บังเอิญเรียก `toLocaleString`
+ *
+ * ระบุ `timeZone` ตายตัวเสมอ ไม่ใช้เขตเวลาของเครื่อง — ไม่งั้นเซิร์ฟเวอร์
+ * (UTC) กับเบราว์เซอร์ (Asia/Bangkok) จะเรนเดอร์คนละค่า แล้ว React จะเตือน
+ * hydration mismatch ในบางหน้าและไม่เตือนในบางหน้า แล้วแต่ว่าเวลานั้นข้ามวันไหม
+ *
+ * ค่าที่แปลงไม่ได้คืน `—` ไม่ใช่ `Invalid Date` — หน้าจอที่ขึ้นว่า Invalid Date
+ * ทำให้คนเชื่อว่าข้อมูลเสีย ทั้งที่ส่วนใหญ่คือ API ยังไม่ส่งค่านั้นมา
+ */
+export function Timestamp({ utc, precision = 'time' }: TimestampProps): ReactNode {
+  const d = new Date(utc);
+  if (Number.isNaN(d.getTime())) {
+    return (
+      <time className="ui-when" dateTime="">
+        —
+      </time>
+    );
+  }
+  const text = d.toLocaleString('th-TH', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    ...(precision === 'time' ? { hour: '2-digit' as const, minute: '2-digit' as const } : {}),
+    timeZone: 'Asia/Bangkok',
+  });
+  return (
+    <time className="ui-when" dateTime={utc} title={`${utc} (UTC)`}>
+      {text}
+    </time>
+  );
+}
