@@ -1,7 +1,8 @@
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 
-import { apiFetch } from '@/lib/api';
+import { PermissionGrid } from '@/components/permission-grid';
+import { API_BASE, apiFetch } from '@/lib/api';
 
 export const dynamic = 'force-dynamic';
 
@@ -33,8 +34,11 @@ interface Detail {
       postFunctions: string[];
     }>;
   }>;
+  groups: Array<{ id: string; name: string; memberCount: number }>;
   permissions: {
     schemeName: string | null;
+    schemeId: string | null;
+    sharedWith: string[];
     rows: Array<{
       permission: string;
       groups: string[];
@@ -56,6 +60,9 @@ interface Detail {
     goals: Array<{ key: string; name: string; targetMs: number; match: unknown }>;
   } | null;
 }
+
+// ที่อยู่ฝั่งเบราว์เซอร์ — ต่างจากที่ server component ใช้ ดู lib/api.ts
+const API = API_BASE;
 
 const CATEGORY_LABEL: Record<string, string> = {
   TODO: 'ยังไม่เริ่ม',
@@ -211,52 +218,15 @@ export default async function ProjectDetailPage({
             โปรเจกต์นี้ยังไม่ได้ผูกชุดสิทธิ์ — ไม่มีใครเข้าถึงได้เลย รวมถึงผู้ดูแล
           </p>
         ) : null}
-        <div className="admin-table-wrap">
-          <table className="admin-table">
-            <thead>
-              <tr>
-                <th scope="col">ทำอะไรได้</th>
-                <th scope="col">กลุ่มที่ได้สิทธิ์</th>
-              </tr>
-            </thead>
-            <tbody>
-              {d.permissions.rows.map((r) => {
-                const none = r.groups.length === 0 && r.impliedGroups.length === 0;
-                return (
-                  <tr key={r.permission} data-inactive={none ? 'true' : undefined}>
-                    <td>
-                      {PERMISSION_LABEL[r.permission] ?? r.permission}
-                      {/*
-                        คีย์ที่ยังไม่มีโค้ดตรวจ ต้องบอกให้เห็น — ไม่งั้นตารางนี้
-                        สร้างความเชื่อว่าให้สิทธิ์แล้วมีผล ซึ่งอันตรายกว่าไม่ให้
-                        เพราะไม่มีใครมาบ่นให้รู้ว่ามันไม่ทำงาน
-                      */}
-                      {r.enforced ? null : (
-                        <span className="cfg-implied"> · ยังไม่มีผลบังคับ</span>
-                      )}
-                    </td>
-                    <td>
-                      {/* แถวว่างคือคำตอบ ไม่ใช่ข้อมูลที่ขาด — ต้องอ่านออกว่า "ไม่มีใคร" */}
-                      {r.groups.length === 0 ? (none ? 'ยังไม่มีใคร' : null) : r.groups.join(' · ')}
-                      {/*
-                        สิทธิ์บางอย่างได้มาโดยปริยายจากอีกคีย์หนึ่ง — ถ้าแสดงแต่ grant
-                        ตรง ๆ ตารางจะบอกว่า "ยังไม่มีใคร" ทั้งที่มีคนทำได้จริง
-                        ซึ่งพาผู้ดูแลไปสรุปผิดอย่างมั่นใจ
-                      */}
-                      {r.impliedGroups.length === 0 ? null : (
-                        <span className="cfg-implied">
-                          {r.groups.length === 0 ? '' : ' · '}
-                          {r.impliedGroups.join(' · ')} (ได้จาก
-                          {PERMISSION_LABEL[r.impliedBy ?? ''] ?? r.impliedBy})
-                        </span>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+        <PermissionGrid
+          apiBase={API}
+          projectKey={d.project.key}
+          rows={d.permissions.rows}
+          groups={d.groups}
+          labels={PERMISSION_LABEL}
+          editable={d.permissions.schemeId !== null}
+          sharedWith={d.permissions.sharedWith}
+        />
         <p className="admin-empty">
           สิทธิ์ให้ผ่านกลุ่มเท่านั้น ไม่ให้รายบุคคล — จึงตอบได้เสมอว่าคนคนหนึ่งทำได้เพราะอยู่กลุ่มไหน
         </p>

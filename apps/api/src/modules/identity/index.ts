@@ -12,4 +12,4 @@ export {
   type ResolvedSession,
 } from './session.service';
 export { PASSWORD_MIN_LENGTH, WeakPasswordError, hashPassword } from './password';
-export { changeOwnPassword, createUser, listUsers, setActive } from './user-admin.service';
+export { changeOwnPassword, createUser, listGroups, listUsers, setActive } from './user-admin.service';

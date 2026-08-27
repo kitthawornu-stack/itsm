@@ -70,6 +70,22 @@ export function isEnforced(key: PermissionKey): boolean {
   return !UNENFORCED_PERMISSIONS.includes(key);
 }
 
+/**
+ * การถอนสิทธิ์นี้จะทำให้ไม่มีใครเข้าหน้าตั้งค่าได้อีกหรือไม่
+ *
+ * แยกออกมาเป็นฟังก์ชันบริสุทธิ์เพราะการทดสอบกฎนี้กับฐานข้อมูลจริง **อันตราย**:
+ * ถ้ากลไกถูกลบออก (ซึ่งต้องทำเพื่อพิสูจน์ว่าเทสต์แดงได้) การลบจะสำเร็จจริง
+ * และฐานข้อมูลจะเหลือศูนย์ — เกิดขึ้นมาแล้วครั้งหนึ่งระหว่างเขียนไฟล์นี้
+ *
+ * @param othersElsewhere จำนวน grant `ADMINISTER_TENANT` ที่เหลือ **ทั้ง tenant**
+ *   ไม่ใช่แค่ในชุดสิทธิ์ใบเดียวกัน เพราะ `isTenantAdmin` ถือว่ามีคีย์นี้
+ *   ในชุดไหนก็ตาม = เป็นผู้ดูแลทั้ง tenant
+ */
+export function wouldLockOutAdmins(permission: PermissionKey, othersElsewhere: number): boolean {
+  if (permission !== 'ADMINISTER_TENANT') return false;
+  return othersElsewhere <= 0;
+}
+
 /** สิทธิ์หนึ่งรายการที่ผูกกับกลุ่ม — `groupId` เป็น null คือ grant ที่ยังตั้งค่าไม่ครบ */
 export interface GrantRow {
   permission: string;

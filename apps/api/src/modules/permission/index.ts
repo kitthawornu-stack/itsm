@@ -8,9 +8,14 @@ export {
   assertTenantAdmin,
   browsableProjectIds,
   can,
+  LastAdminGrantError,
+  SchemeNotFoundError,
+  UnknownGroupError,
   describeGrants,
   isTenantAdmin,
   permissionsFor,
+  schemeUsage,
+  setGrant,
   summaryFor,
 } from './permission.service';
 export {
@@ -19,4 +24,5 @@ export {
   UNENFORCED_PERMISSIONS,
   isEnforced,
   isStaff,
+  wouldLockOutAdmins,
   summarize, type PermissionKey, type PermissionSummary } from './permission-rules';

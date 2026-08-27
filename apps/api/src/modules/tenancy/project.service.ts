@@ -57,3 +57,21 @@ export async function projectByKey(ctx: TenantContext, key: string): Promise<Pro
   if (found === undefined) throw new ProjectNotFoundError(key);
   return found;
 }
+
+/**
+ * รหัสชุดสิทธิ์ของโปรเจกต์ — null เมื่อยังไม่ได้ผูก
+ *
+ * null ไม่ได้แปลว่า "เปิดให้ทุกคน" แต่แปลว่า **ไม่มีใครเข้าถึงได้เลย**
+ * (ดู `describeGrants`) · ผู้เรียกต้องปฏิเสธการแก้สิทธิ์เมื่อได้ null
+ * ไม่ใช่สร้างชุดใหม่ให้เงียบ ๆ ซึ่งจะเปลี่ยนสิทธิ์ทั้งโปรเจกต์โดยไม่มีใครสั่ง
+ */
+export async function projectSchemeId(
+  ctx: TenantContext,
+  projectId: bigint,
+): Promise<bigint | null> {
+  const row = await tenantScoped(ctx).project.findFirst({
+    where: { id: projectId },
+    select: { permissionSchemeId: true },
+  });
+  return row?.permissionSchemeId ?? null;
+}

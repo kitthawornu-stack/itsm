@@ -9,11 +9,13 @@
  */
 import type { TenantContext } from '@itsm/types';
 
+import { auditedTransaction } from '../../infrastructure/audit/audited-transaction';
 import { tenantScoped } from '../../infrastructure/prisma/tenant-scope';
 import {
   ALL_PERMISSION_KEYS,
   IMPLIED_BY,
   isEnforced,
+  wouldLockOutAdmins,
   resolveGrants,
   summarize,
   type PermissionKey,
@@ -239,4 +241,106 @@ export async function describeGrants(
       };
     }),
   };
+}
+
+export class SchemeNotFoundError extends Error {
+  constructor(projectKey: string) {
+    super(`โปรเจกต์ ${projectKey} ยังไม่ได้ผูกชุดสิทธิ์ จึงแก้สิทธิ์ไม่ได้`);
+    this.name = 'SchemeNotFoundError';
+  }
+}
+
+export class UnknownGroupError extends Error {
+  constructor(readonly groupId: string) {
+    super(`ไม่พบกลุ่ม #${groupId}`);
+    this.name = 'UnknownGroupError';
+  }
+}
+
+export class LastAdminGrantError extends Error {
+  constructor() {
+    super(
+      'ถอนสิทธิ์ผู้ดูแลระบบรายการสุดท้ายไม่ได้ — จะไม่มีใครเข้าหน้าตั้งค่าได้อีกเลย ' +
+        'และกู้กลับได้ทางฐานข้อมูลทางเดียว',
+    );
+    this.name = 'LastAdminGrantError';
+  }
+}
+
+/**
+ * ให้หรือถอนสิทธิ์หนึ่งรายการกับกลุ่มหนึ่ง
+ *
+ * ⚠️ **โค้ดนี้แตะระบบสิทธิ์ — ต้องให้ Tech Lead อนุมัติก่อน merge (CLAUDE.md §4)**
+ *
+ * ทำงานที่ระดับ **ชุดสิทธิ์ ไม่ใช่โปรเจกต์** เพราะโครงสร้างเป็นอย่างนั้นจริง
+ * ชุดสิทธิ์ใบเดียวใช้ร่วมกันหลายโปรเจกต์ได้ · การแก้จากหน้าโปรเจกต์หนึ่ง
+ * จึงเปลี่ยนอีกโปรเจกต์ไปด้วย — `schemeUsage` มีไว้ให้หน้าจอบอกเรื่องนี้ก่อนกด
+ */
+export async function setGrant(
+  ctx: TenantContext,
+  schemeId: bigint,
+  permission: PermissionKey,
+  groupId: bigint,
+  granted: boolean,
+): Promise<{ changed: boolean }> {
+  const db = tenantScoped(ctx);
+  const group = await db.userGroup.findFirst({ where: { id: groupId }, select: { name: true } });
+  if (group === null) throw new UnknownGroupError(groupId.toString());
+
+  const existing = await db.permissionGrant.findFirst({
+    where: { schemeId, permission, groupId },
+    select: { id: true },
+  });
+  // สั่งซ้ำสถานะเดิมไม่ใช่ความผิดพลาด — auditedTransaction โยนเมื่อไม่มีอะไรเปลี่ยน
+  if (granted === (existing !== null)) return { changed: false };
+
+  /**
+   * ล็อกตัวเองออกจากระบบไม่ได้
+   *
+   * `ADMINISTER_TENANT` เป็นทางเดียวที่เข้าหน้าตั้งค่าได้ · ถอนรายการสุดท้ายทิ้ง
+   * แปลว่าไม่มีใครแก้อะไรได้อีกเลย รวมถึงแก้ความผิดพลาดนี้ · ทางกลับมีทางเดียว
+   * คือ INSERT ลงฐานข้อมูลตรง ๆ ซึ่งลูกค้า on-prem ทำเองไม่ได้
+   *
+   * ตรวจ **ทั้ง tenant** ไม่ใช่แค่ชุดสิทธิ์ใบนี้ เพราะ `isTenantAdmin` ถือว่า
+   * มีคีย์นี้ในชุดไหนก็ตาม = เป็นผู้ดูแลทั้ง tenant
+   */
+  if (!granted) {
+    const others = await db.permissionGrant.count({
+      where: { permission: 'ADMINISTER_TENANT', groupId: { not: null }, id: { not: existing?.id } },
+    });
+    if (wouldLockOutAdmins(permission, others)) throw new LastAdminGrantError();
+  }
+
+  await auditedTransaction(ctx, granted ? 'permission.grant' : 'permission.revoke', async (tx) => {
+    if (granted) {
+      await tx.permissionGrant.create({
+        data: { tenantId: ctx.tenantId, schemeId, permission, groupId },
+      });
+    } else if (existing !== null) {
+      await tx.permissionGrant.delete({ where: { id: existing.id } });
+    }
+    return {
+      result: undefined,
+      audit: [
+        {
+          kind: 'system',
+          action: granted ? 'permission.grant' : 'permission.revoke',
+          entityType: 'permission_scheme',
+          entityId: schemeId.toString(),
+          payload: { permission, group: group.name, granted },
+        },
+      ],
+    };
+  });
+  return { changed: true };
+}
+
+/** โปรเจกต์ทั้งหมดที่ใช้ชุดสิทธิ์ใบนี้ — หน้าจอต้องบอกก่อนแก้ */
+export async function schemeUsage(ctx: TenantContext, schemeId: bigint): Promise<string[]> {
+  const rows = await tenantScoped(ctx).project.findMany({
+    where: { permissionSchemeId: schemeId },
+    orderBy: { key: 'asc' },
+    select: { key: true },
+  });
+  return rows.map((p) => p.key);
 }

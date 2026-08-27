@@ -1015,3 +1015,38 @@
   gap: var(--space-4);
   flex-wrap: wrap;
 }
+
+/* ---------- ตารางสิทธิ์ที่แก้ได้ ---------- */
+
+.grid-perm {
+  text-align: left;
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+.grid-group {
+  white-space: nowrap;
+}
+
+.grid-cell {
+  text-align: center;
+}
+
+.grid-check {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  cursor: pointer;
+}
+
+.grid-check input:disabled {
+  cursor: default;
+}
+
+/* สิทธิ์ที่ได้มาโดยปริยาย — จุดทึบข้างช่องที่ไม่ได้ติ๊ก
+   ต้องต่างจากช่องที่ติ๊กด้วยรูปร่าง ไม่ใช่ด้วยสีอย่างเดียว */
+.grid-implied {
+  color: var(--text-faint);
+  font-size: 9px;
+  line-height: 1;
+}
