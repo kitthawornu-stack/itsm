@@ -8,6 +8,7 @@ import {
   type StatusCategory,
 } from '@itsm/ui';
 
+import { HqlBar } from '@/components/hql-bar';
 import { toSlaBar } from '@/lib/sla-label';
 import { API_BASE, apiFetch } from '@/lib/api';
 
@@ -56,20 +57,51 @@ const VIEWS = [
 
 type ViewKey = (typeof VIEWS)[number]['key'];
 
+/**
+ * **เมื่อผู้ใช้เขียนคิวรีเอง ตัวกรองปริยายที่มองไม่เห็นต้องหลุดออกไป**
+ *
+ * ปกติคิวนี้บังคับ `project=SD` และ `open=true` ไว้เงียบ ๆ · ถ้ายังบังคับต่อ
+ * ตอนมี HQL คิวรีอย่าง `status = เสร็จแล้ว` หรือ `project = PLAT` จะคืนศูนย์แถว
+ * เสมอ ทั้งที่เขียนถูกทุกตัวอักษร — ผู้ใช้จะสรุปว่า "ไม่มีข้อมูล" หรือ
+ * "ภาษานี้พัง" ซึ่งผิดทั้งคู่ และไม่มีอะไรบนหน้าจอบอกว่ามีตัวกรองซ้อนอยู่
+ *
+ * มุมมอง (`mine`) ยังบังคับต่อ เพราะแท็บที่ถูกเลือกอยู่บนหน้าจอ — ผู้ใช้เห็นว่ามันทำงานอยู่
+ */
 async function fetchQueue(
   mine: ViewKey,
-): Promise<{ rows: ApiRow[]; total: number } | { error: string }> {
+  hql: string,
+): Promise<{ rows: ApiRow[]; total: number; hqlError?: string } | { error: string }> {
   try {
-    const query = `/api/v1/work-items?project=SD&open=true&limit=50${
-      mine === '' ? '' : `&mine=${mine}`
-    }`;
-    const res = await apiFetch(query, {
+    const params = new URLSearchParams({ limit: '50' });
+    if (hql === '') {
+      params.set('project', 'SD');
+      params.set('open', 'true');
+    } else {
+      params.set('hql', hql);
+    }
+    if (mine !== '') params.set('mine', mine);
+
+    const res = await apiFetch(`/api/v1/work-items?${params.toString()}`, {
       cache: 'no-store',
     });
     if (!res.ok) {
+      /*
+        **ระบบค้นหาล่มไม่ใช่ระบบล่ม** — และไม่ใช่ความผิดของสิ่งที่ผู้ใช้เพิ่งพิมพ์
+
+        503 จาก `search_index_not_ready` เคยตกลงมาที่กล่องเดียวกับ "ต่อ API ไม่ได้"
+        ผลคือหน้าจอกลืนคิวทั้งหน้าแล้วบอกให้ไปรัน `pnpm --filter @itsm/api dev`
+        ทั้งที่ API ตอบอยู่ดี ๆ — คำแนะนำที่ชี้ผิดทางแย่กว่าไม่แนะนำอะไรเลย
+        เพราะคนจะไปไล่แก้สิ่งที่ไม่ได้พัง
+
+        คืนเป็น `hqlError` เพื่อให้คิวยังอยู่ และข้อความไปอยู่ข้างช่องกรอก
+      */
+      const detail = (await res.json().catch(() => null)) as { message?: string } | null;
+      if (hql !== '' && typeof detail?.message === 'string') {
+        return { rows: [], total: 0, hqlError: detail.message };
+      }
       return { error: `API ตอบกลับ ${res.status} — ตรวจว่า apps/api รันอยู่ที่ ${API} หรือไม่` };
     }
-    return (await res.json()) as { rows: ApiRow[]; total: number };
+    return (await res.json()) as { rows: ApiRow[]; total: number; hqlError?: string };
   } catch {
     return { error: `เชื่อมต่อ API ที่ ${API} ไม่ได้ — รัน \`pnpm --filter @itsm/api dev\` ก่อน` };
   }
@@ -78,12 +110,13 @@ async function fetchQueue(
 export default async function QueuePage({
   searchParams,
 }: {
-  searchParams: Promise<{ mine?: string }>;
+  searchParams: Promise<{ mine?: string; hql?: string }>;
 }): Promise<ReactNode> {
-  const { mine } = await searchParams;
+  const { mine, hql } = await searchParams;
   // ค่าที่ไม่รู้จักตกกลับเป็น "ทั้งหมด" — ตัวกรองที่เดาเองทำให้เห็นรายการผิด
   const view: ViewKey = mine === 'assigned' || mine === 'reported' ? mine : '';
-  const data = await fetchQueue(view);
+  const query = (hql ?? '').trim();
+  const data = await fetchQueue(view, query);
 
   if ('error' in data) {
     return (
@@ -102,45 +135,84 @@ export default async function QueuePage({
     <>
       <h1 className="page-title">คิวงาน · IT Service Desk</h1>
       <p className="page-lead">
-        งานที่เปิดอยู่ทั้งหมด {data.total.toLocaleString('th-TH')} รายการ · แสดง {data.rows.length}{' '}
-        รายการแรก เรียงตามการอัปเดตล่าสุด
+        {query === '' ? (
+          <>
+            งานที่เปิดอยู่ทั้งหมด {data.total.toLocaleString('th-TH')} รายการ · แสดง{' '}
+            {data.rows.length} รายการแรก เรียงตามการอัปเดตล่าสุด
+          </>
+        ) : (
+          <>
+            {/*
+              **ไม่บอกยอดรวมตอนค้นด้วยคิวรี** — เพราะเราไม่รู้ยอดรวมจริง
+              เส้นทาง HQL คัดจากดัชนีมาไม่เกิน 50 คีย์ก่อน แล้วค่อยนับใน MySQL
+              ยอดที่ได้จึงเท่ากับจำนวนที่แสดงเสมอ · เขียนว่า "ทั้งหมด 50 รายการ"
+              คือการรายงานเพดานเป็นคำตอบ ซึ่งอ่านเหมือนข้อเท็จจริง
+            */}
+            แสดง {data.rows.length.toLocaleString('th-TH')} รายการ (สูงสุด 50 ต่อครั้ง) ·{' '}
+            <b>คิวรีแทนตัวกรองปริยายทั้งหมด</b> — ไม่ได้จำกัดเฉพาะโปรเจกต์ IT Service Desk
+            และไม่ได้ตัดงานที่ปิดแล้วออก
+          </>
+        )}
       </p>
 
       {/* ลิงก์ธรรมดา ไม่ใช่ปุ่ม JavaScript — มุมมองคือสถานะของหน้า
-          จึงต้องอยู่ใน URL ให้บุ๊กมาร์กและกดย้อนกลับได้ */}
+          จึงต้องอยู่ใน URL ให้บุ๊กมาร์กและกดย้อนกลับได้
+          คิวรีติดไปกับลิงก์ด้วย เพราะการสลับมุมมองไม่ควรลบสิ่งที่พิมพ์ไว้ */}
       <nav className="queue-tabs" aria-label="มุมมองคิวงาน">
-        {VIEWS.map((v) => (
-          <a
-            key={v.key}
-            href={v.key === '' ? '/' : `/?mine=${v.key}`}
-            aria-current={v.key === view ? 'page' : undefined}
-          >
-            {v.label}
-          </a>
-        ))}
+        {VIEWS.map((v) => {
+          const p = new URLSearchParams();
+          if (v.key !== '') p.set('mine', v.key);
+          if (query !== '') p.set('hql', query);
+          const qs = p.toString();
+          return (
+            <a
+              key={v.key}
+              href={qs === '' ? '/' : `/?${qs}`}
+              aria-current={v.key === view ? 'page' : undefined}
+            >
+              {v.label}
+            </a>
+          );
+        })}
       </nav>
 
-      <div className="toolbar">
-        <StatusPill label="ยังไม่เสร็จ" category="TODO" />
-        <span style={{ fontSize: 12.5, color: 'var(--text-muted)' }}>
-          ทุกคอลัมน์มาจากฐานข้อมูลจริง — รวมถึง <b>SLA ที่คำนวณจากปฏิทินเวลาทำการ</b>{' '}
-          และหยุดนาฬิกาเมื่อรอลูกค้าตอบ
-        </span>
-      </div>
+      <HqlBar apiBase={API} value={query} {...(data.hqlError === undefined ? {} : { error: data.hqlError })} />
+
+      {/*
+        ป้าย "ยังไม่เสร็จ" อธิบายตัวกรองปริยาย ซึ่งไม่ได้ทำงานตอนมีคิวรี
+        ปล่อยไว้จะกลายเป็นป้ายที่โกหก: หน้าจอโชว์งานที่ปิดแล้วอยู่ใต้ป้ายที่บอกว่ายังไม่เสร็จ
+      */}
+      {query === '' ? (
+        <div className="toolbar">
+          <StatusPill label="ยังไม่เสร็จ" category="TODO" />
+          <span style={{ fontSize: 12.5, color: 'var(--text-muted)' }}>
+            ทุกคอลัมน์มาจากฐานข้อมูลจริง — รวมถึง <b>SLA ที่คำนวณจากปฏิทินเวลาทำการ</b>{' '}
+            และหยุดนาฬิกาเมื่อรอลูกค้าตอบ
+          </span>
+        </div>
+      ) : null}
 
       {data.rows.length === 0 ? (
         <EmptyState
           title={
-            view === 'assigned'
-              ? 'ยังไม่มีงานที่มอบหมายให้คุณ'
-              : view === 'reported'
-                ? 'คุณยังไม่ได้แจ้งเรื่องไว้'
-                : 'ยังไม่มีงานในคิวนี้'
+            data.hqlError !== undefined
+              ? 'คิวรียังใช้ไม่ได้'
+              : query !== ''
+                ? 'ไม่มีงานที่ตรงกับคิวรีนี้'
+                : view === 'assigned'
+                  ? 'ยังไม่มีงานที่มอบหมายให้คุณ'
+                  : view === 'reported'
+                    ? 'คุณยังไม่ได้แจ้งเรื่องไว้'
+                    : 'ยังไม่มีงานในคิวนี้'
           }
           body={
-            view === 'reported'
-              ? 'เมื่อแจ้งปัญหาเข้ามา เรื่องของคุณจะอยู่ที่นี่'
-              : 'เมื่อมีผู้แจ้งปัญหาเข้ามา งานจะปรากฏที่นี่โดยอัตโนมัติ'
+            data.hqlError !== undefined
+              ? 'แก้คิวรีตามข้อความข้างช่องกรอกแล้วลองใหม่'
+              : query !== ''
+                ? 'ลองผ่อนเงื่อนไขลง หรือกด "ล้าง" เพื่อกลับไปดูคิวปกติ'
+                : view === 'reported'
+                  ? 'เมื่อแจ้งปัญหาเข้ามา เรื่องของคุณจะอยู่ที่นี่'
+                  : 'เมื่อมีผู้แจ้งปัญหาเข้ามา งานจะปรากฏที่นี่โดยอัตโนมัติ'
           }
         />
       ) : (

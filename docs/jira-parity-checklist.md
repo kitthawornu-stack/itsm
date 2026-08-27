@@ -54,7 +54,7 @@ Jira สะสมฟีเจอร์มา 20 ปี การไล่เท�
 - [ ] Component + Label
 
 ### Search & Report
-- [~] HQL (ภาษาคิวรีแบบ JQL) + Saved Filter + แชร์ filter — *เอนจินครบ 30 เคส · **ต่อเข้า `GET /work-items?hql=` แล้วและยิงดัชนีจริง** (7 เคส integration) · ยังไม่มีหน้าจอกรอก HQL และยังไม่มี Saved Filter*
+- [x] HQL (ภาษาคิวรีแบบ JQL) + Saved Filter + แชร์ filter — *เอนจิน 30 เคส · ต่อดัชนีจริง 7 เคส · Saved Filter 14 เคส · **ช่องกรอกอยู่บนหน้าคิวแล้ว** (กด `/` เพื่อโฟกัส) บันทึก แชร์ และลบตัวกรองได้จากหน้าจอ · ตัวกรองที่แชร์รันด้วยขอบเขตของคนที่กด ไม่ใช่ของเจ้าของ*
 - [ ] Dashboard + Gadget 18 ชนิด + Wallboard
 - [ ] Agile Report 8 ตัว (Burndown, Burnup, Velocity, CFD, Sprint Report, Control Chart, Epic Report, Release Burndown)
 - [ ] Report Builder แบบ pivot
@@ -104,8 +104,8 @@ Jira สะสมฟีเจอร์มา 20 ปี การไล่เท�
 | เฟส | ขอบเขต | สถานะ | ค้างอะไร |
 |---|---|---|---|
 | **0** Foundation | รากที่รื้อทีหลังไม่ได้ | 🟢 **ผ่าน 5 จาก 6 เกณฑ์** | Storybook 14 จาก 24 คอมโพเนนต์ (เกณฑ์เดียวที่ยังไม่ผ่าน) |
-| **1** Service Desk MVP | ตัวจริงตัวแรกที่มีคนใช้ | 🟡 **ประมาณ 60%** | Service Catalog · Email-to-Ticket · LINE · Approval ขั้นเดียว · CSAT · Saved Filter · Bulk Action |
-| **2** Delivery | ฝั่งที่สู้กับ Jira ตรง ๆ | 🟡 **เริ่มแล้วเฉพาะ HQL** | Board · Backlog · Sprint · Epic · Issue Link · Roadmap · Story Point · Time Tracking · Command Palette |
+| **1** Service Desk MVP | ตัวจริงตัวแรกที่มีคนใช้ | 🟡 **ประมาณ 65%** | Service Catalog · Email-to-Ticket · LINE · Approval ขั้นเดียว · CSAT · Bulk Action |
+| **2** Delivery | ฝั่งที่สู้กับ Jira ตรง ๆ | 🟡 **HQL + Saved Filter ใช้ได้จากหน้าจอแล้ว** | Board · Backlog · Sprint · Epic · Issue Link · Roadmap · Story Point · Time Tracking · Command Palette |
 | **3** ITIL Depth | สิ่งที่ทำให้เป็น ITSM จริง | 🔴 **ยังไม่เริ่ม** | Problem · Change/CAB · CMDB · Knowledge Base · Approval หลายขั้น |
 | **4** Insight + Automation | จุดที่ผู้บริหารเห็นคุณค่า | 🔴 **ยังไม่เริ่ม** | Dashboard · Report · Automation · OpenAPI · Webhook *(SSO/LDAP ตัดออกตาม ADR-003)* |
 | **5** Hardening + SaaS | จากใช้เองสู่ขายได้ | 🔴 **ยังไม่เริ่ม** | ทดสอบโหลด · pentest · PDPA · Multi-tenant · เครื่องมือย้ายข้อมูล |
@@ -139,7 +139,8 @@ workflow (สถานะ + ปุ่ม) · ประเภทงาน + ก�
    ตัวเลข SLA ทุกตัวติดป้าย "เชื่อไม่ได้" อยู่จนกว่าจะมีคนยืนยัน
 2. 🟡 **ยังไม่มี Service Catalog** — ผู้แจ้งพิมพ์อิสระ ไม่ได้เลือกจากรายการบริการ
 3. 🟡 **ยังไม่มี LINE** — องค์กรใช้ LINE อยู่ทุกวัน แต่ระบบแจ้งเตือนได้แค่ในแอปกับอีเมล
-4. 🟡 **คิวยังไม่มี Saved Filter และ Bulk Action** — HQL ยิงผ่าน API ได้แล้ว แต่ยังไม่มีช่องกรอกบนหน้าจอ
+4. 🟡 **คิวยังไม่มี Bulk Action** — HQL และ Saved Filter ใช้จากหน้าจอได้แล้ว แต่ยังเลือกหลายใบพร้อมกันไม่ได้
+   · และผลจากคิวรีจำกัดที่ 50 ใบต่อครั้ง ยังไม่มีการแบ่งหน้า
 
 ---
 
