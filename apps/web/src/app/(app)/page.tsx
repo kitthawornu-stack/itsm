@@ -1,20 +1,15 @@
 import type { ReactNode } from 'react';
 
-import {
-  EmptyState,
-  StatusPill,
-  WorkItemRow,
-  type PriorityRank,
-  type StatusCategory,
-} from '@itsm/ui';
+import { EmptyState, StatusPill } from '@itsm/ui';
 
 import { HqlBar } from '@/components/hql-bar';
-import { toSlaBar } from '@/lib/sla-label';
+import { QueueBulk } from '@/components/queue-bulk';
 import { API_BASE, apiFetch } from '@/lib/api';
 
 interface ApiRow {
   id: string;
   itemKey: string;
+  projectKey: string;
   summary: string;
   status: { name: string; category: string; pausesSla: boolean };
   priority: { rank: number; name: string } | null;
@@ -58,6 +53,14 @@ const VIEWS = [
 type ViewKey = (typeof VIEWS)[number]['key'];
 
 /**
+ * เพดานของการแก้ทีละหลายใบ — ต้องตรงกับ `BULK_MAX` ฝั่ง API
+ *
+ * ประกาศซ้ำที่นี่แทนการ import ข้ามแอป เพราะ web กับ api เป็นคนละ deployment
+ * และค่านี้ยังเดินทางมากับผลลัพธ์ทุกครั้ง (`max`) หน้าจอจึงตรวจได้ว่าตรงกันจริง
+ */
+const BULK_MAX = 50;
+
+/**
  * **เมื่อผู้ใช้เขียนคิวรีเอง ตัวกรองปริยายที่มองไม่เห็นต้องหลุดออกไป**
  *
  * ปกติคิวนี้บังคับ `project=SD` และ `open=true` ไว้เงียบ ๆ · ถ้ายังบังคับต่อ
@@ -70,7 +73,9 @@ type ViewKey = (typeof VIEWS)[number]['key'];
 async function fetchQueue(
   mine: ViewKey,
   hql: string,
-): Promise<{ rows: ApiRow[]; total: number; hqlError?: string } | { error: string }> {
+): Promise<
+  { rows: ApiRow[]; total: number; hqlError?: string; bulkEditable?: string[] } | { error: string }
+> {
   try {
     const params = new URLSearchParams({ limit: '50' });
     if (hql === '') {
@@ -101,7 +106,12 @@ async function fetchQueue(
       }
       return { error: `API ตอบกลับ ${res.status} — ตรวจว่า apps/api รันอยู่ที่ ${API} หรือไม่` };
     }
-    return (await res.json()) as { rows: ApiRow[]; total: number; hqlError?: string };
+    return (await res.json()) as {
+      rows: ApiRow[];
+      total: number;
+      hqlError?: string;
+      bulkEditable?: string[];
+    };
   } catch {
     return { error: `เชื่อมต่อ API ที่ ${API} ไม่ได้ — รัน \`pnpm --filter @itsm/api dev\` ก่อน` };
   }
@@ -216,35 +226,17 @@ export default async function QueuePage({
           }
         />
       ) : (
-        <div className="queue">
-          <div className="queue-head">
-            <span>คีย์</span>
-            <span>หัวข้อ</span>
-            <span>ความสำคัญ</span>
-            <span>สถานะ</span>
-            <span />
-            <span>เหลือถึงกำหนด</span>
-          </div>
-          {data.rows.map((r) => (
-            <a key={r.id} href={`/browse/${r.itemKey}`} className="queue-link">
-            <WorkItemRow
-              itemKey={r.itemKey}
-              summary={r.summary}
-              priority={{
-                rank: (r.priority?.rank ?? 5) as PriorityRank,
-                label: r.priority?.name ?? 'ไม่ระบุ',
-              }}
-              status={{
-                label: r.status.name,
-                category: r.status.category as StatusCategory,
-                pausesSla: r.status.pausesSla,
-              }}
-              {...(r.assignee === null ? {} : { assignee: r.assignee.name })}
-              {...(r.sla === null ? {} : { sla: toSlaBar(r.sla) })}
-            />
-            </a>
-          ))}
-        </div>
+        /*
+          ตารางย้ายไปเป็น client component เพราะการเลือกหลายแถวเป็นสถานะชั่วคราว
+          ที่ **ไม่ควรอยู่ใน URL** — ต่างจากคิวรีและมุมมอง ซึ่งเป็นสิ่งที่คนอยากบุ๊กมาร์ก
+          ไม่มีใครอยากส่งลิงก์ที่แปลว่า "ฉันติ๊กไว้ 7 ใบ"
+        */
+        <QueueBulk
+          apiBase={API}
+          rows={data.rows}
+          bulkEditable={data.bulkEditable ?? []}
+          max={BULK_MAX}
+        />
       )}
     </>
   );

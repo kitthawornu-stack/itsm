@@ -112,18 +112,30 @@
   box-shadow: var(--elevation-1);
 }
 
+/* หัวตารางใช้โครงเดียวกับแถว: ราง (ถ้ามี) แล้วกริดคอลัมน์ที่เหมือน `.ui-row` เป๊ะ
+   รวมทั้ง gap และ padding — ต่างกันเมื่อไรหัวคอลัมน์เลื่อนหลุดจากข้อมูลทันที */
 .queue-head {
-  display: grid;
-  grid-template-columns: 84px 1fr 92px 132px 28px 100px;
-  gap: var(--space-3);
+  display: flex;
   align-items: center;
-  padding: var(--space-2) var(--space-3);
+  padding: var(--space-2) 0;
   border-bottom: 1px solid var(--border);
   background: var(--surface-2);
   font-family: var(--font-mono);
   font-size: 9.5px;
   letter-spacing: 0.1em;
-  color: var(--text-faint);
+  /* `--text-faint` บนพื้น `--surface-2` ได้ contrast 3.8:1 ในธีมมืด ซึ่งตกเกณฑ์ AA
+     สำหรับข้อความ 9.5px · วัดในเบราว์เซอร์จริง ไม่ใช่เดาจากชื่อ token */
+  color: var(--text-muted);
+}
+
+.queue-head-cols {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 84px 1fr 92px 132px 28px 100px;
+  gap: var(--space-3);
+  align-items: center;
+  padding: 0 var(--space-3);
 }
 
 .gallery-section {
@@ -1203,4 +1215,95 @@
 .hql-chip-del:focus-visible {
   outline: none;
   box-shadow: var(--focus-ring);
+}
+
+/* ---------- แก้ไขหลายเรื่องพร้อมกัน ---------- */
+
+/* ช่องติ๊กเป็นราง 28px นอกกริดของแถว — กริดของ .ui-row อยู่ใน packages/ui
+   การเพิ่มคอลัมน์ที่นั่นต้องแก้คอมโพเนนต์ร่วมและเพิ่ม story ให้ครบทุกสถานะ */
+.queue-row {
+  display: flex;
+  align-items: stretch;
+}
+
+.queue-check {
+  flex: 0 0 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-bottom: 1px solid var(--border);
+}
+
+/* หัวตารางมีเส้นล่างของตัวเองอยู่แล้ว ช่องติ๊กในหัวจึงไม่ต้องมีอีกเส้น */
+.queue-head .queue-check {
+  border-bottom: none;
+}
+
+.queue-row:last-child .queue-check {
+  border-bottom: none;
+}
+
+.queue-row > .queue-link {
+  flex: 1 1 auto;
+  /* ไม่มีบรรทัดนี้ หัวข้อยาว ๆ จะดันตารางล้น — ภาษาไทยไม่มีช่องว่างระหว่างคำ */
+  min-width: 0;
+}
+
+.bulk-bar,
+.bulk-result {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  padding: var(--space-2) var(--space-3);
+  margin-bottom: var(--space-2);
+  border: 1px solid var(--accent-service);
+  border-radius: var(--radius-md);
+  background: var(--accent-service-soft);
+  color: var(--accent-service-ink);
+  font-size: 12.5px;
+  line-height: 1.6;
+}
+
+.bulk-result {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-1);
+  border-color: var(--border);
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.bulk-field {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 12.5px;
+  line-height: 1.6;
+}
+
+.bulk-field select {
+  font-family: var(--font-body);
+  font-size: 12.5px;
+  line-height: 1.6;
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+}
+
+.bulk-failed {
+  margin: 0;
+  padding-inline-start: var(--space-4);
+  color: var(--text-muted);
+  line-height: 1.6;
+  /* ชื่อเหตุผลเป็นภาษาไทย ต้องยอมให้ตัดกลางคำในกล่องแคบ */
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.bulk-failed code {
+  font-family: var(--font-mono);
+  color: var(--text);
 }

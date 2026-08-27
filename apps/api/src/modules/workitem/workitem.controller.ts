@@ -98,6 +98,8 @@ export interface WorkItemListRow {
   assignee: { name: string } | null;
   updatedAt: string;
   resolvedAt: string | null;
+  /** คีย์โปรเจกต์ — หน้าจอใช้ตัดสินว่าแถวนี้ติ๊กเลือกเพื่อแก้ทีละหลายใบได้ไหม */
+  projectKey: string;
   /** null เมื่อโปรเจกต์ยังไม่ได้ตั้ง SLA Policy หรืองานยังไม่มีนาฬิกา */
   sla: SlaSnapshot | null;
 }
@@ -150,7 +152,13 @@ export class WorkItemController {
     @Query('limit') limit?: string,
     @Query('mine') mine?: string,
     @Query('hql') hql?: string,
-  ): Promise<{ rows: WorkItemListRow[]; total: number; hqlError?: string }> {
+  ): Promise<{
+    rows: WorkItemListRow[];
+    total: number;
+    hqlError?: string;
+    /** คีย์โปรเจกต์ที่ผู้ใช้คนนี้แก้ทีละหลายใบได้ — ใช้ตัดสินว่าจะโชว์ช่องติ๊กไหม */
+    bulkEditable?: string[];
+  }> {
     const db = tenantScoped(ctx);
     const take = Math.min(Number(limit ?? 50) || 50, 200);
 
@@ -259,10 +267,30 @@ export class WorkItemController {
           status: { select: { name: true, category: true, pausesSla: true } },
           priority: { select: { rank: true, name: true } },
           assignee: { select: { displayName: true } },
+          project: { select: { key: true } },
         },
       }),
       db.workItem.count({ where }),
     ]);
+
+    /*
+      โปรเจกต์ไหนที่ผู้ใช้คนนี้แก้ทีละหลายใบได้ — **เฉพาะที่ปรากฏในผลลัพธ์**
+
+      คืนเป็นรายการ ไม่ใช่ค่าบูลีนใบเดียว เพราะคิวรี HQL เลือกงานข้ามโปรเจกต์ได้
+      ค่าบูลีนใบเดียวจะบังคับให้เลือกระหว่าง "โชว์ช่องติ๊กบนแถวที่กดแล้วไม่ผ่าน"
+      กับ "ซ่อนทั้งหน้าเพราะมีโปรเจกต์เดียวที่ไม่มีสิทธิ์" — ผิดทั้งคู่
+
+      นี่คือการ **ซ่อนปุ่มที่กดแล้วได้ 403** ไม่ใช่กลไกป้องกัน
+      เซิร์ฟเวอร์ตรวจซ้ำเองทุกครั้งใน `bulkEditWorkItems`
+    */
+    const seenProjectIds = [...new Set(rows.map((w) => w.projectId.toString()))];
+    const bulkEditable: string[] = [];
+    for (const idText of seenProjectIds) {
+      if (await can(ctx, BigInt(idText), 'BULK_EDIT')) {
+        const key = rows.find((w) => w.projectId.toString() === idText)?.project.key;
+        if (key !== undefined) bulkEditable.push(key);
+      }
+    }
 
     const sla = await slaForWorkItems(
       ctx,
@@ -271,9 +299,11 @@ export class WorkItemController {
 
     return {
       total,
+      bulkEditable,
       rows: rows.map((w) => ({
         id: w.id.toString(),
         itemKey: w.itemKey,
+        projectKey: w.project.key,
         summary: w.summary,
         status: {
           name: w.status.name,
