@@ -184,6 +184,27 @@ function appliesToCurrentStatus(t: TransitionDefinition, ctx: TransitionContext)
 }
 
 /**
+ * ฟิลด์ที่ transition นี้จะเรียกร้องเมื่อกด
+ *
+ * หน้าจอต้องรู้ **ก่อน** กด ไม่ใช่รู้จากข้อความ error หลังกดแล้วถูกปฏิเสธ
+ * — การให้ผู้ใช้กดปุ่มเพื่อค้นหาว่าระบบต้องการอะไร คือการใช้ข้อความผิดพลาด
+ * แทนการออกแบบ
+ *
+ * อ่านจาก VALIDATOR เท่านั้น ไม่อ่าน CONDITION โดยเจตนา (ดูหัวไฟล์):
+ * ผู้ใช้ที่ไม่ผ่าน CONDITION ต้องไม่เห็นปุ่มอยู่แล้ว และไม่ควรรู้ว่าระบบขออะไร
+ */
+export function requiredFieldsFor(t: TransitionDefinition): string[] {
+  const fields = new Set<string>();
+  for (const rule of t.rules) {
+    if (rule.kind !== 'VALIDATOR' || rule.ruleType !== 'required-fields') continue;
+    const list = rule.config['fields'];
+    if (!Array.isArray(list)) continue;
+    for (const f of list) if (typeof f === 'string' && f !== '') fields.add(f);
+  }
+  return [...fields];
+}
+
+/**
  * ตรวจ CONDITION ทุกข้อ — โยน UnknownRuleError ถ้าเจอกฎที่ไม่รู้จัก
  * ผู้เรียกเลือกได้ว่าจะปล่อย error ขึ้นไป (validateTransition) หรือถือว่าไม่ผ่าน (evaluateTransitions)
  */

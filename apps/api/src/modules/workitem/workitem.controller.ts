@@ -40,8 +40,10 @@ import { slaForWorkItems, type SlaSnapshot } from '../sla';
 import {
   TransitionNotAllowedError,
   ValidationFailedError,
+  UnknownResolutionError,
   applyTransition,
   availableTransitions,
+  listResolutions,
 } from '../workflow';
 import {
   IssueTypeNotConfiguredError,
@@ -368,6 +370,7 @@ export class WorkItemController {
         project: true,
         assignee: { select: { displayName: true } },
         reporter: { select: { displayName: true } },
+        resolution: { select: { name: true } },
       },
     });
     // 404 ไม่ใช่ 200 พร้อม body ที่มีคำว่า error — ลูกค้าของ API ต้องแยกสองอย่างนี้ได้
@@ -420,10 +423,24 @@ export class WorkItemController {
       permissions: await summaryFor(ctx, item.projectId),
       // ตัวเลือกสำหรับฟอร์มแก้ไข ส่งมาพร้อมหน้าเลย ไม่ต้องยิงอีกคำขอ
       priorities: await listPriorities(ctx),
+      /**
+       * ผลการแก้ไข — "จบเรื่องนี้ยังไง"
+       *
+       * ต่างจากสถานะซึ่งบอกว่างานอยู่ตรงไหน · งานที่ปิดเพราะแก้ได้จริง
+       * กับงานที่ปิดเพราะซ้ำกับใบอื่น อยู่สถานะเดียวกันแต่คนละเรื่องกันสิ้นเชิง
+       * และรายงานทุกตัวที่แยกตามผลลัพธ์อ่านค่านี้
+       */
+      resolution: item.resolution?.name ?? null,
+      resolutions: await listResolutions(ctx),
       createdAt: item.createdAt.toISOString(),
       updatedAt: item.updatedAt.toISOString(),
       // ปุ่มที่ผู้ใช้คนนี้เห็นได้จริง — ผ่าน CONDITION ชั้นแรกของ workflow engine แล้ว
-      transitions: transitions.map((t) => ({ id: t.id.toString(), name: t.name })),
+      transitions: transitions.map((t) => ({
+        id: t.id.toString(),
+        name: t.name,
+        // หน้าจอถามก่อนกด แทนที่จะให้กดแล้วเจอ 422 พร้อมรายชื่อฟิลด์ที่ขาด
+        requiredFields: t.requiredFields,
+      })),
       history: history.map((h) => ({
         id: h.id.toString(),
         field: h.field,
@@ -723,6 +740,7 @@ export class WorkItemController {
     @Ctx() ctx: TenantContext,
     @Param('key') key: string,
     @Param('transitionId') transitionId: string,
+    @Body() body: { resolution?: string | null },
   ): Promise<unknown> {
     if (ctx.actorId === null) {
       throw new HttpException({ message: 'ไม่พบผู้ใช้สำหรับดำเนินการ' }, HttpStatus.FORBIDDEN);
@@ -741,7 +759,9 @@ export class WorkItemController {
     await assertCan(ctx, item.projectId, 'TRANSITION_ITEM');
 
     try {
-      const result = await applyTransition(ctx, item.id, BigInt(transitionId), ctx.actorId);
+      const result = await applyTransition(ctx, item.id, BigInt(transitionId), ctx.actorId, {
+        resolutionName: body.resolution ?? null,
+      });
       const status = await db.workflowStatus.findFirst({
         where: { id: result.toStatusId },
         select: { name: true, category: true },
@@ -761,6 +781,13 @@ export class WorkItemController {
             message: e.message,
             missingFields: e.missingFields,
           },
+          HttpStatus.UNPROCESSABLE_ENTITY,
+        );
+      }
+      if (e instanceof UnknownResolutionError) {
+        // 422 ไม่ใช่ 500 — หน้าจอส่งชื่อที่ไม่มีในระบบมา ซึ่งเป็นข้อมูลผิด ไม่ใช่ระบบพัง
+        throw new HttpException(
+          { error: 'unknown_resolution', message: e.message },
           HttpStatus.UNPROCESSABLE_ENTITY,
         );
       }

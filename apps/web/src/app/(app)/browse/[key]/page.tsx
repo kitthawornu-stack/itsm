@@ -41,7 +41,9 @@ interface Detail {
   reporter: string;
   createdAt: string;
   updatedAt: string;
-  transitions: Array<{ id: string; name: string }>;
+  transitions: Array<{ id: string; name: string; requiredFields: string[] }>;
+  resolution: string | null;
+  resolutions?: string[];
   history: HistoryRow[];
 }
 
@@ -53,6 +55,10 @@ const FIELD_LABEL: Record<string, string> = {
   __transition__: 'การดำเนินการ',
   assignee: 'ผู้รับผิดชอบ',
   resolvedAt: 'เวลาที่แก้เสร็จ',
+  resolution: 'ผลการแก้ไข',
+  summary: 'หัวข้อ',
+  description: 'รายละเอียด',
+  priority: 'ความสำคัญ',
 };
 
 function formatTime(iso: string): string {
@@ -123,6 +129,14 @@ export default async function WorkItemDetail({
               label={detail.status.name}
               category={detail.status.category as StatusCategory}
             />
+            {/*
+              อยู่ข้างสถานะเพราะตอบคนละคำถามกัน: สถานะบอกว่างานอยู่ตรงไหน
+              ผลการแก้ไขบอกว่าจบอย่างไร · "เสร็จแล้ว" เหมือนกันหมดทั้งเรื่องที่แก้ได้
+              เรื่องที่ซ้ำกับใบอื่น และเรื่องที่ผู้แจ้งยกเลิกเอง
+            */}
+            {detail.resolution === null ? null : (
+              <span className="detail-resolution">{detail.resolution}</span>
+            )}
           </div>
           <div className="detail-title-row">
             <h1 className="detail-title">{detail.summary}</h1>
@@ -153,6 +167,7 @@ export default async function WorkItemDetail({
         <TransitionButtons
           itemKey={detail.itemKey}
           transitions={detail.transitions}
+          resolutions={detail.resolutions ?? []}
           apiBase={API}
         />
       </div>
@@ -189,6 +204,13 @@ export default async function WorkItemDetail({
                         <>
                           ดำเนินการ <b>{h.newValue}</b>
                         </>
+                      ) : h.field === 'resolvedAt' ? (
+                        /*
+                          ประวัติเก็บค่าเป็นตัวบอกใบ้ว่า "มี" หรือ "ไม่มี" ไม่ใช่เวลาจริง
+                          ถ้าเรนเดอร์ตรง ๆ ผู้ใช้จะเห็นคำว่า set ปนอยู่ในประโยคไทย
+                          ซึ่งเป็นศัพท์ระบบที่ไม่มีความหมายกับใครนอกจากคนเขียนโค้ด
+                        */
+                        <>{h.newValue === null ? 'ยกเลิกการปิดงาน' : 'บันทึกเวลาที่แก้เสร็จ'}</>
                       ) : (
                         <>
                           เปลี่ยน {FIELD_LABEL[h.field] ?? h.field}

@@ -209,11 +209,64 @@ async function ensureStarterProject(
   const doing = await mkStatus('กำลังดำเนินการ', 'IN_PROGRESS', 2);
   const done = await mkStatus('เสร็จแล้ว', 'DONE', 3);
 
-  await prismaClient.workflowTransition.createMany({
-    data: [
-      { tenantId, workflowId: workflow.id, name: 'เริ่มดำเนินการ', fromStatusId: isNew, toStatusId: doing, position: 1 },
-      { tenantId, workflowId: workflow.id, name: 'ปิดงาน', fromStatusId: doing, toStatusId: done, position: 2 },
-    ],
+  await prismaClient.workflowTransition.create({
+    data: {
+      tenantId,
+      workflowId: workflow.id,
+      name: 'เริ่มดำเนินการ',
+      fromStatusId: isNew,
+      toStatusId: doing,
+      position: 1,
+    },
+  });
+
+  /**
+   * ปิดงานต้องระบุว่าจบอย่างไร
+   *
+   * สถานะบอกแค่ว่างานอยู่ตรงไหน — "เสร็จแล้ว" เท่ากันหมดทั้งงานที่แก้ได้จริง
+   * งานที่ซ้ำกับใบอื่น และงานที่ผู้แจ้งยกเลิกเอง ถ้าไม่บันทึกไว้ตอนปิด
+   * ไม่มีใครย้อนกลับไปเติมได้ และรายงานทุกตัวที่ถามว่า "แก้ได้กี่เรื่อง"
+   * จะตอบด้วยตัวเลขที่รวมเรื่องที่ไม่เคยถูกแก้เข้าไปด้วย
+   *
+   * เป็น VALIDATOR ไม่ใช่ CONDITION — ปุ่มต้องยังเห็นอยู่ ผู้ใช้จึงรู้ว่า
+   * ปิดงานได้แต่ต้องกรอกอะไรก่อน (ดูหัวไฟล์ workflow-engine.ts)
+   */
+  await prismaClient.workflowTransition.create({
+    data: {
+      tenantId,
+      workflowId: workflow.id,
+      name: 'ปิดงาน',
+      fromStatusId: doing,
+      toStatusId: done,
+      position: 2,
+      rules: {
+        create: [
+          {
+            tenantId,
+            kind: 'VALIDATOR',
+            ruleType: 'required-fields',
+            config: { fields: ['resolution'] },
+            position: 1,
+          },
+          {
+            tenantId,
+            kind: 'POST_FUNCTION',
+            ruleType: 'set-resolution',
+            // ไม่ระบุ config.resolution = ใช้ค่าที่ผู้ใช้เลือกตอนกด
+            // ถ้าระบุไว้ ปุ่มนั้นจะบังคับผลการแก้ไขตายตัว เช่นปุ่ม "ยกเลิกเรื่องนี้"
+            config: {},
+            position: 1,
+          },
+          {
+            tenantId,
+            kind: 'POST_FUNCTION',
+            ruleType: 'stop-sla',
+            config: {},
+            position: 2,
+          },
+        ],
+      },
+    },
   });
 
   const project = await prismaClient.project.create({
@@ -275,7 +328,7 @@ async function ensureStarterProject(
     });
   }
 
-  process.stdout.write('สร้างโปรเจกต์ SD · ศูนย์บริการไอที (3 สถานะ · 2 ปุ่ม)\n');
+  process.stdout.write('สร้างโปรเจกต์ SD · ศูนย์บริการไอที (3 สถานะ · 2 ปุ่ม · ปิดงานต้องระบุผลการแก้ไข)\n');
 }
 
 void main().catch((err: unknown) => {

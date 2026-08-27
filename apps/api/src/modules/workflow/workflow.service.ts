@@ -12,6 +12,7 @@ import { tenantScoped } from '../../infrastructure/prisma/tenant-scope';
 import { recomputeSla, recordSlaEvent } from '../sla';
 import {
   evaluateTransitions,
+  requiredFieldsFor,
   validateTransition,
   type TransitionContext,
   type TransitionDefinition,
@@ -26,6 +27,13 @@ export class WorkItemNotFoundError extends Error {
   constructor(workItemId: bigint) {
     super(`ไม่พบงาน #${workItemId.toString()} ในขอบเขตของ tenant นี้`);
     this.name = 'WorkItemNotFoundError';
+  }
+}
+
+export class UnknownResolutionError extends Error {
+  constructor(readonly given: string) {
+    super(`ไม่รู้จักผลการแก้ไข "${given}"`);
+    this.name = 'UnknownResolutionError';
   }
 }
 
@@ -49,6 +57,7 @@ interface LoadedWorkItem {
   statusId: bigint;
   statusName: string;
   assigneeId: bigint | null;
+  resolutionId: number | null;
   resolutionName: string | null;
   fieldSnapshot: Record<string, unknown>;
 }
@@ -71,6 +80,7 @@ async function loadWorkItem(ctx: TenantContext, workItemId: bigint): Promise<Loa
     statusId: item.statusId,
     statusName: item.status.name,
     assigneeId: item.assigneeId,
+    resolutionId: item.resolutionId,
     resolutionName: item.resolution?.name ?? null,
     fieldSnapshot:
       item.fieldSnapshot !== null && typeof item.fieldSnapshot === 'object'
@@ -113,10 +123,18 @@ async function loadTransitions(
   }));
 }
 
+/**
+ * @param submitted ค่าที่ผู้ใช้กรอกมา **พร้อมกับการกดปุ่ม** ทับค่าที่เก็บอยู่
+ *
+ * ถ้าไม่ทับ validator `required-fields: ['resolution']` จะอ่านค่าเดิมซึ่งยังว่าง
+ * แล้วปฏิเสธการปิดงานที่ผู้ใช้เพิ่งเลือกผลการแก้ไขมาให้เรียบร้อย — ระบบจะขอ
+ * สิ่งที่ได้รับมาแล้ว ซึ่งเป็นทางตันที่ผู้ใช้ออกเองไม่ได้
+ */
 async function buildContext(
   ctx: TenantContext,
   item: LoadedWorkItem,
   actorId: bigint,
+  submitted: Record<string, unknown> = {},
 ): Promise<TransitionContext> {
   const db = tenantScoped(ctx);
   const memberships = await db.groupMember.findMany({
@@ -134,8 +152,37 @@ async function buildContext(
       // built-in field ที่ validator อ้างถึงได้เหมือน custom field
       resolution: item.resolutionName,
       assignee: item.assigneeId,
+      ...submitted,
     },
   };
+}
+
+/**
+ * ชื่อผลการแก้ไข → แถวจริง · คืน null เมื่อไม่ได้ส่งอะไรมา
+ * ชื่อที่ไม่รู้จักโยน error ไม่ใช่คืน null — สองอย่างนี้ต่างกันคนละเรื่อง
+ */
+async function resolveResolution(
+  ctx: TenantContext,
+  name: string | null | undefined,
+): Promise<{ id: number; name: string } | null> {
+  if (name === undefined || name === null) return null;
+  const trimmed = name.trim();
+  if (trimmed === '') return null;
+  const row = await tenantScoped(ctx).resolution.findFirst({
+    where: { name: trimmed },
+    select: { id: true, name: true },
+  });
+  if (row === null) throw new UnknownResolutionError(trimmed);
+  return row;
+}
+
+/** ผลการแก้ไขทั้งหมดของ tenant — ใช้เติมตัวเลือกตอนปิดงาน */
+export async function listResolutions(ctx: TenantContext): Promise<string[]> {
+  const rows = await tenantScoped(ctx).resolution.findMany({
+    orderBy: { id: 'asc' },
+    select: { name: true },
+  });
+  return rows.map((r) => r.name);
 }
 
 /** transition ที่ผู้ใช้ควรเห็นปุ่มบนงานใบนี้ */
@@ -143,7 +190,7 @@ export async function availableTransitions(
   ctx: TenantContext,
   workItemId: bigint,
   actorId: bigint,
-): Promise<Array<{ id: bigint; name: string; toStatusId: bigint }>> {
+): Promise<Array<{ id: bigint; name: string; toStatusId: bigint; requiredFields: string[] }>> {
   const item = await loadWorkItem(ctx, workItemId);
   const [transitions, tctx] = await Promise.all([
     loadTransitions(ctx, item),
@@ -153,7 +200,14 @@ export async function availableTransitions(
     id: t.id,
     name: t.name,
     toStatusId: t.toStatusId,
+    // หน้าจอถามฟิลด์เหล่านี้ก่อนกด แทนที่จะให้กดแล้วเจอ 422
+    requiredFields: requiredFieldsFor(t),
   }));
+}
+
+export interface TransitionInput {
+  /** ผลการแก้ไขที่ผู้ใช้เลือกตอนกดปุ่ม — ใช้ชื่อ ไม่ใช่ id เพราะหน้าจอเห็นแต่ชื่อ */
+  resolutionName?: string | null;
 }
 
 export interface TransitionResult {
@@ -174,10 +228,20 @@ export async function applyTransition(
   workItemId: bigint,
   transitionId: bigint,
   actorId: bigint,
+  input: TransitionInput = {},
 ): Promise<TransitionResult> {
   const item = await loadWorkItem(ctx, workItemId);
   const transitions = await loadTransitions(ctx, item);
-  const tctx = await buildContext(ctx, item, actorId);
+
+  // แปลงชื่อผลการแก้ไขเป็นแถวจริงก่อนตรวจอะไรทั้งสิ้น
+  // ชื่อที่ไม่มีในระบบต้องถูกปฏิเสธ ไม่ใช่ถูกมองข้ามจนงานปิดโดยไม่มีผลการแก้ไข
+  const submittedResolution = await resolveResolution(ctx, input.resolutionName);
+  const tctx = await buildContext(
+    ctx,
+    item,
+    actorId,
+    submittedResolution === null ? {} : { resolution: submittedResolution.name },
+  );
 
   const definition = transitions.find((t) => t.id === transitionId);
   if (definition === undefined) {
@@ -193,6 +257,18 @@ export async function applyTransition(
   ]);
   if (toStatus === null) throw new WorkItemNotFoundError(workItemId);
 
+  /**
+   * ผลการแก้ไขที่จะบันทึก — ตัดสินก่อนเปิดทรานแซกชัน
+   *
+   * ค่าที่ workflow กำหนดตายตัวมาก่อนค่าที่ผู้ใช้เลือก: ปุ่ม "ยกเลิกเรื่องนี้"
+   * ต้องได้ผลว่ายกเลิกเสมอ ไม่ว่าหน้าจอจะส่งอะไรมาก็ตาม
+   */
+  const fixed = outcome.postFunctions.find((f) => f.ruleType === 'set-resolution');
+  const fixedName =
+    typeof fixed?.config['resolution'] === 'string' ? fixed.config['resolution'] : null;
+  const chosenResolution =
+    fixedName === null ? submittedResolution : await resolveResolution(ctx, fixedName);
+
   const result = await auditedTransaction(
     { ...ctx, actorId },
     `workflow.transition:${definition.name}`,
@@ -206,6 +282,36 @@ export async function applyTransition(
 
       const applied: string[] = [];
       const data: Record<string, unknown> = { statusId: outcome.toStatusId };
+
+      /**
+       * ---------- ผลการแก้ไข ----------
+       *
+       * งานที่ไม่ได้อยู่ในหมวด DONE **ต้องไม่มีผลการแก้ไข** และข้อนี้ไม่ใช่
+       * ตัวเลือกที่แอดมินตั้งได้ แต่เป็นความจริงของข้อมูล — คำว่า "แก้ไขแล้ว"
+       * บนงานที่กำลังดำเนินการอยู่ ตอบคำถามผิดให้ทุกคนที่อ่าน และทำให้ตัวกรอง
+       * "งานที่ยังไม่จบ" ตกงานใบนั้นไปเงียบ ๆ
+       *
+       * Jira ให้ตั้งการล้างค่าเป็น post function ที่แอดมินต้องเพิ่มเอง
+       * ผลคือทีมจำนวนมากมีงานที่เปิดใหม่แล้วแต่ยังติดป้ายว่าแก้ไขแล้วค้างอยู่
+       * ที่นี่จึงบังคับไว้ในโค้ด ไม่ใช่ฝากไว้กับคนที่ตั้งค่า
+       */
+      if (toStatus.category === 'DONE') {
+        if (chosenResolution !== null && chosenResolution.id !== item.resolutionId) {
+          data['resolutionId'] = chosenResolution.id;
+          audit.push(change(item.id, 'resolution', item.resolutionName, chosenResolution.name));
+        }
+      } else {
+        if (item.resolutionId !== null) {
+          data['resolutionId'] = null;
+          audit.push(change(item.id, 'resolution', item.resolutionName, null));
+        }
+        if (fromStatus?.category === 'DONE') {
+          // resolvedAt เป็นฐานของ MTTR — งานที่กลับมาเปิดใหม่ยังไม่เสร็จ
+          // ถ้าปล่อยค่าเดิมไว้ รายงานจะนับว่ามันเสร็จตั้งแต่รอบก่อน
+          data['resolvedAt'] = null;
+          audit.push(change(item.id, 'resolvedAt', 'set', null));
+        }
+      }
 
       for (const fn of outcome.postFunctions) {
         switch (fn.ruleType) {
@@ -226,9 +332,13 @@ export async function applyTransition(
               audit.push(change(item.id, 'resolvedAt', null, 'set'));
             }
             break;
+          case 'set-resolution':
+            // จัดการไปแล้วข้างบน ก่อนวนลูปนี้ — ต้องอยู่นอกลูปเพราะการล้างค่า
+            // ตอนออกจากหมวด DONE เกิดขึ้นแม้ transition นั้นไม่มี post function เลย
+            break;
           default:
-            // start-sla / pause-sla / notify / fire-webhook / set-resolution
-            // จะทำงานเมื่อ SLA และ Notification module พร้อม — ตอนนี้บันทึกว่าถูกเรียก
+            // start-sla / pause-sla / notify / fire-webhook
+            // จะทำงานเมื่อ Notification module ต่อครบ — ตอนนี้บันทึกว่าถูกเรียก
             break;
         }
         applied.push(fn.ruleType);

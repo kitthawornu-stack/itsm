@@ -3,19 +3,21 @@
 import { useRouter } from 'next/navigation';
 import { useState, type ReactNode } from 'react';
 
-import { Button } from '@itsm/ui';
+import { Button, Field, Select } from '@itsm/ui';
 
 export interface TransitionOption {
   id: string;
   name: string;
+  /** ฟิลด์ที่ต้องกรอกก่อนกดปุ่มนี้ — engine เป็นคนบอก ไม่ใช่หน้าจอเดาเอง */
+  requiredFields: string[];
 }
 
 /**
  * ปุ่มเปลี่ยนสถานะ — ทางเข้าเดียวที่ผู้ใช้เปลี่ยนสถานะงานได้
  *
  * ปุ่มที่แสดงคือปุ่มที่ผ่าน CONDITION แล้วเท่านั้น (workflow engine ตัดสิน ไม่ใช่หน้าจอ)
- * แต่ **VALIDATOR ยังไม่ถูกตรวจตอนนี้** — ปุ่มจึงยังกดได้แม้ข้อมูลไม่ครบ
- * และเมื่อกดแล้วไม่ผ่าน หน้าจอมีหน้าที่บอกว่า **ขาดฟิลด์อะไร** ไม่ใช่แค่ว่าล้มเหลว
+ * ส่วน VALIDATOR ยังเป็นหน้าที่ของเซิร์ฟเวอร์เสมอ — หน้าจอถามก่อนเพื่อไม่ให้ผู้ใช้
+ * ต้องกดปุ่มเพื่อค้นหาว่าระบบต้องการอะไร แต่ไม่ได้แทนการตรวจ
  *
  * นี่คือเหตุผลที่ engine แยก CONDITION ออกจาก VALIDATOR:
  * ปุ่มที่หายไปเฉย ๆ ไม่บอกผู้ใช้ว่าต้องทำอะไรต่อ
@@ -23,22 +25,29 @@ export interface TransitionOption {
 export function TransitionButtons({
   itemKey,
   transitions,
+  resolutions,
   apiBase,
 }: {
   itemKey: string;
   transitions: TransitionOption[];
+  resolutions: string[];
   apiBase: string;
 }): ReactNode {
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
+  const [asking, setAsking] = useState<TransitionOption | null>(null);
+  const [chosen, setChosen] = useState('');
   const [error, setError] = useState<{ message: string; missingFields?: string[] } | null>(null);
 
-  async function run(t: TransitionOption): Promise<void> {
+  async function run(t: TransitionOption, resolution: string | null): Promise<void> {
     setBusy(t.id);
     setError(null);
     try {
-      const res = await fetch(`${apiBase}/api/v1/work-items/${itemKey}/transitions/${t.id}`, { credentials: 'include',
+      const res = await fetch(`${apiBase}/api/v1/work-items/${itemKey}/transitions/${t.id}`, {
+        credentials: 'include',
         method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(resolution === null ? {} : { resolution }),
       });
       if (!res.ok) {
         const body = (await res.json()) as { message?: string; missingFields?: string[] };
@@ -48,6 +57,8 @@ export function TransitionButtons({
         });
         return;
       }
+      setAsking(null);
+      setChosen('');
       // โหลดข้อมูลใหม่จากเซิร์ฟเวอร์ — ไม่เดาสถานะใหม่เองที่ฝั่ง client
       router.refresh();
     } catch {
@@ -55,6 +66,22 @@ export function TransitionButtons({
     } finally {
       setBusy(null);
     }
+  }
+
+  /**
+   * ปุ่มที่ต้องกรอกอะไรก่อน จะเปิดช่องให้เลือกแทนการยิงทันที
+   *
+   * ตัวเลือกที่หายไปทั้งหมด (ตาราง resolution ว่าง) ต้องไม่ทำให้ปุ่มกดไม่ได้เงียบ ๆ
+   * — ปล่อยให้กดแล้วให้เซิร์ฟเวอร์ตอบว่าขาดอะไร ดีกว่าปุ่มที่ไม่ตอบสนอง
+   */
+  function press(t: TransitionOption): void {
+    if (t.requiredFields.includes('resolution') && resolutions.length > 0) {
+      setError(null);
+      setChosen(resolutions[0] ?? '');
+      setAsking(t);
+      return;
+    }
+    void run(t, null);
   }
 
   if (transitions.length === 0) {
@@ -67,19 +94,60 @@ export function TransitionButtons({
 
   return (
     <div className="transition-area">
-      <div className="transition-row">
-        {transitions.map((t, i) => (
-          <Button
-            key={t.id}
-            variant={i === 0 ? 'primary' : 'secondary'}
-            disabled={busy !== null}
-            shortcut={String(i + 1)}
-            onClick={() => void run(t)}
+      {asking === null ? (
+        <div className="transition-row">
+          {transitions.map((t, i) => (
+            <Button
+              key={t.id}
+              variant={i === 0 ? 'primary' : 'secondary'}
+              disabled={busy !== null}
+              shortcut={String(i + 1)}
+              onClick={() => {
+                press(t);
+              }}
+            >
+              {busy === t.id ? 'กำลังดำเนินการ…' : t.name}
+            </Button>
+          ))}
+        </div>
+      ) : (
+        <form
+          className="transition-ask"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void run(asking, chosen);
+          }}
+        >
+          <Field
+            label="เรื่องนี้จบอย่างไร"
+            htmlFor="tr-resolution"
+            hint="บันทึกไว้ตอนนี้เท่านั้น — ย้อนกลับมาเติมทีหลังไม่ได้"
+            required
           >
-            {busy === t.id ? 'กำลังดำเนินการ…' : t.name}
-          </Button>
-        ))}
-      </div>
+            <Select
+              id="tr-resolution"
+              value={chosen}
+              onChange={setChosen}
+              options={resolutions.map((r) => ({ value: r, label: r }))}
+            />
+          </Field>
+          <div className="transition-ask-actions">
+            <Button variant="primary" type="submit" disabled={busy !== null}>
+              {busy === null ? asking.name : 'กำลังดำเนินการ…'}
+            </Button>
+            <button
+              type="button"
+              className="edit-cancel"
+              onClick={() => {
+                setAsking(null);
+                setChosen('');
+              }}
+            >
+              ยกเลิก
+            </button>
+          </div>
+        </form>
+      )}
 
       {error === null ? null : (
         <div className="error-box" role="alert">
@@ -90,13 +158,7 @@ export function TransitionButtons({
           {error.missingFields === undefined || error.missingFields.length === 0 ? (
             <b>{error.message}</b>
           ) : (
-            <>
-              <b>ยังทำรายการนี้ไม่ได้ — ต้องกรอก {error.missingFields.join(', ')} ก่อน</b>
-              <br />
-              <span style={{ fontSize: 12.5, opacity: 0.85 }}>
-                ฟอร์มกรอกฟิลด์ยังไม่ได้สร้าง อยู่ใน Phase 1
-              </span>
-            </>
+            <b>ยังทำรายการนี้ไม่ได้ — ต้องกรอก {error.missingFields.join(', ')} ก่อน</b>
           )}
         </div>
       )}

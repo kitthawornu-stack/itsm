@@ -920,3 +920,33 @@
   word-break: break-word;
   overflow-wrap: anywhere;
 }
+
+/* ---------- ผลการแก้ไข ---------- */
+
+.detail-resolution {
+  font-size: 12px;
+  line-height: 1.6;
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  background: var(--surface-2);
+  white-space: nowrap;
+}
+
+.transition-ask {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+  max-width: 320px;
+}
+
+.transition-ask-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
