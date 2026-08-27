@@ -54,7 +54,7 @@ Jira สะสมฟีเจอร์มา 20 ปี การไล่เท�
 - [ ] Component + Label
 
 ### Search & Report
-- [~] HQL (ภาษาคิวรีแบบ JQL) + Saved Filter + แชร์ filter — *เอนจินตัวที่ 4 มีของจริงแล้ว: lexer + parser + compiler → OpenSearch DSL · 30 เคสเขียนก่อนโค้ด · **ยังไม่ต่อเข้าหน้าค้นหา** และยังไม่มี Saved Filter*
+- [~] HQL (ภาษาคิวรีแบบ JQL) + Saved Filter + แชร์ filter — *เอนจินครบ 30 เคส · **ต่อเข้า `GET /work-items?hql=` แล้วและยิงดัชนีจริง** (7 เคส integration) · ยังไม่มีหน้าจอกรอก HQL และยังไม่มี Saved Filter*
 - [ ] Dashboard + Gadget 18 ชนิด + Wallboard
 - [ ] Agile Report 8 ตัว (Burndown, Burnup, Velocity, CFD, Sprint Report, Control Chart, Epic Report, Release Burndown)
 - [ ] Report Builder แบบ pivot

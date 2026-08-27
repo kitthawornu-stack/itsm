@@ -8,6 +8,7 @@
  * ความไม่สอดคล้องชั่วคราว: ผู้ใช้ที่แก้ตั๋วแล้วค้นทันทีอาจยังไม่เจอ
  * หน้ารายละเอียดอ่านจาก MySQL ตรง ๆ จึงไม่ได้รับผลกระทบ
  */
+import { compile } from '@itsm/hql';
 import type { TenantContext } from '@itsm/types';
 
 import { tenantScoped, type Prisma } from '../../infrastructure/prisma/tenant-scope';
@@ -194,6 +195,46 @@ export async function searchWorkItems(
   let hits;
   try {
     hits = await openSearch.search<WorkItemDoc>(index, query, opts.size ?? 20);
+  } catch (e) {
+    if (e instanceof OpenSearchError && e.status === 404) throw new SearchIndexNotReadyError(index);
+    throw e;
+  }
+  return hits.map((h) => ({
+    itemKey: h.source.itemKey,
+    summary: h.source.summary,
+    statusName: h.source.statusName,
+    score: h.score,
+  }));
+}
+
+/**
+ * ค้นด้วย HQL
+ *
+ * ต่างจาก `searchWorkItems` ตรงที่ผู้ใช้เป็นคนเขียนเงื่อนไขเอง ไม่ใช่พิมพ์คำค้น
+ * ขอบเขต tenant และโปรเจกต์จึงถูกประกอบเข้าไปโดย `compile` เสมอ ไม่ว่าคิวรี
+ * จะเขียนว่าอะไร (ดู packages/hql)
+ *
+ * **`browsableProjectIds` ต้องส่งเข้ามา ไม่ใช่คำนวณที่นี่** — โมดูล search-index
+ * ถามโมดูล permission ไม่ได้โดยตรง (ADR-004) และการปล่อยให้ค่านี้เป็นตัวเลือก
+ * ที่ลืมส่งได้ คือการเปิดช่องให้คิวรีหลุดขอบเขตอย่างเงียบ ๆ
+ */
+export async function searchByHql(
+  ctx: TenantContext,
+  hql: string,
+  browsableProjectIds: bigint[],
+  size = 50,
+): Promise<SearchHit[]> {
+  const index = workItemIndexName(ctx.tenantId);
+  const compiled = compile(hql, {
+    tenantId: ctx.tenantId.toString(),
+    browsableProjectIds: browsableProjectIds.map((id) => id.toString()),
+  });
+
+  let hits;
+  try {
+    // CompiledQuery เป็นชนิดที่ประกาศฟิลด์ชัดเจน ไม่มี index signature
+    // ตัว client รับ Record<string, unknown> — แปลงเป็น object ธรรมดาก่อนส่ง
+    hits = await openSearch.search<WorkItemDoc>(index, { ...compiled }, size);
   } catch (e) {
     if (e instanceof OpenSearchError && e.status === 404) throw new SearchIndexNotReadyError(index);
     throw e;

@@ -44,7 +44,7 @@ import {
   prepareFieldValues,
   saveFieldValues,
 } from '../field';
-import { SearchIndexNotReadyError, searchWorkItems } from '../search-index';
+import { SearchIndexNotReadyError, searchByHql, searchWorkItems } from '../search-index';
 import { slaForWorkItems, type SlaSnapshot } from '../sla';
 import {
   TransitionNotAllowedError,
@@ -142,7 +142,8 @@ export class WorkItemController {
     @Query('open') openOnly?: string,
     @Query('limit') limit?: string,
     @Query('mine') mine?: string,
-  ): Promise<{ rows: WorkItemListRow[]; total: number }> {
+    @Query('hql') hql?: string,
+  ): Promise<{ rows: WorkItemListRow[]; total: number; hqlError?: string }> {
     const db = tenantScoped(ctx);
     const take = Math.min(Number(limit ?? 50) || 50, 200);
 
@@ -169,7 +170,34 @@ export class WorkItemController {
     // เมื่อมีคำค้น ให้ OpenSearch คัดก่อน แล้วดึงรายละเอียดจาก MySQL
     // MySQL เป็นแหล่งความจริงเสมอ — OpenSearch คืนแค่ลำดับและ key
     let keyFilter: string[] | undefined;
-    if (q !== undefined && q.trim().length > 0) {
+
+    /**
+     * HQL — ผู้ใช้เขียนเงื่อนไขเอง
+     *
+     * ข้อผิดพลาดของภาษาคืนเป็น 200 พร้อม `hqlError` ไม่ใช่ 4xx โดยตั้งใจ:
+     * คนกำลังพิมพ์คิวรีอยู่ และการพิมพ์ยังไม่จบไม่ใช่คำขอที่ผิด
+     * หน้าจอต้องแสดงข้อความช่วยแก้ ไม่ใช่หน้าจอ error เต็มจอ
+     *
+     * ขอบเขตโปรเจกต์ส่งเข้าไปเสมอ — `compile` เป็นคนใส่ลง filter ไม่ใช่ที่นี่
+     */
+    if (hql !== undefined && hql.trim().length > 0) {
+      try {
+        const hits = await searchByHql(ctx, hql, scopedProjectIds, take);
+        keyFilter = hits.map((h) => h.itemKey);
+      } catch (e) {
+        if (e instanceof SearchIndexNotReadyError) {
+          throw new HttpException(
+            { error: 'search_index_not_ready', message: 'ระบบค้นหายังไม่พร้อมใช้งาน กรุณาแจ้งผู้ดูแลระบบ' },
+            HttpStatus.SERVICE_UNAVAILABLE,
+          );
+        }
+        if (e instanceof Error && e.name.startsWith('Hql')) {
+          return { rows: [], total: 0, hqlError: e.message };
+        }
+        throw e;
+      }
+      if (keyFilter.length === 0) return { rows: [], total: 0 };
+    } else if (q !== undefined && q.trim().length > 0) {
       try {
         const hits = await searchWorkItems(ctx, q, {
           ...(project === null ? {} : { projectIds: [project.id] }),

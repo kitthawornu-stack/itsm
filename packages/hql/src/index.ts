@@ -66,6 +66,13 @@ interface FieldSpec {
   target: string;
   kind: 'keyword' | 'text';
   sortable?: boolean;
+  /**
+   * มีฟิลด์ย่อย `.ngram` ในดัชนีหรือไม่
+   *
+   * `summary` มี · `description` ไม่มี (ดู index-mapping.ts) · การยิงไปที่
+   * `description.ngram` ที่ไม่มีอยู่ ไม่ใช่ error — มันแค่ไม่ตรงอะไรเลย
+   */
+  ngram?: boolean;
 }
 
 /**
@@ -88,7 +95,7 @@ const FIELDS: Record<string, FieldSpec> = {
   type: { target: 'issueTypeName', kind: 'keyword' },
   key: { target: 'itemKey', kind: 'keyword' },
   parent: { target: 'parentId', kind: 'keyword' },
-  summary: { target: 'summary', kind: 'text' },
+  summary: { target: 'summary', kind: 'text', ngram: true },
   description: { target: 'description', kind: 'text' },
   created: { target: 'createdAt', kind: 'keyword', sortable: true },
   updated: { target: 'updatedAt', kind: 'keyword', sortable: true },
@@ -399,8 +406,14 @@ function spec(field: string): FieldSpec {
   return f;
 }
 
-/** ADR-005 · ต้องมี `minimum_should_match` ไม่งั้น n-gram ชิ้นเดียวก็นับเป็น hit */
-const MIN_SHOULD_MATCH = '75%';
+/**
+ * เกณฑ์ที่วัดมาแล้วบนข้อมูลจริง 10,000 ใบ (ADR-005) — ไม่ใช่ตัวเลขที่เดา
+ *
+ * ไม่ใส่เลย = คำค้นที่ไม่เกี่ยวข้องกันเลยจะคืนผลลัพธ์ เพราะ n-gram ชิ้นเดียว
+ * ที่บังเอิญตรงก็นับเป็น hit
+ */
+const MIN_MAIN = '75%';
+const MIN_NGRAM = '80%';
 
 function toClause(node: Node): unknown {
   switch (node.kind) {
@@ -433,8 +446,29 @@ function toClause(node: Node): unknown {
             `ฟิลด์ "${node.field}" ต้องตรงทั้งค่า ใช้ ~ ไม่ได้ — ใช้ = หรือ IN แทน`,
           );
         }
+        const main = {
+          match: { [f.target]: { query: node.value, minimum_should_match: MIN_MAIN } },
+        };
+        /*
+          ฟิลด์ที่มี `.ngram` ต้องยิงสองสาขา เหมือนที่ `buildTextQuery` ทำ
+
+          สาขาหลักใช้ตัวตัดคำ ซึ่งพลาดคำทับศัพท์ที่ตัดไม่ลง · สาขา n-gram
+          กู้คืนให้ · ยิงสาขาเดียวแล้วคำอย่าง "ปริ๊นเตอร์" หาไม่เจอเลย
+          ซึ่งเป็นความล้มเหลวแบบเงียบที่ ADR-005 บันทึกไว้ทั้งหน้า
+        */
+        if (f.ngram !== true) return main;
         return {
-          match: { [f.target]: { query: node.value, minimum_should_match: MIN_SHOULD_MATCH } },
+          bool: {
+            minimum_should_match: 1,
+            should: [
+              main,
+              {
+                match: {
+                  [`${f.target}.ngram`]: { query: node.value, minimum_should_match: MIN_NGRAM },
+                },
+              },
+            ],
+          },
         };
       }
       if (f.kind !== 'keyword') {
