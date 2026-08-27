@@ -13,6 +13,7 @@ import {
 import { LookupController } from './modules/field/lookup.controller';
 import { HealthController } from './modules/health/health.controller';
 import { NotificationController } from './modules/notification/notification.controller';
+import { ProjectAdminController } from './modules/tenancy/project-admin.controller';
 import { WorkItemController } from './modules/workitem/workitem.controller';
 
 /**
@@ -28,6 +29,7 @@ import { WorkItemController } from './modules/workitem/workitem.controller';
     UserAdminController,
     SelfServiceController,
     LookupController,
+    ProjectAdminController,
     WorkItemController,
     NotificationController,
   ],

@@ -8,8 +8,9 @@ export {
   assertTenantAdmin,
   browsableProjectIds,
   can,
+  describeGrants,
   isTenantAdmin,
   permissionsFor,
   summaryFor,
 } from './permission.service';
-export { isStaff, summarize, type PermissionKey, type PermissionSummary } from './permission-rules';
+export { ALL_PERMISSION_KEYS, IMPLIED_BY, isStaff, summarize, type PermissionKey, type PermissionSummary } from './permission-rules';

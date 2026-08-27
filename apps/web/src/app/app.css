@@ -982,3 +982,25 @@
   gap: var(--space-3);
   flex-wrap: wrap;
 }
+
+/* ---------- หน้าตั้งค่าโปรเจกต์ ---------- */
+
+.cfg-block {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-top: var(--space-8);
+}
+
+.cfg-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 600;
+  line-height: var(--line-height-body);
+  color: var(--text);
+}
+
+.cfg-implied {
+  color: var(--text-muted);
+}

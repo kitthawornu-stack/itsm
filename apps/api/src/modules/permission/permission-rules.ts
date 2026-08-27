@@ -9,24 +9,34 @@
  * อ่านบันทึกภายในของทีมได้ครบทุกฉบับ
  */
 
+/**
+ * คีย์สิทธิ์ทั้งหมดที่ระบบรู้จัก — เรียงตามลำดับเดียวกับ enum `PermissionKey`
+ * ในสคีมา ซึ่งจัดกลุ่มสิ่งที่เกี่ยวข้องกันไว้ด้วยกันอยู่แล้ว
+ *
+ * ชนิด `PermissionKey` ประกาศจากรายการนี้ ไม่ใช่เขียนคู่กันสองที่ —
+ * รายการที่ต้องแก้สองแห่งคือรายการที่จะไม่ตรงกันในวันที่มีคนแก้แค่แห่งเดียว
+ */
+export const ALL_PERMISSION_KEYS = [
+  'BROWSE_PROJECT',
+  'CREATE_ITEM',
+  'EDIT_ITEM',
+  'DELETE_ITEM',
+  'ASSIGN_ITEM',
+  'TRANSITION_ITEM',
+  'ADD_COMMENT',
+  'DELETE_COMMENT',
+  'VIEW_INTERNAL_COMMENT',
+  'MANAGE_ATTACHMENT',
+  'LINK_ITEM',
+  'BULK_EDIT',
+  'MANAGE_SPRINT',
+  'MANAGE_PROJECT',
+  'VIEW_REPORT',
+  'ADMINISTER_TENANT',
+] as const;
+
 /** คีย์สิทธิ์ที่ระบบรู้จัก — ตรงกับ enum `PermissionKey` ในสคีมา */
-export type PermissionKey =
-  | 'BROWSE_PROJECT'
-  | 'CREATE_ITEM'
-  | 'EDIT_ITEM'
-  | 'DELETE_ITEM'
-  | 'ASSIGN_ITEM'
-  | 'TRANSITION_ITEM'
-  | 'ADD_COMMENT'
-  | 'DELETE_COMMENT'
-  | 'VIEW_INTERNAL_COMMENT'
-  | 'MANAGE_ATTACHMENT'
-  | 'LINK_ITEM'
-  | 'BULK_EDIT'
-  | 'MANAGE_SPRINT'
-  | 'MANAGE_PROJECT'
-  | 'VIEW_REPORT'
-  | 'ADMINISTER_TENANT';
+export type PermissionKey = (typeof ALL_PERMISSION_KEYS)[number];
 
 /** สิทธิ์หนึ่งรายการที่ผูกกับกลุ่ม — `groupId` เป็น null คือ grant ที่ยังตั้งค่าไม่ครบ */
 export interface GrantRow {
@@ -67,6 +77,20 @@ export function resolveGrants(
 export function isStaff(permissions: ReadonlySet<PermissionKey>): boolean {
   return permissions.has('VIEW_INTERNAL_COMMENT');
 }
+
+/**
+ * คีย์ที่ **ให้สิทธิ์อีกคีย์หนึ่งโดยปริยาย**
+ *
+ * `canAttach` เป็นจริงเมื่อมี MANAGE_ATTACHMENT **หรือ** EDIT_ITEM
+ * (ดู `summarize`) · ตารางสิทธิ์ที่แสดงแต่ grant ตรง ๆ จึงบอกว่า
+ * "จัดการไฟล์แนบ — ยังไม่มีใคร" ทั้งที่ทีมที่แก้ไขเรื่องได้แนบไฟล์ได้อยู่แล้ว
+ *
+ * ข้อความที่จริงตามตัวอักษรแต่พาให้สรุปผิด แย่กว่าไม่มีข้อความ —
+ * หน้าตั้งค่าจึงต้องบอกที่มาโดยปริยายด้วย ไม่ใช่บอกแค่สิ่งที่อยู่ในตาราง
+ */
+export const IMPLIED_BY: Partial<Record<PermissionKey, PermissionKey>> = {
+  MANAGE_ATTACHMENT: 'EDIT_ITEM',
+};
 
 /**
  * สรุปสิทธิ์ให้หน้าจอใช้ตัดสินว่าจะแสดงปุ่มอะไร

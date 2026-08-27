@@ -372,3 +372,156 @@ export async function applyTransition(
 
   return result;
 }
+
+export interface WorkflowDescription {
+  /**
+   * ประเภทงานที่ใช้ workflow เรือนนี้ร่วมกัน
+   *
+   * เป็นรายการไม่ใช่ค่าเดียว เพราะการแสดงตารางเดิมซ้ำสี่รอบให้ประเภทงานสี่ชนิด
+   * ที่ผูกกับ workflow เดียวกัน ไม่ได้บอกอะไรเพิ่ม แถมกลบข้อเท็จจริงที่สำคัญ
+   * กว่าไว้ด้วย — ว่าทั้งสี่ชนิดนี้ทำงานเหมือนกันทุกประการ
+   */
+  issueTypes: string[];
+  workflowName: string;
+  statuses: Array<{
+    name: string;
+    category: string;
+    isInitial: boolean;
+    pausesSla: boolean;
+    itemCount: number;
+  }>;
+  transitions: Array<{
+    name: string;
+    from: string | null;
+    to: string;
+    conditions: string[];
+    validators: string[];
+    postFunctions: string[];
+  }>;
+}
+
+/**
+ * workflow ที่โปรเจกต์นี้ใช้จริง — แยกตามประเภทงาน
+ *
+ * ทำไมต้องมี: พฤติกรรมทั้งหมดของระบบอยู่ในตารางเหล่านี้ ไม่ได้อยู่ในโค้ด
+ * (ADR-004 · state machine นิยามในฐานข้อมูล) ผู้ดูแลที่ตอบไม่ได้ว่ามีสถานะอะไร
+ * ปุ่มไหนไปไหน และปุ่มไหนขออะไร ก็ตอบไม่ได้ว่าทำไมระบบทำแบบที่เห็น
+ * — และทางเดียวที่จะรู้คือเปิดฐานข้อมูลอ่านสามตาราง
+ *
+ * `from: null` = transition ที่ทำได้จากทุกสถานะ · ต้องแสดงต่างจาก
+ * "ไม่รู้ว่ามาจากไหน" เพราะสองอย่างนี้คนละความหมายกันคนละเรื่อง
+ */
+export async function describeProjectWorkflows(
+  ctx: TenantContext,
+  projectId: bigint,
+): Promise<WorkflowDescription[]> {
+  const db = tenantScoped(ctx);
+  const schemes = await db.workflowScheme.findMany({
+    where: { projectId },
+    include: { issueType: { select: { name: true } }, workflow: { select: { id: true, name: true } } },
+  });
+
+  // รวมประเภทงานที่ผูก workflow เรือนเดียวกันไว้ด้วยกันก่อน
+  const byWorkflow = new Map<string, { id: bigint; name: string; issueTypes: string[] }>();
+  for (const scheme of schemes) {
+    const k = scheme.workflow.id.toString();
+    const entry = byWorkflow.get(k) ?? {
+      id: scheme.workflow.id,
+      name: scheme.workflow.name,
+      issueTypes: [],
+    };
+    entry.issueTypes.push(scheme.issueType.name);
+    byWorkflow.set(k, entry);
+  }
+
+  const out: WorkflowDescription[] = [];
+  for (const wf of byWorkflow.values()) {
+    const [statuses, transitions] = await Promise.all([
+      db.workflowStatus.findMany({
+        where: { workflowId: wf.id },
+        orderBy: { position: 'asc' },
+        include: { _count: { select: { workItems: true } } },
+      }),
+      db.workflowTransition.findMany({
+        where: { workflowId: wf.id },
+        orderBy: { position: 'asc' },
+        include: { rules: true, fromStatus: { select: { name: true } }, toStatus: { select: { name: true } } },
+      }),
+    ]);
+
+    const of = (t: (typeof transitions)[number], kind: string): string[] =>
+      t.rules
+        .filter((r) => r.kind === kind)
+        .sort((a, b) => a.position - b.position)
+        .map((r) => describeRule(r.ruleType, r.config));
+
+    out.push({
+      issueTypes: wf.issueTypes,
+      workflowName: wf.name,
+      statuses: statuses.map((st) => ({
+        name: st.name,
+        category: st.category,
+        isInitial: st.isInitial,
+        pausesSla: st.pausesSla,
+        itemCount: st._count.workItems,
+      })),
+      transitions: transitions.map((t) => ({
+        name: t.name,
+        from: t.fromStatus?.name ?? null,
+        to: t.toStatus.name,
+        conditions: of(t, 'CONDITION'),
+        validators: of(t, 'VALIDATOR'),
+        postFunctions: of(t, 'POST_FUNCTION'),
+      })),
+    });
+  }
+  return out;
+}
+
+/**
+ * กฎหนึ่งข้อเป็นภาษาคน
+ *
+ * กฎที่ระบบไม่รู้จักต้องแสดงชื่อดิบของมัน **ไม่ใช่ซ่อน** — engine ปฏิเสธ
+ * transition ที่มีกฎแปลกปลอมทั้งเส้น (UnknownRuleError) ถ้าหน้าจอไม่แสดง
+ * ผู้ดูแลจะเห็นปุ่มที่หายไปโดยไม่มีอะไรอธิบายว่าเพราะอะไร
+ */
+function describeRule(ruleType: string, rawConfig: unknown): string {
+  const config = (rawConfig !== null && typeof rawConfig === 'object' ? rawConfig : {}) as Record<
+    string,
+    unknown
+  >;
+  switch (ruleType) {
+    case 'assignee-is-current-user':
+      return 'ผู้กดต้องเป็นผู้รับผิดชอบงาน';
+    case 'has-assignee':
+      return 'งานต้องมีผู้รับผิดชอบแล้ว';
+    case 'is-unassigned':
+      return 'งานต้องยังไม่มีผู้รับผิดชอบ';
+    case 'in-group':
+      return 'ผู้กดต้องอยู่ในกลุ่มที่กำหนด';
+    case 'required-fields': {
+      const fields = Array.isArray(config['fields']) ? config['fields'].join(', ') : '';
+      return `ต้องกรอก: ${fields === '' ? '(ยังไม่ระบุฟิลด์)' : fields}`;
+    }
+    case 'set-resolution':
+      return typeof config['resolution'] === 'string'
+        ? `บันทึกผลการแก้ไขเป็น "${config['resolution']}"`
+        : 'บันทึกผลการแก้ไขที่ผู้ใช้เลือก';
+    case 'stop-sla':
+      return 'หยุดนาฬิกา SLA';
+    case 'start-sla':
+      return 'เริ่มนาฬิกา SLA';
+    case 'pause-sla':
+      return 'พักนาฬิกา SLA';
+    case 'assign-to-current-user':
+      return 'มอบหมายให้ผู้กด';
+    case 'clear-assignee':
+      return 'ล้างผู้รับผิดชอบ';
+    case 'notify':
+      return 'ส่งการแจ้งเตือน';
+    case 'fire-webhook':
+      return 'ยิง webhook';
+    default:
+      return `${ruleType} — ระบบไม่รู้จักกฎนี้ ปุ่มนี้จะไม่ปรากฏกับใครเลย`;
+  }
+}

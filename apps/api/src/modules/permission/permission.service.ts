@@ -11,6 +11,8 @@ import type { TenantContext } from '@itsm/types';
 
 import { tenantScoped } from '../../infrastructure/prisma/tenant-scope';
 import {
+  ALL_PERMISSION_KEYS,
+  IMPLIED_BY,
   resolveGrants,
   summarize,
   type PermissionKey,
@@ -166,4 +168,65 @@ export async function isTenantAdmin(ctx: TenantContext): Promise<boolean> {
 /** โยนเมื่อไม่ใช่ผู้ดูแลระบบ */
 export async function assertTenantAdmin(ctx: TenantContext): Promise<void> {
   if (!(await isTenantAdmin(ctx))) throw new PermissionDeniedError('ADMINISTER_TENANT');
+}
+
+/**
+ * สิทธิ์ทั้งหมดของโปรเจกต์หนึ่ง — ใครได้อะไร เพราะอยู่กลุ่มไหน
+ *
+ * CLAUDE.md สัญญาไว้ว่า "ให้สิทธิ์ผ่านกลุ่มเท่านั้น เพื่อให้ตอบได้ว่าได้เพราะ
+ * อยู่กลุ่มไหน" · สัญญานั้นจะเป็นจริงก็ต่อเมื่อมีคนเปิดดูได้จริง ไม่ใช่ต้อง
+ * ไล่ JOIN สามตารางในฐานข้อมูลทุกครั้งที่มีคนถามว่า "ทำไมกดปุ่มนี้ไม่ได้"
+ *
+ * คืนคีย์ **ครบทุกตัวที่ระบบรู้จัก** รวมที่ไม่มีใครได้ — ช่องว่างคือคำตอบ
+ * ที่มีความหมายพอ ๆ กับรายชื่อ และการซ่อนแถวที่ว่างทำให้ดูเหมือนไม่มีคีย์นั้นอยู่
+ */
+export async function describeGrants(
+  ctx: TenantContext,
+  projectId: bigint,
+): Promise<{
+  schemeName: string | null;
+  rows: Array<{ permission: string; groups: string[]; impliedBy: string | null; impliedGroups: string[] }>;
+}> {
+  const db = tenantScoped(ctx);
+  const project = await db.project.findFirst({
+    where: { id: projectId },
+    select: { permissionScheme: { select: { id: true, name: true } } },
+  });
+  const scheme = project?.permissionScheme ?? null;
+  const empty = ALL_PERMISSION_KEYS.map((permission) => ({
+    permission,
+    groups: [] as string[],
+    impliedBy: IMPLIED_BY[permission] ?? null,
+    impliedGroups: [] as string[],
+  }));
+  // โปรเจกต์ที่ไม่มี scheme = ไม่มีใครทำอะไรได้เลย ไม่ใช่ทุกคนทำได้
+  if (scheme === null) return { schemeName: null, rows: empty };
+
+  const grants = await db.permissionGrant.findMany({
+    where: { schemeId: scheme.id },
+    select: { permission: true, group: { select: { name: true } } },
+  });
+
+  const byKey = new Map<string, string[]>(ALL_PERMISSION_KEYS.map((k) => [k, []]));
+  for (const g of grants) {
+    // grant ที่ไม่มีกลุ่มถือว่าไม่ให้สิทธิ์ใคร (ข้อมูลไม่ครบ = ไม่มีสิทธิ์)
+    if (g.group === null) continue;
+    byKey.get(g.permission)?.push(g.group.name);
+  }
+  return {
+    schemeName: scheme.name,
+    rows: ALL_PERMISSION_KEYS.map((permission) => {
+      const source = IMPLIED_BY[permission] ?? null;
+      return {
+        permission,
+        groups: (byKey.get(permission) ?? []).sort((a, b) => a.localeCompare(b, 'th')),
+        impliedBy: source,
+        // กลุ่มที่ได้สิทธิ์นี้มาโดยปริยาย ไม่ได้อยู่ในตาราง grant ของคีย์นี้เลย
+        impliedGroups:
+          source === null
+            ? []
+            : (byKey.get(source) ?? []).sort((a, b) => a.localeCompare(b, 'th')),
+      };
+    }),
+  };
 }

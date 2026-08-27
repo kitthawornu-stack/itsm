@@ -320,3 +320,42 @@ export async function slaForWorkItems(
   }
   return out;
 }
+
+/**
+ * ข้อตกลงบริการของโปรเจกต์นี้ — null เมื่อยังไม่ได้ตั้ง
+ *
+ * โปรเจกต์ที่ไม่มี policy จะไม่มีนาฬิกาให้งานสักใบ ซึ่งไม่ผิดพลาดอะไร
+ * แต่ต้องบอกให้เห็น ไม่ใช่แสดงพื้นที่ว่างที่ดูเหมือน "ยังไม่หลุด"
+ */
+export async function describeSlaPolicy(
+  ctx: TenantContext,
+  projectId: bigint,
+): Promise<{
+  name: string;
+  calendar: string;
+  calendarVerified: boolean;
+  goals: Array<{ key: string; name: string; targetMs: number; match: unknown }>;
+} | null> {
+  const db = tenantScoped(ctx);
+  const policy = await db.slaPolicy.findFirst({
+    where: { projectId },
+    include: {
+      calendar: { select: { name: true, verified: true } },
+      goals: { orderBy: { position: 'asc' } },
+    },
+  });
+  if (policy === null) return null;
+  return {
+    name: policy.name,
+    calendar: policy.calendar.name,
+    // ปฏิทินที่ยังไม่ตรวจสอบใช้บน production ไม่ได้ (assertVerified) —
+    // ผู้ดูแลต้องเห็นสถานะนี้ก่อนวันที่มันโยน error ใส่หน้า
+    calendarVerified: policy.calendar.verified,
+    goals: policy.goals.map((g) => ({
+      key: g.key,
+      name: g.name,
+      targetMs: g.targetMs,
+      match: g.match,
+    })),
+  };
+}
