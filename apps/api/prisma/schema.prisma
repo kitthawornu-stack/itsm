@@ -71,6 +71,7 @@ model User {
   auditLogs        AuditLog[]
   sessions         Session[]
   loginAttempts    LoginAttempt[]
+  verifiedCalendarYears SlaCalendarYear[] @relation("CalendarVerifier")
 
   @@unique([tenantId, email])
   @@index([tenantId, isActive])
@@ -768,16 +769,39 @@ model SlaCalendar {
   timezone  String   @default("Asia/Bangkok") @db.VarChar(64)
   /// เวลาทำการรายวัน [{startMinute,endMinute}] × 7 · index 0 = อาทิตย์
   weekly    Json
-  /// ตรวจรายการวันหยุดกับประกาศจริงแล้วหรือยัง
-  verified  Boolean  @default(false)
   createdAt DateTime @default(now()) @map("created_at") @db.DateTime(3)
   updatedAt DateTime @updatedAt @map("updated_at") @db.DateTime(3)
 
   holidays SlaHoliday[]
   policies SlaPolicy[]
+  years    SlaCalendarYear[]
 
   @@unique([tenantId, name])
   @@map("sla_calendar")
+}
+
+/// การยืนยันว่ารายการวันหยุด **ของปีหนึ่ง** ตรงกับประกาศจริง
+///
+/// เดิมเป็นบูลีนตัวเดียวบน `sla_calendar` ซึ่งถูกไม่ได้เกินหนึ่งปี —
+/// วันหยุดเปลี่ยนทุกปี การยืนยันปี 2569 ไม่ได้บอกอะไรเลยเกี่ยวกับปี 2570
+///
+/// **การมีแถวนี้อยู่ = ยืนยันแล้ว** ไม่มีคอลัมน์ `verified` ให้ตั้งเป็น true ลอย ๆ
+/// และทุกแถวต้องตอบได้ว่าใครยืนยัน เมื่อไร เทียบกับประกาศฉบับไหน
+model SlaCalendarYear {
+  id           BigInt   @id @default(autoincrement())
+  tenantId     BigInt   @map("tenant_id")
+  calendarId   BigInt   @map("calendar_id")
+  year         Int
+  verifiedAt   DateTime @map("verified_at") @db.DateTime(3)
+  verifiedById BigInt?  @map("verified_by_id")
+  /// ประกาศที่ใช้ตรวจ เช่น "มติ ครม. 4 พ.ย. 2568" — ว่างไม่ได้
+  source       String   @db.VarChar(255)
+
+  calendar   SlaCalendar @relation(fields: [calendarId], references: [id], onDelete: Cascade)
+  verifiedBy User?       @relation("CalendarVerifier", fields: [verifiedById], references: [id], onDelete: SetNull)
+
+  @@unique([calendarId, year])
+  @@map("sla_calendar_year")
 }
 
 model SlaHoliday {

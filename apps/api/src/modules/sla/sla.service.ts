@@ -16,6 +16,7 @@ import {
   type BusinessCalendar,
   type WorkingWindow,
 } from './business-calendar';
+import { calendarYearStatus } from './calendar.service';
 import { computeSla, notificationTimes, type SlaEvent, type SlaStatus } from './sla-engine';
 import { SLA_THRESHOLDS, planSlaJobs, type PlannedJob } from './sla-scheduler';
 
@@ -330,17 +331,19 @@ export async function slaForWorkItems(
 export async function describeSlaPolicy(
   ctx: TenantContext,
   projectId: bigint,
+  thisYear: number = systemClock.nowUtc().getUTCFullYear(),
 ): Promise<{
   name: string;
   calendar: string;
-  calendarVerified: boolean;
+  /** สถานะรายปี — วันหยุดเปลี่ยนทุกปี สถานะเดียวต่อปฏิทินจึงถูกได้ปีเดียว */
+  calendarYears: Array<{ year: number; required: boolean; verified: boolean; empty: boolean; missingLunar: string[] }>;
   goals: Array<{ key: string; name: string; targetMs: number; match: unknown }>;
 } | null> {
   const db = tenantScoped(ctx);
   const policy = await db.slaPolicy.findFirst({
     where: { projectId },
     include: {
-      calendar: { select: { name: true, verified: true } },
+      calendar: { select: { id: true, name: true } },
       goals: { orderBy: { position: 'asc' } },
     },
   });
@@ -348,9 +351,24 @@ export async function describeSlaPolicy(
   return {
     name: policy.name,
     calendar: policy.calendar.name,
-    // ปฏิทินที่ยังไม่ตรวจสอบใช้บน production ไม่ได้ (assertVerified) —
-    // ผู้ดูแลต้องเห็นสถานะนี้ก่อนวันที่มันโยน error ใส่หน้า
-    calendarVerified: policy.calendar.verified,
+    /**
+     * ปีนี้และปีหน้า — ปีหน้าคือปีที่พังเงียบที่สุด
+     *
+     * ระบบที่ทำงานถูกต้องมาทั้งปี จะเริ่มนับวันสงกรานต์เป็นวันทำการ
+     * ตั้งแต่เที่ยงคืนวันที่ 1 มกราคม โดยไม่มีอะไรเปลี่ยนในฐานข้อมูลเลย
+     */
+    calendarYears: await Promise.all(
+      [thisYear, thisYear + 1].map(async (year) => {
+        const st = await calendarYearStatus(ctx, policy.calendar.id, year);
+        return {
+          year,
+          required: st.required,
+          verified: st.verified,
+          empty: st.empty,
+          missingLunar: st.missingLunar,
+        };
+      }),
+    ),
     goals: policy.goals.map((g) => ({
       key: g.key,
       name: g.name,

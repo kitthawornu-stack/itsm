@@ -116,3 +116,72 @@ export class UnverifiedCalendarError extends Error {
 export function assertVerified(set: HolidaySet): void {
   if (!set.verified) throw new UnverifiedCalendarError(set.year);
 }
+
+/**
+ * วันสำคัญทางพุทธศาสนาที่เดินตามปฏิทินจันทรคติ
+ *
+ * **ไม่มีสูตรคำนวณที่เชื่อถือได้** — ต้องกรอกจากประกาศจริงทุกปี
+ * รายชื่อนี้มีไว้ตรวจว่ารายการของปีหนึ่ง "ครบหรือยัง" ไม่ใช่ไว้เดาวันที่
+ *
+ * ปฏิทินที่มีแต่วันหยุดตายตัวจะขาดสี่ถึงห้าวันต่อปี · ผลคือ SLA ของตั๋วที่
+ * คร่อมวันเหล่านั้นถูกนับว่าเกินเวลาทั้งที่ทีมไม่ได้มาทำงาน
+ */
+export const LUNAR_HOLIDAY_NAMES = [
+  'มาฆบูชา',
+  'วิสาขบูชา',
+  'อาสาฬหบูชา',
+  'เข้าพรรษา',
+] as const;
+
+export interface YearCoverage {
+  /** จำนวนวันหยุดที่บันทึกไว้ในปีนั้น */
+  count: number;
+  /** วันสำคัญทางจันทรคติที่ยังไม่พบในรายการ — ต้องกรอกเอง */
+  missingLunar: string[];
+  /** ไม่มีข้อมูลของปีนั้นเลย — ทุกวันถูกนับเป็นวันทำการ */
+  empty: boolean;
+}
+
+/**
+ * ตรวจว่ารายการวันหยุดของปีหนึ่งครบพอจะเชื่อได้ไหม
+ *
+ * เทียบจาก **ชื่อ** ไม่ใช่วันที่ เพราะวันที่ของจันทรคติเดาไม่ได้
+ * ชื่อที่บันทึกเป็น "วันหยุดราชการ" เฉย ๆ จึงนับว่ายังขาดทั้งสี่วัน
+ * ซึ่งถูกต้อง — รายการที่ไม่บอกว่าวันไหนคือวันอะไร ตรวจกับประกาศไม่ได้
+ */
+export function coverageOfYear(entries: ReadonlyArray<{ date: string; name: string }>): YearCoverage {
+  const names = entries.map((e) => e.name);
+  return {
+    count: entries.length,
+    missingLunar: LUNAR_HOLIDAY_NAMES.filter((n) => !names.some((h) => h.includes(n))),
+    empty: entries.length === 0,
+  };
+}
+
+/**
+ * ปฏิทินใบนี้ต้องยืนยันวันหยุดไหม
+ *
+ * ปฏิทินที่ทำงาน 24 ชั่วโมงทุกวันไม่มีวันหยุดให้ผิด — การเตือนว่า
+ * "ยังไม่ยืนยันวันหยุด" กับปฏิทิน 24×7 คือเสียงเตือนที่ไม่มีทางแก้ให้หายได้
+ * และเสียงเตือนที่แก้ไม่ได้คือเสียงที่ทุกคนเรียนรู้ที่จะไม่ฟัง
+ */
+export function needsHolidayVerification(weekly: unknown): boolean {
+  /*
+    รับ `unknown` ไม่ใช่ชนิดที่ประกาศไว้สวย ๆ เพราะค่านี้มาจากคอลัมน์ JSON
+    ซึ่งฐานข้อมูลไม่ได้รับประกันรูปร่างอะไรให้เลย
+
+    ครั้งแรกประกาศเป็น `ReadonlyArray<ReadonlyArray<{...}>>` แล้ว lint บอกว่า
+    `day[0]?.` ซ้ำซ้อน — ถูกตามชนิดที่ประกาศ แต่ผิดตามความจริง เพราะแถวที่
+    บันทึกไว้เป็น `[]` ก็มี · เมื่อ lint ขัดกับพฤติกรรมจริง ให้สงสัยชนิดก่อน
+    (CLAUDE.md §4)
+
+    รูปร่างที่ผิดแปลว่า "ไม่รู้ว่าปฏิทินนี้ทำงานเวลาไหน" ซึ่งต้องตอบว่า
+    **ต้องยืนยัน** ไม่ใช่ปล่อยผ่าน
+  */
+  if (!Array.isArray(weekly) || weekly.length !== 7) return true;
+  return !weekly.every((day) => {
+    if (!Array.isArray(day) || day.length !== 1) return false;
+    const w = day[0] as { startMinute?: unknown; endMinute?: unknown } | undefined;
+    return w?.startMinute === 0 && w.endMinute === 1440;
+  });
+}

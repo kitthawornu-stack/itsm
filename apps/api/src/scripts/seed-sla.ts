@@ -28,7 +28,7 @@ async function main(): Promise<void> {
   await prismaClient.slaCalendar.upsert({
     where: { tenantId_name: { tenantId, name: '24×7' } },
     update: {},
-    create: { tenantId, name: '24×7', timezone: 'Asia/Bangkok', weekly: WEEKLY_24X7, verified: true },
+    create: { tenantId, name: '24×7', timezone: 'Asia/Bangkok', weekly: WEEKLY_24X7 },
   });
 
   const cal8x5 = await prismaClient.slaCalendar.upsert({
@@ -40,7 +40,6 @@ async function main(): Promise<void> {
       timezone: 'Asia/Bangkok',
       weekly: WEEKLY_8X5,
       // ⚠️ false โดยตั้งใจ — รายการวันหยุดยังไม่ได้ตรวจกับประกาศจริง
-      verified: false,
     },
   });
 

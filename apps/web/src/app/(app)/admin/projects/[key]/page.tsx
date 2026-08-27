@@ -45,7 +45,13 @@ interface Detail {
   sla: {
     name: string;
     calendar: string;
-    calendarVerified: boolean;
+    calendarYears: Array<{
+      year: number;
+      required: boolean;
+      verified: boolean;
+      empty: boolean;
+      missingLunar: string[];
+    }>;
     goals: Array<{ key: string; name: string; targetMs: number; match: unknown }>;
   } | null;
 }
@@ -257,11 +263,23 @@ export default async function ProjectDetailPage({
             <p className="page-sub">
               {d.sla.name} · ปฏิทิน {d.sla.calendar}
             </p>
-            {d.sla.calendarVerified ? null : (
-              <p className="admin-error" role="alert">
-                ปฏิทินนี้ยังไม่ได้ตรวจสอบกับประกาศวันหยุดจริง — ใช้บนระบบจริงไม่ได้
-              </p>
-            )}
+            {/*
+              สถานะรายปี ไม่ใช่สถานะเดียวของปฏิทิน — วันหยุดเปลี่ยนทุกปี
+              ปีหน้าคือปีที่พังเงียบที่สุด: ระบบที่ทำงานถูกมาทั้งปีจะเริ่มนับ
+              วันสงกรานต์เป็นวันทำการตั้งแต่เที่ยงคืนวันที่ 1 มกราคม
+            */}
+            {d.sla.calendarYears
+              .filter((y) => y.required && !y.verified)
+              .map((y) => (
+                <p key={y.year} className="admin-error" role="alert">
+                  <b>ปี {y.year + 543}</b> ยังไม่ได้ยืนยันกับประกาศวันหยุดจริง
+                  {y.empty
+                    ? ' — ยังไม่มีวันหยุดสักวันในรายการ ทุกวันจะถูกนับเป็นวันทำการ'
+                    : y.missingLunar.length === 0
+                      ? ' — มีรายการแล้ว รอคนตรวจและยืนยัน'
+                      : ` — ยังไม่พบ ${y.missingLunar.join(' · ')} ในรายการ`}
+                </p>
+              ))}
             <div className="admin-table-wrap">
               <table className="admin-table">
                 <thead>
