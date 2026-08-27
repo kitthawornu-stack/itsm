@@ -1,0 +1,486 @@
+/**
+ * HQL — ภาษาคิวรีของ Helix · เอนจินตัวที่สี่
+ *
+ * `status = Open AND priority IN (P1, P2) ORDER BY updated DESC`
+ *
+ * เป็นฟังก์ชันบริสุทธิ์ทั้งไฟล์ — ไม่แตะฐานข้อมูล ไม่อ่านนาฬิกา ไม่มี I/O
+ * ผู้เรียกส่ง `CompileScope` เข้ามาแล้วรับ DSL กลับไปยิงเอง
+ *
+ * **สองข้อที่พลาดแล้วเสียหายที่สุด และทั้งคู่ล้มเหลวแบบเงียบ:**
+ *
+ *   1. ขอบเขต tenant และโปรเจกต์ **ประกอบจาก scope เท่านั้น** ไม่เคยมาจากสิ่งที่
+ *      ผู้ใช้พิมพ์ · อยู่ใน `filter` แยกจาก `must` ของผู้ใช้ ทั้งเพราะ ADR-005
+ *      (filter context ไม่คิดคะแนนและถูกแคช) และเพราะการอ่านคิวรีที่ได้ต้อง
+ *      แยกออกทันทีว่าอันไหนระบบบังคับ อันไหนผู้ใช้พิมพ์
+ *
+ *   2. ฟิลด์ที่ไม่รู้จัก **ถูกปฏิเสธ ไม่ใช่ข้าม** · คิวรีที่สะกดผิดแล้วคืนผลลัพธ์
+ *      เหมือนไม่มีเงื่อนไขนั้น คือคำตอบที่ผิดโดยที่ผู้ใช้มั่นใจว่าถูก
+ */
+
+// ============================================================
+// Errors
+// ============================================================
+
+export class HqlSyntaxError extends Error {
+  constructor(
+    message: string,
+    readonly position: number,
+  ) {
+    super(`${message} (ตำแหน่ง ${String(position)})`);
+    this.name = 'HqlSyntaxError';
+  }
+}
+
+export class HqlFieldError extends Error {
+  constructor(readonly field: string) {
+    super(
+      `ไม่รู้จักฟิลด์ "${field}" — ตรวจตัวสะกดอีกครั้ง ` +
+        `(ฟิลด์ที่ใช้ได้: ${[...Object.keys(FIELDS)].join(', ')})`,
+    );
+    this.name = 'HqlFieldError';
+  }
+}
+
+export class HqlValueError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'HqlValueError';
+  }
+}
+
+// ============================================================
+// ฟิลด์ที่อนุญาต
+// ============================================================
+
+/**
+ * รายการฟิลด์ที่คิวรีได้ — **allow-list ไม่ใช่ deny-list**
+ *
+ * ปล่อยให้พิมพ์ชื่อฟิลด์อะไรก็ได้ แปลว่าคนที่รู้ชื่อคอลัมน์ภายในจะกรองด้วย
+ * ฟิลด์ที่ไม่ควรถูกกรอง และรู้ได้ว่ามีข้อมูลอะไรอยู่จากจำนวนผลลัพธ์
+ *
+ * `text` = ค้นด้วยการวิเคราะห์คำ (ใช้ `~` ได้ ใช้ `=` ไม่ได้)
+ * `keyword` = ตรงทั้งค่า (ใช้ `=` `!=` `IN` ได้ ใช้ `~` ไม่ได้)
+ */
+interface FieldSpec {
+  /** ชื่อฟิลด์จริงในดัชนี — ต่างจากชื่อที่ผู้ใช้พิมพ์ได้ */
+  target: string;
+  kind: 'keyword' | 'text';
+  sortable?: boolean;
+}
+
+/**
+ * **ชื่อ `target` ต้องตรงกับชื่อฟิลด์ในดัชนีจริง** ไม่ใช่ชื่อที่คิดว่าน่าจะเป็น
+ *
+ * เขียนรอบแรกด้วยการเดา (`status`, `priority`, `issueType`) ทั้งที่ดัชนีเก็บเป็น
+ * `statusName`, `priorityRank`, `issueTypeName` · คิวรีที่ได้จะไม่ตรงกับเอกสาร
+ * ไหนเลยและคืนศูนย์ผลลัพธ์ทุกครั้ง โดยที่ OpenSearch ไม่ฟ้องอะไร —
+ * ฟิลด์ที่ไม่มีอยู่ในดัชนีไม่ใช่ error มันแค่ไม่ตรง
+ *
+ * `index-mapping.spec.ts` ฝั่ง api ตรวจว่ารายการนี้ตรงกับ mapping จริง
+ */
+const FIELDS: Record<string, FieldSpec> = {
+  status: { target: 'statusName', kind: 'keyword' },
+  category: { target: 'statusCategory', kind: 'keyword' },
+  priority: { target: 'priorityRank', kind: 'keyword' },
+  assignee: { target: 'assigneeId', kind: 'keyword' },
+  reporter: { target: 'reporterId', kind: 'keyword' },
+  project: { target: 'projectKey', kind: 'keyword' },
+  type: { target: 'issueTypeName', kind: 'keyword' },
+  key: { target: 'itemKey', kind: 'keyword' },
+  parent: { target: 'parentId', kind: 'keyword' },
+  summary: { target: 'summary', kind: 'text' },
+  description: { target: 'description', kind: 'text' },
+  created: { target: 'createdAt', kind: 'keyword', sortable: true },
+  updated: { target: 'updatedAt', kind: 'keyword', sortable: true },
+  resolved: { target: 'resolvedAt', kind: 'keyword', sortable: true },
+};
+
+/** ชื่อฟิลด์ในดัชนีที่ภาษานี้อ้างถึง — ใช้ตรวจกับ mapping จริงฝั่ง api */
+export const INDEX_TARGETS: readonly string[] = [
+  ...new Set(Object.values(FIELDS).map((f) => f.target)),
+];
+
+// ============================================================
+// A · ตัวแยกคำ
+// ============================================================
+
+export type TokenKind = 'ident' | 'op' | 'lparen' | 'rparen' | 'comma' | 'eof';
+
+export interface Token {
+  kind: TokenKind;
+  value: string;
+  position: number;
+  /** true เมื่อคำนี้มาจากข้อความในเครื่องหมายคำพูด — ห้ามตีความเป็นคำสั่ง */
+  quoted: boolean;
+}
+
+const OPERATORS = ['!=', '=', '~'];
+
+/**
+ * อักขระที่จบคำ
+ *
+ * ทุกอย่างที่ไม่ใช่ตัวคั่นถือเป็นส่วนหนึ่งของคำ — รวมภาษาไทย สระ และวรรณยุกต์
+ * เพราะชื่อสถานะและผลการแก้ไขเป็นภาษาไทยทั้งระบบ การบังคับให้ครอบเครื่องหมาย
+ * คำพูดทุกครั้งคือการทำให้ภาษานี้ใช้ไม่ได้จริงกับข้อมูลของตัวเอง
+ */
+const BREAK = new Set([' ', '\t', '\n', '\r', '(', ')', ',', '=', '!', '~', '"']);
+
+export function tokenize(input: string): Token[] {
+  const out: Token[] = [];
+  let i = 0;
+
+  while (i < input.length) {
+    const ch = input[i] ?? '';
+
+    if (ch === ' ' || ch === '\t' || ch === '\n' || ch === '\r') {
+      i += 1;
+      continue;
+    }
+
+    if (ch === '(') {
+      out.push({ kind: 'lparen', value: ch, position: i, quoted: false });
+      i += 1;
+      continue;
+    }
+    if (ch === ')') {
+      out.push({ kind: 'rparen', value: ch, position: i, quoted: false });
+      i += 1;
+      continue;
+    }
+    if (ch === ',') {
+      out.push({ kind: 'comma', value: ch, position: i, quoted: false });
+      i += 1;
+      continue;
+    }
+
+    if (ch === '"') {
+      const start = i;
+      i += 1;
+      let value = '';
+      let closed = false;
+      while (i < input.length) {
+        const c = input[i] ?? '';
+        if (c === '\\' && input[i + 1] === '"') {
+          value += '"';
+          i += 2;
+          continue;
+        }
+        if (c === '"') {
+          closed = true;
+          i += 1;
+          break;
+        }
+        value += c;
+        i += 1;
+      }
+      // เครื่องหมายคำพูดที่ไม่ปิดต้องล้มดัง — ไม่ใช่กลืนไปจนจบบรรทัด
+      // แล้วได้คิวรีที่ความหมายต่างจากที่พิมพ์โดยไม่มีอะไรบอก
+      if (!closed) throw new HqlSyntaxError('เครื่องหมายคำพูดไม่ได้ปิด', start);
+      out.push({ kind: 'ident', value, position: start, quoted: true });
+      continue;
+    }
+
+    const op = OPERATORS.find((o) => input.startsWith(o, i));
+    if (op !== undefined) {
+      out.push({ kind: 'op', value: op, position: i, quoted: false });
+      i += op.length;
+      continue;
+    }
+
+    const start = i;
+    let word = '';
+    // `noUncheckedIndexedAccess` เปิดอยู่ — ดัชนีของสตริงเป็น string | undefined
+    // จริงตามชนิด แม้เงื่อนไขวนลูปจะรับประกันว่าไม่ undefined ก็ตาม
+    while (i < input.length) {
+      const c = input[i];
+      if (c === undefined || BREAK.has(c)) break;
+      word += c;
+      i += 1;
+    }
+    if (word === '') throw new HqlSyntaxError(`อักขระที่ใช้ไม่ได้: ${ch}`, i);
+    out.push({ kind: 'ident', value: word, position: start, quoted: false });
+  }
+
+  out.push({ kind: 'eof', value: '', position: input.length, quoted: false });
+  return out;
+}
+
+// ============================================================
+// B · ไวยากรณ์
+// ============================================================
+
+export type Node =
+  | { kind: 'and'; left: Node; right: Node }
+  | { kind: 'or'; left: Node; right: Node }
+  | { kind: 'not'; child: Node }
+  | { kind: 'cmp'; field: string; op: '=' | '!=' | '~'; value: string }
+  | { kind: 'in'; field: string; not: boolean; values: string[] }
+  | { kind: 'empty'; field: string; not: boolean };
+
+export interface OrderBy {
+  field: string;
+  direction: 'asc' | 'desc';
+}
+
+/** คำสั่งของภาษา — เทียบแบบไม่สนตัวพิมพ์ ต่างจาก **ค่า** ซึ่งสนเสมอ */
+const isWord = (t: Token, word: string): boolean =>
+  !t.quoted && t.kind === 'ident' && t.value.toUpperCase() === word;
+
+class Parser {
+  private pos = 0;
+
+  constructor(private readonly tokens: Token[]) {}
+
+  private peek(): Token {
+    return this.tokens[this.pos] ?? { kind: 'eof', value: '', position: 0, quoted: false };
+  }
+
+  private next(): Token {
+    const t = this.peek();
+    this.pos += 1;
+    return t;
+  }
+
+  private expect(kind: TokenKind, what: string): Token {
+    const t = this.peek();
+    if (t.kind !== kind) throw new HqlSyntaxError(`ต้องมี${what}`, t.position);
+    return this.next();
+  }
+
+  /** ตัดส่วน ORDER BY ออกมาก่อน แล้วคืนตำแหน่งที่เงื่อนไขจบ */
+  static splitOrderBy(tokens: Token[]): { where: Token[]; order: OrderBy | null } {
+    for (let i = 0; i < tokens.length - 1; i += 1) {
+      const t = tokens[i];
+      const n = tokens[i + 1];
+      if (t === undefined || n === undefined) continue;
+      if (!isWord(t, 'ORDER') || !isWord(n, 'BY')) continue;
+
+      const fieldTok = tokens[i + 2];
+      if (fieldTok === undefined || fieldTok.kind !== 'ident') {
+        throw new HqlSyntaxError('ORDER BY ต้องตามด้วยชื่อฟิลด์', t.position);
+      }
+      const dirTok = tokens[i + 3];
+      let direction: 'asc' | 'desc' = 'desc';
+      if (dirTok !== undefined && dirTok.kind === 'ident') {
+        if (isWord(dirTok, 'ASC')) direction = 'asc';
+        else if (isWord(dirTok, 'DESC')) direction = 'desc';
+        else throw new HqlSyntaxError('ทิศทางการเรียงต้องเป็น ASC หรือ DESC', dirTok.position);
+      }
+      const where = tokens.slice(0, i);
+      where.push({ kind: 'eof', value: '', position: t.position, quoted: false });
+      return { where, order: { field: fieldTok.value, direction } };
+    }
+    return { where: tokens, order: null };
+  }
+
+  parse(): Node {
+    const node = this.parseOr();
+    const t = this.peek();
+    if (t.kind !== 'eof') throw new HqlSyntaxError(`ไม่เข้าใจ "${t.value}"`, t.position);
+    return node;
+  }
+
+  /** OR ผูกหลวมที่สุด — `a OR b AND c` = `a OR (b AND c)` */
+  private parseOr(): Node {
+    let left = this.parseAnd();
+    while (isWord(this.peek(), 'OR')) {
+      this.next();
+      left = { kind: 'or', left, right: this.parseAnd() };
+    }
+    return left;
+  }
+
+  private parseAnd(): Node {
+    let left = this.parseUnary();
+    while (isWord(this.peek(), 'AND')) {
+      this.next();
+      left = { kind: 'and', left, right: this.parseUnary() };
+    }
+    return left;
+  }
+
+  private parseUnary(): Node {
+    if (isWord(this.peek(), 'NOT')) {
+      this.next();
+      return { kind: 'not', child: this.parseUnary() };
+    }
+    return this.parsePrimary();
+  }
+
+  private parsePrimary(): Node {
+    const t = this.peek();
+    if (t.kind === 'lparen') {
+      this.next();
+      const inner = this.parseOr();
+      this.expect('rparen', 'วงเล็บปิด');
+      return inner;
+    }
+    if (t.kind !== 'ident') throw new HqlSyntaxError('ต้องมีชื่อฟิลด์', t.position);
+    const field = this.next().value;
+
+    // IS EMPTY / IS NOT EMPTY
+    if (isWord(this.peek(), 'IS')) {
+      this.next();
+      let not = false;
+      if (isWord(this.peek(), 'NOT')) {
+        this.next();
+        not = true;
+      }
+      if (!isWord(this.peek(), 'EMPTY')) {
+        throw new HqlSyntaxError('หลัง IS ต้องเป็น EMPTY หรือ NOT EMPTY', this.peek().position);
+      }
+      this.next();
+      return { kind: 'empty', field, not };
+    }
+
+    // [NOT] IN (...)
+    let notIn = false;
+    if (isWord(this.peek(), 'NOT')) {
+      this.next();
+      notIn = true;
+    }
+    if (isWord(this.peek(), 'IN')) {
+      this.next();
+      this.expect('lparen', 'วงเล็บเปิดหลัง IN');
+      const values: string[] = [];
+      while (this.peek().kind !== 'rparen') {
+        const v = this.peek();
+        if (v.kind !== 'ident') throw new HqlSyntaxError('ต้องมีค่าใน IN', v.position);
+        values.push(this.next().value);
+        if (this.peek().kind === 'comma') this.next();
+        else break;
+      }
+      this.expect('rparen', 'วงเล็บปิด');
+      /*
+        `IN ()` ที่ไม่มีค่าเลยถูกปฏิเสธ ไม่ใช่ตีความว่า "ไม่กรอง"
+        ทั้งสองความหมายเป็นไปได้ทั้งคู่ และการเดาผิดข้างหนึ่งคืนผลกว้างเกิน
+        โดยที่ผู้ใช้ตั้งใจตรงกันข้าม
+      */
+      if (values.length === 0) throw new HqlSyntaxError('IN ต้องมีค่าอย่างน้อยหนึ่งค่า', t.position);
+      return { kind: 'in', field, not: notIn, values };
+    }
+    if (notIn) throw new HqlSyntaxError('หลัง NOT ต้องเป็น IN', this.peek().position);
+
+    const opTok = this.peek();
+    if (opTok.kind !== 'op') throw new HqlSyntaxError('ต้องมีตัวดำเนินการ', opTok.position);
+    this.next();
+    const valTok = this.peek();
+    if (valTok.kind !== 'ident') throw new HqlSyntaxError('ต้องมีค่าหลังตัวดำเนินการ', valTok.position);
+    this.next();
+    return { kind: 'cmp', field, op: opTok.value as '=' | '!=' | '~', value: valTok.value };
+  }
+}
+
+/** แปลงข้อความเป็นต้นไม้ไวยากรณ์ — ยังไม่ตรวจว่าฟิลด์มีจริง */
+export function parse(input: string): Node {
+  const { where } = Parser.splitOrderBy(tokenize(input));
+  if (where.length <= 1) throw new HqlSyntaxError('คิวรีว่างเปล่า', 0);
+  return new Parser(where).parse();
+}
+
+// ============================================================
+// C+D+E · แปลเป็น DSL
+// ============================================================
+
+export interface CompileScope {
+  tenantId: string;
+  /** โปรเจกต์ที่ผู้ใช้คนนี้เปิดดูได้ — รายการว่าง = ไม่เห็นอะไรเลย */
+  browsableProjectIds: string[];
+}
+
+export interface CompiledQuery {
+  query: { bool: { filter: unknown[]; must: unknown[] } };
+  sort: Array<Record<string, 'asc' | 'desc'>>;
+}
+
+function spec(field: string): FieldSpec {
+  const f = FIELDS[field];
+  if (f === undefined) throw new HqlFieldError(field);
+  return f;
+}
+
+/** ADR-005 · ต้องมี `minimum_should_match` ไม่งั้น n-gram ชิ้นเดียวก็นับเป็น hit */
+const MIN_SHOULD_MATCH = '75%';
+
+function toClause(node: Node): unknown {
+  switch (node.kind) {
+    case 'and':
+      return { bool: { must: [toClause(node.left), toClause(node.right)] } };
+    case 'or':
+      // `should` + `minimum_should_match: 1` — ไม่ใช่ `should` เปล่า ๆ ซึ่งใน
+      // filter context จะกลายเป็น "ไม่บังคับสักข้อ" และคืนทุกอย่าง
+      return { bool: { should: [toClause(node.left), toClause(node.right)], minimum_should_match: 1 } };
+    case 'not':
+      return { bool: { must_not: [toClause(node.child)] } };
+    case 'empty': {
+      const f = spec(node.field);
+      const exists = { exists: { field: f.target } };
+      return node.not ? exists : { bool: { must_not: [exists] } };
+    }
+    case 'in': {
+      const f = spec(node.field);
+      if (f.kind !== 'keyword') {
+        throw new HqlValueError(`ฟิลด์ "${node.field}" เป็นข้อความ ใช้ IN ไม่ได้ — ใช้ ~ แทน`);
+      }
+      const terms = { terms: { [f.target]: node.values } };
+      return node.not ? { bool: { must_not: [terms] } } : terms;
+    }
+    case 'cmp': {
+      const f = spec(node.field);
+      if (node.op === '~') {
+        if (f.kind !== 'text') {
+          throw new HqlValueError(
+            `ฟิลด์ "${node.field}" ต้องตรงทั้งค่า ใช้ ~ ไม่ได้ — ใช้ = หรือ IN แทน`,
+          );
+        }
+        return {
+          match: { [f.target]: { query: node.value, minimum_should_match: MIN_SHOULD_MATCH } },
+        };
+      }
+      if (f.kind !== 'keyword') {
+        throw new HqlValueError(
+          `ฟิลด์ "${node.field}" เป็นข้อความ ใช้ ${node.op} ไม่ได้ — ใช้ ~ แทน`,
+        );
+      }
+      const term = { term: { [f.target]: node.value } };
+      return node.op === '=' ? term : { bool: { must_not: [term] } };
+    }
+  }
+}
+
+/**
+ * แปลคิวรีของผู้ใช้เป็น OpenSearch DSL พร้อมขอบเขตที่ระบบบังคับ
+ *
+ * ตัวกรองของระบบอยู่ใน `filter` · เงื่อนไขของผู้ใช้อยู่ใน `must`
+ * แยกกันโดยตั้งใจ ไม่ใช่เพื่อความสวยงาม — วันที่มีคนแก้กติกาความปลอดภัย
+ * จะได้ไม่เผลอแก้เงื่อนไขของผู้ใช้ไปด้วย และคนอ่านคิวรีที่ได้แยกออกทันที
+ */
+export function compile(input: string, scope: CompileScope): CompiledQuery {
+  const tokens = tokenize(input);
+  const { where, order } = Parser.splitOrderBy(tokens);
+  if (where.length <= 1) throw new HqlSyntaxError('คิวรีว่างเปล่า', 0);
+  const ast = new Parser(where).parse();
+
+  let sort: Array<Record<string, 'asc' | 'desc'>> = [{ updatedAt: 'desc' }];
+  if (order !== null) {
+    const f = spec(order.field);
+    // เรียงตามฟิลด์ที่วิเคราะห์คำแล้วให้ผลที่อธิบายไม่ได้ — ปฏิเสธดีกว่า
+    if (f.sortable !== true) throw new HqlFieldError(order.field);
+    sort = [{ [f.target]: order.direction }];
+  }
+
+  return {
+    query: {
+      bool: {
+        filter: [
+          { term: { tenantId: scope.tenantId } },
+          // รายการว่าง = ไม่เห็นอะไรเลย ซึ่งถูกต้อง · `terms` กับ array ว่าง
+          // ไม่ตรงกับเอกสารใดเลย ต่างจากการละตัวกรองทิ้งซึ่งจะเห็นทั้งหมด
+          { terms: { projectId: scope.browsableProjectIds } },
+        ],
+        must: [toClause(ast)],
+      },
+    },
+    sort,
+  };
+}

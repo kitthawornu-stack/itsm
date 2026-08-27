@@ -1,3 +1,5 @@
+import { fileURLToPath } from 'node:url';
+
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
@@ -31,6 +33,17 @@ export default defineConfig({
     },
   },
   resolve: {
-    alias: { '@itsm/types': new URL('../../packages/types/src/index.ts', import.meta.url).pathname },
+    /*
+      ชี้ไปที่ซอร์สของ workspace package ไม่ใช่ `dist` — ไม่งั้นต้อง build ก่อน
+      รันเทสต์ทุกครั้ง และเทสต์จะทดสอบโค้ดที่ build ไว้เมื่อไหร่ก็ไม่รู้
+
+      ใช้ `fileURLToPath` ไม่ใช่ `new URL(...).pathname` — บน Windows ตัวหลัง
+      คืน `/D:/Project/...` ที่มีขีดนำหน้า ซึ่งเป็นกับดักเดียวกับที่
+      `outputFileTracingRoot` เคยเจอและบันทึกไว้ใน CLAUDE.md
+    */
+    alias: {
+      '@itsm/types': fileURLToPath(new URL('../../packages/types/src/index.ts', import.meta.url)),
+      '@itsm/hql': fileURLToPath(new URL('../../packages/hql/src/index.ts', import.meta.url)),
+    },
   },
 });

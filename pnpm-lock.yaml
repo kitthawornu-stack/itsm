@@ -44,6 +44,9 @@ importers:
       '@aws-sdk/client-s3':
         specifier: ^3.1117.0
         version: 3.1117.0
+      '@itsm/hql':
+        specifier: workspace:*
+        version: link:../../packages/hql
       '@itsm/lexorank':
         specifier: workspace:*
         version: link:../../packages/lexorank
@@ -179,6 +182,15 @@ importers:
       tsx:
         specifier: ^4.19.2
         version: 4.23.12
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.20.1)
+
+  packages/hql:
+    devDependencies:
       typescript:
         specifier: ^5.7.2
         version: 5.9.3

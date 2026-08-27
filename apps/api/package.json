@@ -32,6 +32,7 @@
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1117.0",
+    "@itsm/hql": "workspace:*",
     "@itsm/lexorank": "workspace:*",
     "@itsm/types": "workspace:*",
     "@nestjs/common": "^11.0.1",

@@ -24,6 +24,9 @@
       ],
       "@itsm/lexorank": [
         "../../packages/lexorank/src/index.ts"
+      ],
+      "@itsm/hql": [
+        "../../packages/hql/src/index.ts"
       ]
     },
     "noEmit": true
