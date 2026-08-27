@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
-import { Button, Field, Input } from '@itsm/ui';
+import { Button, Field, Input, Table } from '@itsm/ui';
 
 interface Row {
   id: number;
@@ -114,99 +114,90 @@ export function ResolutionAdmin({ apiBase }: { apiBase: string }): ReactNode {
       </form>
 
       {rows.length === 0 ? (
-        <p className="admin-empty">ยังไม่มีผลการแก้ไข — เพิ่มอย่างน้อยหนึ่งรายการก่อน ไม่งั้นปิดงานไม่ได้</p>
+        <p className="admin-empty">
+          ยังไม่มีผลการแก้ไข — เพิ่มอย่างน้อยหนึ่งรายการก่อน ไม่งั้นปิดงานไม่ได้
+        </p>
       ) : (
-        <div className="admin-table-wrap">
-          <table className="admin-table">
-          <thead>
-            <tr>
-              <th scope="col">ชื่อ</th>
-              <th scope="col">ใช้อยู่</th>
-              <th scope="col">สถานะ</th>
-              <th scope="col">
-                <span className="ui-sr-only">การกระทำ</span>
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r) => (
-              <tr key={r.id} data-inactive={r.isActive ? undefined : 'true'}>
-                <td>
-                  {editing === r.id ? (
-                    <form
-                      className="admin-rename"
-                      onSubmit={(e) => {
-                        e.preventDefault();
-                        void send(`/${String(r.id)}/rename`, { name: draft }, 'เปลี่ยนชื่อแล้ว').then(
-                          () => {
-                            setEditing(null);
-                          },
+        <Table
+          columns={['ชื่อ', 'ใช้อยู่', 'สถานะ', '<span className="ui-sr-only">การกระทำ</span>']}
+          rowCount={rows.length}
+        >
+          {rows.map((r) => (
+            <tr key={r.id} data-inactive={r.isActive ? undefined : 'true'}>
+              <td>
+                {editing === r.id ? (
+                  <form
+                    className="admin-rename"
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      void send(`/${String(r.id)}/rename`, { name: draft }, 'เปลี่ยนชื่อแล้ว').then(
+                        () => {
+                          setEditing(null);
+                        },
+                      );
+                    }}
+                  >
+                    <Input
+                      id={`res-edit-${String(r.id)}`}
+                      value={draft}
+                      onChange={setDraft}
+                      maxLength={NAME_MAX}
+                    />
+                    <Button variant="primary" type="submit" disabled={busy}>
+                      บันทึก
+                    </Button>
+                    <button
+                      type="button"
+                      className="admin-linkish"
+                      onClick={() => {
+                        setEditing(null);
+                      }}
+                    >
+                      ยกเลิก
+                    </button>
+                  </form>
+                ) : (
+                  r.name
+                )}
+              </td>
+              <td className="admin-when">
+                {/* บอกให้เห็นก่อนกดเลิกใช้ ว่าการเปลี่ยนชื่อจะกระทบงานกี่ใบ */}
+                {r.inUse === 0 ? '—' : `${String(r.inUse)} เรื่อง`}
+              </td>
+              <td>{r.isActive ? 'ใช้งานอยู่' : 'เลิกใช้แล้ว'}</td>
+              <td className="admin-actions">
+                {editing === r.id ? null : (
+                  <>
+                    <button
+                      type="button"
+                      className="admin-linkish"
+                      onClick={() => {
+                        setDraft(r.name);
+                        setEditing(r.id);
+                      }}
+                    >
+                      เปลี่ยนชื่อ
+                    </button>
+                    <button
+                      type="button"
+                      className="admin-linkish"
+                      disabled={busy}
+                      onClick={() => {
+                        void send(
+                          `/${String(r.id)}/active`,
+                          { isActive: !r.isActive },
+                          r.isActive ? `เลิกใช้ "${r.name}" แล้ว` : `เปิดใช้ "${r.name}" อีกครั้ง`,
                         );
                       }}
                     >
-                      <Input
-                        id={`res-edit-${String(r.id)}`}
-                        value={draft}
-                        onChange={setDraft}
-                        maxLength={NAME_MAX}
-                      />
-                      <Button variant="primary" type="submit" disabled={busy}>
-                        บันทึก
-                      </Button>
-                      <button
-                        type="button"
-                        className="admin-linkish"
-                        onClick={() => {
-                          setEditing(null);
-                        }}
-                      >
-                        ยกเลิก
-                      </button>
-                    </form>
-                  ) : (
-                    r.name
-                  )}
-                </td>
-                <td className="admin-when">
-                  {/* บอกให้เห็นก่อนกดเลิกใช้ ว่าการเปลี่ยนชื่อจะกระทบงานกี่ใบ */}
-                  {r.inUse === 0 ? '—' : `${String(r.inUse)} เรื่อง`}
-                </td>
-                <td>{r.isActive ? 'ใช้งานอยู่' : 'เลิกใช้แล้ว'}</td>
-                <td className="admin-actions">
-                  {editing === r.id ? null : (
-                    <>
-                      <button
-                        type="button"
-                        className="admin-linkish"
-                        onClick={() => {
-                          setDraft(r.name);
-                          setEditing(r.id);
-                        }}
-                      >
-                        เปลี่ยนชื่อ
-                      </button>
-                      <button
-                        type="button"
-                        className="admin-linkish"
-                        disabled={busy}
-                        onClick={() => {
-                          void send(
-                            `/${String(r.id)}/active`,
-                            { isActive: !r.isActive },
-                            r.isActive ? `เลิกใช้ "${r.name}" แล้ว` : `เปิดใช้ "${r.name}" อีกครั้ง`,
-                          );
-                        }}
-                      >
-                        {r.isActive ? 'เลิกใช้' : 'เปิดใช้อีกครั้ง'}
-                      </button>
-                    </>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-          </table>
-        </div>
+                      {r.isActive ? 'เลิกใช้' : 'เปิดใช้อีกครั้ง'}
+                    </button>
+                  </>
+                )}
+              </td>
+            </tr>
+          ))}
+        </Table>
       )}
 
       <p className="admin-empty">

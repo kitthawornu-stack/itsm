@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
-import { Button, Field, Input, Select, Timestamp } from '@itsm/ui';
+import { Button, Field, Input, Select, Table, Timestamp } from '@itsm/ui';
 
 interface UserRow {
   id: string;
@@ -44,7 +44,10 @@ export function UserAdmin({ apiBase }: { apiBase: string }): ReactNode {
     try {
       const [u, g] = await Promise.all([
         fetch(`${apiBase}/api/v1/admin/users`, { credentials: 'include', cache: 'no-store' }),
-        fetch(`${apiBase}/api/v1/admin/users/groups`, { credentials: 'include', cache: 'no-store' }),
+        fetch(`${apiBase}/api/v1/admin/users/groups`, {
+          credentials: 'include',
+          cache: 'no-store',
+        }),
       ]);
       if (!u.ok) {
         setError(
@@ -159,7 +162,12 @@ export function UserAdmin({ apiBase }: { apiBase: string }): ReactNode {
               }}
             >
               <Field label="อีเมล" htmlFor="ad-email" required>
-                <Input id="ad-email" value={email} onChange={setEmail} placeholder="ชื่อ@บริษัท.co.th" />
+                <Input
+                  id="ad-email"
+                  value={email}
+                  onChange={setEmail}
+                  placeholder="ชื่อ@บริษัท.co.th"
+                />
               </Field>
               <Field label="ชื่อที่แสดง" htmlFor="ad-name">
                 <Input id="ad-name" value={displayName} onChange={setDisplayName} />
@@ -193,45 +201,34 @@ export function UserAdmin({ apiBase }: { apiBase: string }): ReactNode {
           <h2 className="detail-section-title detail-section-gap">
             ผู้ใช้ทั้งหมด {rows.length} คน
           </h2>
-          <div className="admin-table-wrap">
-            <table className="admin-table">
-              <thead>
-                <tr>
-                  <th>อีเมล</th>
-                  <th>ชื่อ</th>
-                  <th>กลุ่ม</th>
-                  <th>เข้าใช้ล่าสุด</th>
-                  <th>สถานะ</th>
-                  <th>จัดการ</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((u) => (
-                  <tr key={u.id} data-inactive={u.isActive ? 'false' : 'true'}>
-                    <td>{u.email}</td>
-                    <td>{u.displayName}</td>
-                    <td>{u.groups.length === 0 ? '—' : u.groups.join(', ')}</td>
-                    <td className="admin-when">
-                      {u.lastLoginAt === null ? (
-                        'ยังไม่เคย'
-                      ) : (
-                        <Timestamp utc={u.lastLoginAt} precision="date" />
-                      )}
-                    </td>
-                    <td>{u.isActive ? 'ใช้งานอยู่' : 'ปิดแล้ว'}</td>
-                    <td className="admin-actions">
-                      <button type="button" onClick={() => void resetPassword(u)}>
-                        ตั้งรหัสผ่าน
-                      </button>
-                      <button type="button" onClick={() => void toggleActive(u)}>
-                        {u.isActive ? 'ปิดบัญชี' : 'เปิดบัญชี'}
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <Table
+            columns={['อีเมล', 'ชื่อ', 'กลุ่ม', 'เข้าใช้ล่าสุด', 'สถานะ', 'จัดการ']}
+            rowCount={rows.length}
+          >
+            {rows.map((u) => (
+              <tr key={u.id} data-inactive={u.isActive ? 'false' : 'true'}>
+                <td>{u.email}</td>
+                <td>{u.displayName}</td>
+                <td>{u.groups.length === 0 ? '—' : u.groups.join(', ')}</td>
+                <td className="admin-when">
+                  {u.lastLoginAt === null ? (
+                    'ยังไม่เคย'
+                  ) : (
+                    <Timestamp utc={u.lastLoginAt} precision="date" />
+                  )}
+                </td>
+                <td>{u.isActive ? 'ใช้งานอยู่' : 'ปิดแล้ว'}</td>
+                <td className="admin-actions">
+                  <button type="button" onClick={() => void resetPassword(u)}>
+                    ตั้งรหัสผ่าน
+                  </button>
+                  <button type="button" onClick={() => void toggleActive(u)}>
+                    {u.isActive ? 'ปิดบัญชี' : 'เปิดบัญชี'}
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </Table>
         </>
       )}
     </div>

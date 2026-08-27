@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
-import { Button, Field, Input, Select } from '@itsm/ui';
+import { Button, Field, Input, Select, Table } from '@itsm/ui';
 
 interface WorkflowRow {
   id: string;
@@ -193,76 +193,71 @@ export function WorkflowAdmin({ apiBase }: { apiBase: string }): ReactNode {
           {detail.usedBy.length > 0 ? (
             <p className="admin-error" role="alert">
               {/* แก้ workflow ที่ใช้อยู่ กระทบตั๋วที่เปิดอยู่ทันที ไม่ใช่เฉพาะตั๋วใหม่ */}
-              ใช้อยู่ในโปรเจกต์ {detail.usedBy.join(' · ')} — การแก้ที่นี่กระทบเรื่องที่เปิดอยู่ทันที
+              ใช้อยู่ในโปรเจกต์ {detail.usedBy.join(' · ')} —
+              การแก้ที่นี่กระทบเรื่องที่เปิดอยู่ทันที
             </p>
           ) : (
             <p className="admin-empty">ยังไม่มีโปรเจกต์ไหนใช้ workflow นี้</p>
           )}
 
           <h2 className="cfg-title">สถานะ</h2>
-          <div className="admin-table-wrap">
-            <table className="admin-table">
-              <thead>
-                <tr>
-                  <th scope="col">ชื่อ</th>
-                  <th scope="col">หมวด</th>
-                  <th scope="col">เรื่องที่ค้างอยู่</th>
-                  <th scope="col">หมายเหตุ</th>
-                  <th scope="col">
-                    <span className="ui-sr-only">การกระทำ</span>
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {detail.statuses.map((s) => (
-                  <tr key={s.id}>
-                    <td>{s.name}</td>
-                    <td>{CATEGORY_LABEL[s.category] ?? s.category}</td>
-                    <td className="admin-when">{s.itemCount.toLocaleString('th-TH')}</td>
-                    <td>
-                      {[s.isInitial ? 'สถานะเริ่มต้น' : null, s.pausesSla ? 'พักนาฬิกา SLA' : null]
-                        .filter((v) => v !== null)
-                        .join(' · ') || '—'}
-                    </td>
-                    <td className="admin-actions">
-                      {s.isInitial ? null : (
-                        <>
-                          <button
-                            type="button"
-                            className="admin-linkish"
-                            disabled={busy}
-                            onClick={() => {
-                              void send(
-                                `/${detail.id}/statuses/${s.id}/initial`,
-                                {},
-                                `ตั้ง "${s.name}" เป็นสถานะเริ่มต้นแล้ว`,
-                              );
-                            }}
-                          >
-                            ตั้งเป็นสถานะเริ่มต้น
-                          </button>
-                          <button
-                            type="button"
-                            className="admin-linkish"
-                            disabled={busy}
-                            onClick={() => {
-                              void send(
-                                `/${detail.id}/statuses/${s.id}/remove`,
-                                {},
-                                `ลบ "${s.name}" แล้ว`,
-                              );
-                            }}
-                          >
-                            ลบ
-                          </button>
-                        </>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <Table
+            columns={[
+              'ชื่อ',
+              'หมวด',
+              'เรื่องที่ค้างอยู่',
+              'หมายเหตุ',
+              '<span className="ui-sr-only">การกระทำ</span>',
+            ]}
+            rowCount={detail.statuses.length}
+          >
+            {detail.statuses.map((s) => (
+              <tr key={s.id}>
+                <td>{s.name}</td>
+                <td>{CATEGORY_LABEL[s.category] ?? s.category}</td>
+                <td className="admin-when">{s.itemCount.toLocaleString('th-TH')}</td>
+                <td>
+                  {[s.isInitial ? 'สถานะเริ่มต้น' : null, s.pausesSla ? 'พักนาฬิกา SLA' : null]
+                    .filter((v) => v !== null)
+                    .join(' · ') || '—'}
+                </td>
+                <td className="admin-actions">
+                  {s.isInitial ? null : (
+                    <>
+                      <button
+                        type="button"
+                        className="admin-linkish"
+                        disabled={busy}
+                        onClick={() => {
+                          void send(
+                            `/${detail.id}/statuses/${s.id}/initial`,
+                            {},
+                            `ตั้ง "${s.name}" เป็นสถานะเริ่มต้นแล้ว`,
+                          );
+                        }}
+                      >
+                        ตั้งเป็นสถานะเริ่มต้น
+                      </button>
+                      <button
+                        type="button"
+                        className="admin-linkish"
+                        disabled={busy}
+                        onClick={() => {
+                          void send(
+                            `/${detail.id}/statuses/${s.id}/remove`,
+                            {},
+                            `ลบ "${s.name}" แล้ว`,
+                          );
+                        }}
+                      >
+                        ลบ
+                      </button>
+                    </>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </Table>
 
           <form
             className="admin-add-form"
@@ -281,7 +276,12 @@ export function WorkflowAdmin({ apiBase }: { apiBase: string }): ReactNode {
               <Input id="st-name" value={stName} onChange={setStName} maxLength={64} />
             </Field>
             <Field label="หมวด" htmlFor="st-cat" hint="หมวด DONE ทำให้ระบบถือว่าเรื่องจบแล้ว">
-              <Select id="st-cat" value={stCategory} onChange={setStCategory} options={CATEGORIES} />
+              <Select
+                id="st-cat"
+                value={stCategory}
+                onChange={setStCategory}
+                options={CATEGORIES}
+              />
             </Field>
             <label className="grid-check">
               <input
@@ -299,55 +299,44 @@ export function WorkflowAdmin({ apiBase }: { apiBase: string }): ReactNode {
           </form>
 
           <h2 className="cfg-title">ปุ่มเปลี่ยนสถานะ</h2>
-          <div className="admin-table-wrap">
-            <table className="admin-table">
-              <thead>
-                <tr>
-                  <th scope="col">ปุ่ม</th>
-                  <th scope="col">จาก → ไป</th>
-                  <th scope="col">กฎ</th>
-                  <th scope="col">
-                    <span className="ui-sr-only">การกระทำ</span>
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {detail.transitions.map((t) => (
-                  <tr key={t.id}>
-                    <td>{t.name}</td>
-                    <td>
-                      {t.from ?? 'ทุกสถานะ'} → {t.to}
-                    </td>
-                    <td>
-                      {/*
-                        การลบปุ่มลบกฎไปด้วย (onDelete: Cascade)
-                        ต้องเห็นจำนวนก่อนกดลบ ไม่ใช่รู้ตอนที่เงื่อนไขหายไปแล้ว
-                      */}
-                      {t.ruleCount === 0 ? '—' : `${String(t.ruleCount)} ข้อ`}
-                    </td>
-                    <td className="admin-actions">
-                      <button
-                        type="button"
-                        className="admin-linkish"
-                        disabled={busy}
-                        onClick={() => {
-                          void send(
-                            `/${detail.id}/transitions/${t.id}/remove`,
-                            {},
-                            t.ruleCount === 0
-                              ? `ลบปุ่ม "${t.name}" แล้ว`
-                              : `ลบปุ่ม "${t.name}" พร้อมกฎ ${String(t.ruleCount)} ข้อแล้ว`,
-                          );
-                        }}
-                      >
-                        ลบ
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <Table
+            columns={['ปุ่ม', 'จาก → ไป', 'กฎ', '<span className="ui-sr-only">การกระทำ</span>']}
+            rowCount={detail.transitions.length}
+          >
+            {detail.transitions.map((t) => (
+              <tr key={t.id}>
+                <td>{t.name}</td>
+                <td>
+                  {t.from ?? 'ทุกสถานะ'} → {t.to}
+                </td>
+                <td>
+                  {/*
+            การลบปุ่มลบกฎไปด้วย (onDelete: Cascade)
+            ต้องเห็นจำนวนก่อนกดลบ ไม่ใช่รู้ตอนที่เงื่อนไขหายไปแล้ว
+            */}
+                  {t.ruleCount === 0 ? '—' : `${String(t.ruleCount)} ข้อ`}
+                </td>
+                <td className="admin-actions">
+                  <button
+                    type="button"
+                    className="admin-linkish"
+                    disabled={busy}
+                    onClick={() => {
+                      void send(
+                        `/${detail.id}/transitions/${t.id}/remove`,
+                        {},
+                        t.ruleCount === 0
+                          ? `ลบปุ่ม "${t.name}" แล้ว`
+                          : `ลบปุ่ม "${t.name}" พร้อมกฎ ${String(t.ruleCount)} ข้อแล้ว`,
+                      );
+                    }}
+                  >
+                    ลบ
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </Table>
 
           <form
             className="admin-add-form"

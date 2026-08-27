@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
-import { Button, Field, Input, Select } from '@itsm/ui';
+import { Button, Field, Input, Select, Table } from '@itsm/ui';
 
 interface FieldRow {
   id: string;
@@ -166,15 +166,17 @@ export function FieldAdmin({ apiBase }: { apiBase: string }): ReactNode {
         className="admin-add-form"
         onSubmit={(e) => {
           e.preventDefault();
-          void send('', { key, name, type, options: parsedOptions }, `สร้างฟิลด์ "${name}" แล้ว`).then(
-            (ok) => {
-              if (ok) {
-                setKey('');
-                setName('');
-                setOptions('');
-              }
-            },
-          );
+          void send(
+            '',
+            { key, name, type, options: parsedOptions },
+            `สร้างฟิลด์ "${name}" แล้ว`,
+          ).then((ok) => {
+            if (ok) {
+              setKey('');
+              setName('');
+              setOptions('');
+            }
+          });
         }}
       >
         <Field
@@ -229,52 +231,46 @@ export function FieldAdmin({ apiBase }: { apiBase: string }): ReactNode {
         </Field>
       ) : null}
 
-      <div className="admin-table-wrap">
-        <table className="admin-table">
-          <thead>
-            <tr>
-              <th scope="col">ชื่อ</th>
-              <th scope="col">คีย์</th>
-              <th scope="col">ชนิด</th>
-              <th scope="col">ตัวเลือก</th>
-              <th scope="col">ค่าที่กรอกไว้</th>
-              <th scope="col">ใช้อยู่</th>
-              <th scope="col">
-                <span className="ui-sr-only">การกระทำ</span>
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((f) => (
-              <tr key={f.id} data-inactive={f.configCount === 0 ? 'true' : undefined}>
-                <td>{f.name}</td>
-                <td className="admin-when">{f.key}</td>
-                <td>{TYPE_LABEL[f.type] ?? f.type}</td>
-                <td>{f.options.length === 0 ? '—' : f.options.join(' · ')}</td>
-                <td className="admin-when">{f.valueCount.toLocaleString('th-TH')}</td>
-                <td className="admin-when">
-                  {/* ฟิลด์ที่ไม่ได้ตั้งใช้ที่ไหนเลย ไม่มีใครเห็นและไม่มีใครกรอก */}
-                  {f.configCount === 0 ? 'ยังไม่ได้ตั้งใช้' : `${String(f.configCount)} ที่`}
-                </td>
-                <td className="admin-actions">
-                  {f.isSystem ? null : (
-                    <button
-                      type="button"
-                      className="admin-linkish"
-                      disabled={busy}
-                      onClick={() => {
-                        void send(`/${f.id}/remove`, {}, `ลบฟิลด์ "${f.name}" แล้ว`);
-                      }}
-                    >
-                      ลบ
-                    </button>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <Table
+        columns={[
+          'ชื่อ',
+          'คีย์',
+          'ชนิด',
+          'ตัวเลือก',
+          'ค่าที่กรอกไว้',
+          'ใช้อยู่',
+          '<span className="ui-sr-only">การกระทำ</span>',
+        ]}
+        rowCount={rows.length}
+      >
+        {rows.map((f) => (
+          <tr key={f.id} data-inactive={f.configCount === 0 ? 'true' : undefined}>
+            <td>{f.name}</td>
+            <td className="admin-when">{f.key}</td>
+            <td>{TYPE_LABEL[f.type] ?? f.type}</td>
+            <td>{f.options.length === 0 ? '—' : f.options.join(' · ')}</td>
+            <td className="admin-when">{f.valueCount.toLocaleString('th-TH')}</td>
+            <td className="admin-when">
+              {/* ฟิลด์ที่ไม่ได้ตั้งใช้ที่ไหนเลย ไม่มีใครเห็นและไม่มีใครกรอก */}
+              {f.configCount === 0 ? 'ยังไม่ได้ตั้งใช้' : `${String(f.configCount)} ที่`}
+            </td>
+            <td className="admin-actions">
+              {f.isSystem ? null : (
+                <button
+                  type="button"
+                  className="admin-linkish"
+                  disabled={busy}
+                  onClick={() => {
+                    void send(`/${f.id}/remove`, {}, `ลบฟิลด์ "${f.name}" แล้ว`);
+                  }}
+                >
+                  ลบ
+                </button>
+              )}
+            </td>
+          </tr>
+        ))}
+      </Table>
 
       <h2 className="cfg-title">ตั้งว่าโปรเจกต์ไหนถามฟิลด์อะไร</h2>
       <div className="admin-add-form">

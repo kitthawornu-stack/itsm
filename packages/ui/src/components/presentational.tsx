@@ -303,3 +303,80 @@ export function Timestamp({ utc, precision = 'time' }: TimestampProps): ReactNod
     </time>
   );
 }
+
+// ============================================================
+
+export interface TableColumn {
+  label: ReactNode;
+  /** ชิดขวาสำหรับตัวเลข — ตัวเลขที่ชิดซ้ายเทียบขนาดกันด้วยตาไม่ได้ */
+  align?: 'start' | 'end';
+  /** ความกว้างตายตัว เช่น '84px' — ไม่ใส่คือแบ่งตามเนื้อหา */
+  width?: string;
+}
+
+export interface TableProps {
+  columns: ReadonlyArray<TableColumn | string>;
+  /**
+   * จำนวนแถวที่ผู้เรียกกำลังเรนเดอร์
+   *
+   * ต้องบอกมาตรง ๆ ไม่ใช่ให้เดาจาก `children` — `React.Children.count`
+   * นับ fragment และ array ซ้อนผิด แล้วตารางที่มีข้อมูลจะขึ้นว่า "ไม่มีข้อมูล"
+   * เป็นครั้งคราวโดยไม่มีใครทำซ้ำได้
+   */
+  rowCount: number;
+  /** ข้อความเมื่อไม่มีแถว — ไม่ใส่จะไม่แสดงอะไรเลย */
+  empty?: ReactNode;
+  /** `<tr>` ทั้งหมด */
+  children: ReactNode;
+  /** ชื่อตารางสำหรับสกรีนรีดเดอร์เมื่อไม่มีหัวเรื่องข้างบนที่ผูกไว้ */
+  label?: string;
+}
+
+/**
+ * ตารางข้อมูล
+ *
+ * รับผิดชอบสามอย่างที่ตารางเขียนมือพลาดซ้ำ ๆ ทั้ง 8 หน้าจอ:
+ *
+ *   1. **กล่องเลื่อนแนวนอนของตัวเอง** — ตารางกว้างต้องเลื่อนในกล่องมันเอง
+ *      ไม่ใช่ดันทั้งหน้าให้เลื่อนข้าง (CLAUDE.md §6)
+ *   2. **ตัดคำไทยได้ทุกตำแหน่ง** — ภาษาไทยไม่มีช่องว่างระหว่างคำ
+ *      ลืม `word-break` เมื่อไร ข้อความยาวดันตารางล้นทันที
+ *   3. **แถว "ไม่มีข้อมูล" ที่ `colSpan` ถูก** — เขียนมือแล้วนับคอลัมน์ผิด
+ *      ข้อความจะไปกองในคอลัมน์แรกและตารางเบี้ยวทั้งใบ
+ */
+export function Table({ columns, rowCount, empty, children, label }: TableProps): ReactNode {
+  const cols = columns.map((c) => (typeof c === 'string' ? { label: c } : c));
+  return (
+    <div className="ui-table-scroll">
+      <table className="ui-table" aria-label={label}>
+        <thead>
+          <tr>
+            {cols.map((c, i) => (
+              <th
+                // หัวคอลัมน์ไม่มี id ที่เสถียร และลำดับคือสิ่งที่นิยามมันจริง ๆ
+                // การใช้ดัชนีเป็น key จึงถูกต้องที่นี่ ไม่ใช่ทางลัด
+                key={i}
+                data-align={c.align ?? 'start'}
+                style={c.width === undefined ? undefined : { width: c.width }}
+                scope="col"
+              >
+                {c.label}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rowCount === 0 && empty !== undefined ? (
+            <tr>
+              <td className="ui-table-empty" colSpan={cols.length}>
+                {empty}
+              </td>
+            </tr>
+          ) : (
+            children
+          )}
+        </tbody>
+      </table>
+    </div>
+  );
+}

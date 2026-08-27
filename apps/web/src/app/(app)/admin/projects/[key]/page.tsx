@@ -1,6 +1,8 @@
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 
+import { Table } from '@itsm/ui';
+
 import { PermissionGrid } from '@/components/permission-grid';
 import { API_BASE, apiFetch } from '@/lib/api';
 
@@ -92,7 +94,9 @@ const PERMISSION_LABEL: Record<string, string> = {
 
 function hours(ms: number): string {
   const h = ms / 3_600_000;
-  return h >= 1 ? `${String(Number(h.toFixed(1)))} ชั่วโมงทำการ` : `${String(Math.round(ms / 60_000))} นาทีทำการ`;
+  return h >= 1
+    ? `${String(Number(h.toFixed(1)))} ชั่วโมงทำการ`
+    : `${String(Math.round(ms / 60_000))} นาทีทำการ`;
 }
 
 export default async function ProjectDetailPage({
@@ -147,63 +151,43 @@ export default async function ProjectDetailPage({
               ใช้กับ {w.issueTypes.join(' · ')}
             </p>
 
-            <div className="admin-table-wrap">
-              <table className="admin-table">
-                <thead>
-                  <tr>
-                    <th scope="col">สถานะ</th>
-                    <th scope="col">หมวด</th>
-                    <th scope="col">เรื่องที่ค้างอยู่</th>
-                    <th scope="col">หมายเหตุ</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {w.statuses.map((st) => (
-                    <tr key={st.name}>
-                      <td>{st.name}</td>
-                      <td>{CATEGORY_LABEL[st.category] ?? st.category}</td>
-                      <td className="admin-when">{st.itemCount.toLocaleString('th-TH')}</td>
-                      <td>
-                        {[
-                          st.isInitial ? 'สถานะเริ่มต้น' : null,
-                          st.pausesSla ? 'พักนาฬิกา SLA' : null,
-                        ]
-                          .filter((v) => v !== null)
-                          .join(' · ') || '—'}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <Table
+              columns={['สถานะ', 'หมวด', 'เรื่องที่ค้างอยู่', 'หมายเหตุ']}
+              rowCount={w.statuses.length}
+            >
+              {w.statuses.map((st) => (
+                <tr key={st.name}>
+                  <td>{st.name}</td>
+                  <td>{CATEGORY_LABEL[st.category] ?? st.category}</td>
+                  <td className="admin-when">{st.itemCount.toLocaleString('th-TH')}</td>
+                  <td>
+                    {[st.isInitial ? 'สถานะเริ่มต้น' : null, st.pausesSla ? 'พักนาฬิกา SLA' : null]
+                      .filter((v) => v !== null)
+                      .join(' · ') || '—'}
+                  </td>
+                </tr>
+              ))}
+            </Table>
 
-            <div className="admin-table-wrap">
-              <table className="admin-table">
-                <thead>
-                  <tr>
-                    <th scope="col">ปุ่ม</th>
-                    <th scope="col">จาก → ไป</th>
-                    <th scope="col">ใครเห็นปุ่ม</th>
-                    <th scope="col">ต้องกรอกอะไร</th>
-                    <th scope="col">ทำอะไรต่อ</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {w.transitions.map((t) => (
-                    <tr key={t.name}>
-                      <td>{t.name}</td>
-                      <td>
-                        {/* null = ทำได้จากทุกสถานะ · ต้องต่างจาก "ไม่รู้ว่ามาจากไหน" */}
-                        {t.from ?? 'ทุกสถานะ'} → {t.to}
-                      </td>
-                      <td>{t.conditions.length === 0 ? 'ทุกคนที่มีสิทธิ์' : t.conditions.join(' · ')}</td>
-                      <td>{t.validators.length === 0 ? '—' : t.validators.join(' · ')}</td>
-                      <td>{t.postFunctions.length === 0 ? '—' : t.postFunctions.join(' · ')}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <Table
+              columns={['ปุ่ม', 'จาก → ไป', 'ใครเห็นปุ่ม', 'ต้องกรอกอะไร', 'ทำอะไรต่อ']}
+              rowCount={w.transitions.length}
+            >
+              {w.transitions.map((t) => (
+                <tr key={t.name}>
+                  <td>{t.name}</td>
+                  <td>
+                    {/* null = ทำได้จากทุกสถานะ · ต้องต่างจาก "ไม่รู้ว่ามาจากไหน" */}
+                    {t.from ?? 'ทุกสถานะ'} → {t.to}
+                  </td>
+                  <td>
+                    {t.conditions.length === 0 ? 'ทุกคนที่มีสิทธิ์' : t.conditions.join(' · ')}
+                  </td>
+                  <td>{t.validators.length === 0 ? '—' : t.validators.join(' · ')}</td>
+                  <td>{t.postFunctions.length === 0 ? '—' : t.postFunctions.join(' · ')}</td>
+                </tr>
+              ))}
+            </Table>
           </div>
         ))
       )}
@@ -228,7 +212,8 @@ export default async function ProjectDetailPage({
           sharedWith={d.permissions.sharedWith}
         />
         <p className="admin-empty">
-          สิทธิ์ให้ผ่านกลุ่มเท่านั้น ไม่ให้รายบุคคล — จึงตอบได้เสมอว่าคนคนหนึ่งทำได้เพราะอยู่กลุ่มไหน
+          สิทธิ์ให้ผ่านกลุ่มเท่านั้น ไม่ให้รายบุคคล —
+          จึงตอบได้เสมอว่าคนคนหนึ่งทำได้เพราะอยู่กลุ่มไหน
         </p>
         {d.permissions.rows.some((r) => !r.enforced && r.groups.length > 0) ? (
           <p className="admin-error" role="alert">
@@ -267,26 +252,15 @@ export default async function ProjectDetailPage({
                       : ` — ยังไม่พบ ${y.missingLunar.join(' · ')} ในรายการ`}
                 </p>
               ))}
-            <div className="admin-table-wrap">
-              <table className="admin-table">
-                <thead>
-                  <tr>
-                    <th scope="col">เป้าหมาย</th>
-                    <th scope="col">เวลา</th>
-                    <th scope="col">ใช้กับ</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {d.sla.goals.map((g) => (
-                    <tr key={g.key}>
-                      <td>{g.name}</td>
-                      <td className="admin-when">{hours(g.targetMs)}</td>
-                      <td>{describeMatch(g.match)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <Table columns={['เป้าหมาย', 'เวลา', 'ใช้กับ']} rowCount={d.sla.goals.length}>
+              {d.sla.goals.map((g) => (
+                <tr key={g.key}>
+                  <td>{g.name}</td>
+                  <td className="admin-when">{hours(g.targetMs)}</td>
+                  <td>{describeMatch(g.match)}</td>
+                </tr>
+              ))}
+            </Table>
           </>
         )}
       </div>

@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
-import { Button, Field, Input, Select } from '@itsm/ui';
+import { Button, Field, Input, Select, Table } from '@itsm/ui';
 
 interface TypeRow {
   id: string;
@@ -130,47 +130,41 @@ export function IssueTypeAdmin({ apiBase }: { apiBase: string }): ReactNode {
         </Button>
       </form>
 
-      <div className="admin-table-wrap">
-        <table className="admin-table">
-          <thead>
-            <tr>
-              <th scope="col">ชื่อ</th>
-              <th scope="col">งานที่เป็นประเภทนี้</th>
-              <th scope="col">ใช้ในโปรเจกต์</th>
-              <th scope="col">
-                <span className="ui-sr-only">การกระทำ</span>
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((t) => (
-              <tr key={t.id} data-inactive={t.usedBy.length === 0 ? 'true' : undefined}>
-                <td>{t.name}</td>
-                <td className="admin-when">{t.itemCount.toLocaleString('th-TH')}</td>
-                <td>
-                  {/*
-                    ประเภทที่ไม่ได้ผูกกับโปรเจกต์ไหนเลย ไม่มีใครเลือกได้
-                    ต้องอ่านออกจากตาราง ไม่ใช่ต้องไปลองแล้วหาไม่เจอ
-                  */}
-                  {t.usedBy.length === 0 ? 'ยังไม่ได้ผูกกับโปรเจกต์ไหน' : t.usedBy.join(' · ')}
-                </td>
-                <td className="admin-actions">
-                  <button
-                    type="button"
-                    className="admin-linkish"
-                    disabled={busy}
-                    onClick={() => {
-                      void send(`/${t.id}/remove`, {}, `ลบ "${t.name}" แล้ว`);
-                    }}
-                  >
-                    ลบ
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <Table
+        columns={[
+          'ชื่อ',
+          'งานที่เป็นประเภทนี้',
+          'ใช้ในโปรเจกต์',
+          '<span className="ui-sr-only">การกระทำ</span>',
+        ]}
+        rowCount={rows.length}
+      >
+        {rows.map((t) => (
+          <tr key={t.id} data-inactive={t.usedBy.length === 0 ? 'true' : undefined}>
+            <td>{t.name}</td>
+            <td className="admin-when">{t.itemCount.toLocaleString('th-TH')}</td>
+            <td>
+              {/*
+        ประเภทที่ไม่ได้ผูกกับโปรเจกต์ไหนเลย ไม่มีใครเลือกได้
+        ต้องอ่านออกจากตาราง ไม่ใช่ต้องไปลองแล้วหาไม่เจอ
+        */}
+              {t.usedBy.length === 0 ? 'ยังไม่ได้ผูกกับโปรเจกต์ไหน' : t.usedBy.join(' · ')}
+            </td>
+            <td className="admin-actions">
+              <button
+                type="button"
+                className="admin-linkish"
+                disabled={busy}
+                onClick={() => {
+                  void send(`/${t.id}/remove`, {}, `ลบ "${t.name}" แล้ว`);
+                }}
+              >
+                ลบ
+              </button>
+            </td>
+          </tr>
+        ))}
+      </Table>
 
       <h2 className="cfg-title">ผูกประเภทงานเข้ากับโปรเจกต์</h2>
       <form

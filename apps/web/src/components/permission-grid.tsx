@@ -1,5 +1,7 @@
 'use client';
 
+import { Table } from '@itsm/ui';
+
 import { useRouter } from 'next/navigation';
 import { useState, type ReactNode } from 'react';
 
@@ -104,62 +106,69 @@ export function PermissionGrid({
         </p>
       ) : null}
 
-      <div className="admin-table-wrap">
-        <table className="admin-table">
-          <thead>
-            <tr>
-              <th scope="col">ทำอะไรได้</th>
-              {groups.map((g) => (
-                <th key={g.id} scope="col" className="grid-group">
-                  {g.name}
-                  <span className="cfg-implied"> ({g.memberCount})</span>
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r) => (
-              <tr key={r.permission} data-inactive={r.enforced ? undefined : 'true'}>
-                <th scope="row" className="grid-perm">
-                  {labels[r.permission] ?? r.permission}
-                  {r.enforced ? null : <span className="cfg-implied"> · ยังไม่มีผลบังคับ</span>}
-                </th>
-                {groups.map((g) => {
-                  const cell = `${r.permission}:${g.id}`;
-                  const has = pending[cell] ?? r.groups.includes(g.name);
-                  const implied = r.impliedGroups.includes(g.name);
-                  return (
-                    <td key={g.id} className="grid-cell">
-                      <label className="grid-check">
-                        <input
-                          type="checkbox"
-                          checked={has}
-                          disabled={!editable || busy !== null}
-                          /* ชื่อสำหรับ screen reader ที่ไม่เห็นหัวแถวกับหัวคอลัมน์พร้อมกัน */
-                          aria-label={`${labels[r.permission] ?? r.permission} — ${g.name}`}
-                          onChange={() => {
-                            void toggle(r.permission, g, !has);
-                          }}
-                        />
-                        {/*
+      {/*
+        หัวคอลัมน์ของตารางนี้เป็นไดนามิก (กลุ่มผู้ใช้) จึงส่งเป็น ReactNode
+        ไม่ใช่สตริง — `Table` รับได้ทั้งสองแบบด้วยเหตุนี้
+      */}
+      <Table
+        label="ตารางสิทธิ์ตามกลุ่ม"
+        columns={[
+          'ทำอะไรได้',
+          ...groups.map((g) => ({
+            label: (
+              <>
+                {g.name}
+                <span className="cfg-implied"> ({g.memberCount})</span>
+              </>
+            ),
+          })),
+        ]}
+        rowCount={rows.length}
+        empty="ยังไม่มีสิทธิ์ในชุดนี้"
+      >
+        {rows.map((r) => (
+          <tr key={r.permission} data-inactive={r.enforced ? undefined : 'true'}>
+            <th scope="row" className="grid-perm">
+              {labels[r.permission] ?? r.permission}
+              {r.enforced ? null : <span className="cfg-implied"> · ยังไม่มีผลบังคับ</span>}
+            </th>
+            {groups.map((g) => {
+              const cell = `${r.permission}:${g.id}`;
+              const has = pending[cell] ?? r.groups.includes(g.name);
+              const implied = r.impliedGroups.includes(g.name);
+              return (
+                <td key={g.id} className="grid-cell">
+                  <label className="grid-check">
+                    <input
+                      type="checkbox"
+                      checked={has}
+                      disabled={!editable || busy !== null}
+                      /* ชื่อสำหรับ screen reader ที่ไม่เห็นหัวแถวกับหัวคอลัมน์พร้อมกัน */
+                      aria-label={`${labels[r.permission] ?? r.permission} — ${g.name}`}
+                      onChange={() => {
+                        void toggle(r.permission, g, !has);
+                      }}
+                    />
+                    {/*
                           สิทธิ์ที่ได้มาโดยปริยายต้องต่างจากสิทธิ์ที่ให้ตรง ๆ ด้วยตา
                           ไม่งั้นผู้ดูแลจะถอดช่องที่ไม่ได้ติ๊กแล้วงงว่าทำไมยังทำได้อยู่
                         */}
-                        {!has && implied ? (
-                          <span className="grid-implied" title={`ได้จาก${labels[r.impliedBy ?? ''] ?? ''}`}>
-                            ●
-                          </span>
-                        ) : null}
-                        {busy === cell ? <span className="cfg-implied">…</span> : null}
-                      </label>
-                    </td>
-                  );
-                })}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+                    {!has && implied ? (
+                      <span
+                        className="grid-implied"
+                        title={`ได้จาก${labels[r.impliedBy ?? ''] ?? ''}`}
+                      >
+                        ●
+                      </span>
+                    ) : null}
+                    {busy === cell ? <span className="cfg-implied">…</span> : null}
+                  </label>
+                </td>
+              );
+            })}
+          </tr>
+        ))}
+      </Table>
     </>
   );
 }
