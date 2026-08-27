@@ -18,6 +18,7 @@ import { HealthController } from './modules/health/health.controller';
 import { NotificationController } from './modules/notification/notification.controller';
 import { ProjectAdminController } from './modules/tenancy/project-admin.controller';
 import { WorkflowAdminController } from './modules/workflow/workflow-admin.controller';
+import { SavedFilterController } from './modules/search-index/saved-filter.controller';
 import { WorkItemController } from './modules/workitem/workitem.controller';
 
 /**
@@ -39,6 +40,7 @@ import { WorkItemController } from './modules/workitem/workitem.controller';
     ProjectAdminController,
     WorkflowAdminController,
     WorkItemController,
+    SavedFilterController,
     NotificationController,
   ],
   /**
