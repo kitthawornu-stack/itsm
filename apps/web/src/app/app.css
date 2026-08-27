@@ -1004,3 +1004,14 @@
 .cfg-implied {
   color: var(--text-muted);
 }
+
+/* ปุ่มจริงปนกับปุ่มที่ดูเหมือนลิงก์
+   แยกคลาสจาก .admin-actions เพราะกฎ `.admin-actions button` ถอด border
+   และ background ออกทั้งหมด ซึ่งกลืนปุ่ม primary ให้กลายเป็นข้อความธรรมดา
+   — การชนกันของ selector ที่เห็นได้ด้วยตาอย่างเดียว ไม่มี error ที่ไหน */
+.admin-btn-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}

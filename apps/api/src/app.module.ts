@@ -11,6 +11,7 @@ import {
   UserAdminController,
 } from './modules/identity/user-admin.controller';
 import { LookupController } from './modules/field/lookup.controller';
+import { CalendarController } from './modules/sla/calendar.controller';
 import { HealthController } from './modules/health/health.controller';
 import { NotificationController } from './modules/notification/notification.controller';
 import { ProjectAdminController } from './modules/tenancy/project-admin.controller';
@@ -29,6 +30,7 @@ import { WorkItemController } from './modules/workitem/workitem.controller';
     UserAdminController,
     SelfServiceController,
     LookupController,
+    CalendarController,
     ProjectAdminController,
     WorkItemController,
     NotificationController,
