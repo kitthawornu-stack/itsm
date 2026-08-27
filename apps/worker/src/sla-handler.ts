@@ -15,13 +15,15 @@ export interface HandlerDeps {
   recompute: (
     tenantId: bigint,
     workItemId: bigint,
-  ) => Promise<{ state: string; ratio: number; goalName: string } | null>;
+  ) => Promise<{ state: string; ratio: number; goalName: string; trusted: boolean } | null>;
   dedupeKey: (workItemSlaId: bigint, threshold: number) => string;
   text: (p: {
     itemKey: string;
     summary: string;
     goalName: string;
     threshold: number;
+    /** ตัวเลขนี้มาจากปฏิทินที่มีคนยืนยันแล้วหรือยัง */
+    trusted: boolean;
   }) => { title: string; body: string };
 }
 
@@ -47,11 +49,22 @@ export function createSlaHandler(deps: HandlerDeps) {
     });
     if (item === null) return 'skipped';
 
+    /**
+     * ตัวเลขที่เชื่อไม่ได้ **ยังต้องส่ง แต่ต้องไม่กล่าวหา**
+     *
+     * เงียบไปเลยแปลว่าคนที่หลุด SLA จริงไม่มีใครเตือน · ส่งแบบยืนยันหนักแน่น
+     * ทั้งที่ปฏิทินไม่มีวันสงกรานต์อยู่ในนั้น แปลว่าบอกคนว่าเขาทำงานช้า
+     * ในวันที่เขาไม่ได้มาทำงาน ซึ่งเป็นความผิดพลาดที่คนจำได้นาน
+     * และทำให้เลิกเชื่อตัวเลข SLA ทั้งระบบ (CLAUDE.md)
+     *
+     * ทางที่เหลือคือส่งพร้อมบอกความจริงว่าตัวเลขนี้เชื่อไม่ได้และเพราะอะไร
+     */
     const { title, body } = deps.text({
       itemKey: item.itemKey,
       summary: item.summary,
       goalName: status.goalName,
       threshold: payload.threshold,
+      trusted: status.trusted,
     });
 
     try {
@@ -61,10 +74,15 @@ export function createSlaHandler(deps: HandlerDeps) {
           // ส่งถึงผู้รับผิดชอบ · ถ้ายังไม่มีคนรับ ให้เป็นการแจ้งเตือนระดับทีม
           userId: item.assigneeId,
           workItemId,
-          kind: 'sla.threshold',
+          // แยก kind เพื่อให้กรองรายงานภายหลังได้ว่าเตือนไปกี่ครั้งบนตัวเลขที่เชื่อไม่ได้
+          kind: status.trusted ? 'sla.threshold' : 'sla.threshold.untrusted',
           title,
           body,
-          payload: { threshold: payload.threshold, scheduledFor: payload.scheduledFor },
+          payload: {
+            threshold: payload.threshold,
+            scheduledFor: payload.scheduledFor,
+            calendarTrusted: status.trusted,
+          },
           dedupeKey: deps.dedupeKey(workItemSlaId, payload.threshold),
         },
       });

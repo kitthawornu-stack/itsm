@@ -42,7 +42,7 @@ const prisma = new PrismaClient();
 async function recompute(
   tenantId: bigint,
   workItemId: bigint,
-): Promise<{ state: string; ratio: number; goalName: string } | null> {
+): Promise<{ state: string; ratio: number; goalName: string; trusted: boolean } | null> {
   const row = await prisma.workItemSla.findFirst({
     where: { tenantId, workItemId },
     include: { goal: true },
@@ -52,6 +52,9 @@ async function recompute(
     state: row.state,
     ratio: row.targetMs === 0 ? 1 : row.elapsedMs / row.targetMs,
     goalName: row.goal.name,
+    // ธงที่ api เขียนไว้ตอนคำนวณ — worker เรียกโค้ดของ api ไม่ได้
+    // จึงต้องให้ความเชื่อถือเดินทางมากับค่า denormalise เหมือน state
+    trusted: row.calendarTrusted,
   };
 }
 

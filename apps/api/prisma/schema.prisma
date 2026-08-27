@@ -885,6 +885,11 @@ model WorkItemSla {
   /// ถ้าไม่มีค่านี้จะกู้การแจ้งเตือนที่ตกหล่นไม่ได้ และรายงานตอบไม่ได้ว่าช้าเท่าไร
   breachedAt DateTime? @map("breached_at") @db.DateTime(3)
   isBreached Boolean   @default(false) @map("is_breached")
+  /// ปฏิทินของปีที่นาฬิกาเรือนนี้กำลังนับ ได้รับการยืนยันแล้วหรือยัง
+  ///
+  /// เก็บติดมากับค่า denormalise เพราะ worker อ่านตารางนี้ตรง ๆ และเรียกโค้ด
+  /// ของ api ไม่ได้ · ค่าเริ่มต้นเป็น false เพราะ "ยังไม่รู้" ต้องแปลว่าเชื่อไม่ได้
+  calendarTrusted Boolean @default(false) @map("calendar_trusted")
 
   createdAt DateTime @default(now()) @map("created_at") @db.DateTime(3)
   updatedAt DateTime @updatedAt @map("updated_at") @db.DateTime(3)

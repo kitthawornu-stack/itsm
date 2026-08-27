@@ -16,7 +16,7 @@ import {
   type BusinessCalendar,
   type WorkingWindow,
 } from './business-calendar';
-import { calendarYearStatus } from './calendar.service';
+import { calendarYearStatus, calendarYearTrusted } from './calendar.service';
 import { computeSla, notificationTimes, type SlaEvent, type SlaStatus } from './sla-engine';
 import { SLA_THRESHOLDS, planSlaJobs, type PlannedJob } from './sla-scheduler';
 
@@ -98,6 +98,14 @@ export interface SlaSnapshot {
   breachedAt: string | null;
   ratio: number;
   isBreached: boolean;
+  /**
+   * ตัวเลขชุดนี้มาจากปฏิทินที่มีคนยืนยันแล้วหรือยัง
+   *
+   * ตัวเลขที่นับจากปฏิทินซึ่งไม่มีวันสงกรานต์อยู่ในนั้น หน้าตาปกติทุกอย่าง
+   * ไม่มีอะไรบอกได้ว่ามันเชื่อไม่ได้ · ค่านี้เดินทางไปกับตัวเลขทุกที่
+   * ที่ตัวเลขไปถึง — หน้าจอ อีเมล และการตัดสินใจของ worker
+   */
+  trusted: boolean;
 }
 
 /**
@@ -244,9 +252,20 @@ export async function recomputeSla(
 
   const status = computeSla(calendar, clock.goal.targetMs, events, now);
 
+  /**
+   * เชื่อได้ไหม — ตรวจ **ปีของเส้นตาย** ไม่ใช่ปีปัจจุบัน
+   *
+   * ตั๋วที่เปิดกลางเดือนธันวาคมแล้วเส้นตายข้ามไปปีหน้า ถูกคำนวณด้วยวันหยุด
+   * ของปีหน้าที่ยังไม่มีใครกรอก · การตรวจปีปัจจุบันจะบอกว่าเชื่อได้ ทั้งที่
+   * ตัวเลขที่ได้มาจากปีที่ว่างเปล่า
+   */
+  const deadlineYear = (status.breachAt ?? status.breachedAt ?? now).getUTCFullYear();
+  const trusted = await calendarYearTrusted(ctx, clock.goal.policy.calendarId, deadlineYear);
+
   await db.workItemSla.update({
     where: { id: clock.id },
     data: {
+      calendarTrusted: trusted,
       state: status.state,
       elapsedMs: Math.round(status.elapsedMs),
       targetMs: status.targetMs,
@@ -284,6 +303,7 @@ export async function recomputeSla(
     breachedAt: status.breachedAt?.toISOString() ?? null,
     ratio: status.ratio,
     isBreached: status.isBreached,
+    trusted,
   };
 }
 
@@ -317,6 +337,7 @@ export async function slaForWorkItems(
       breachedAt: r.breachedAt?.toISOString() ?? null,
       ratio: r.targetMs === 0 ? 1 : r.elapsedMs / r.targetMs,
       isBreached: r.isBreached,
+      trusted: r.calendarTrusted,
     });
   }
   return out;

@@ -140,6 +140,42 @@ export async function assertCalendarYearVerified(
 }
 
 /**
+ * เชื่อปฏิทินของปีนี้ได้ไหม — เวอร์ชันที่ **ไม่โยน error**
+ *
+ * `assertCalendarYearVerified` มีไว้ปิดกั้นการกระทำ · ตัวนี้มีไว้ติดป้ายตัวเลข
+ * แยกกันโดยตั้งใจ: การคำนวณ SLA ต้องไม่ล้มเพราะปฏิทินยังไม่ยืนยัน
+ * เพราะการหยุดคำนวณทั้งระบบเสียหายกว่าการแสดงตัวเลขที่ติดป้ายว่าเชื่อไม่ได้
+ */
+export async function calendarYearTrusted(
+  ctx: TenantContext,
+  calendarId: bigint,
+  year: number,
+): Promise<boolean> {
+  const status = await calendarYearStatus(ctx, calendarId, year);
+  return !status.required || status.verified;
+}
+
+/**
+ * ล้างธงความเชื่อถือของนาฬิกาทุกเรือนที่ผูกกับปฏิทินใบนี้
+ *
+ * เรียกหลังแก้รายการหรือหลังยืนยัน · ถ้าไม่ล้าง นาฬิกาที่คำนวณไว้ก่อนหน้า
+ * จะยังพกธง `trusted: true` เดิมไปทั่วระบบ ทั้งที่คำยืนยันถูกเพิกถอนไปแล้ว
+ *
+ * ตั้งเป็น false เสมอ ไม่ใช่ตั้งตามสถานะใหม่ — "ต้องคำนวณใหม่" กับ "เชื่อได้"
+ * เป็นคนละเรื่อง และการเดาไปทางเชื่อได้คือการเดาผิดทาง
+ */
+export async function invalidateTrustForCalendar(
+  ctx: TenantContext,
+  calendarId: bigint,
+): Promise<number> {
+  const r = await tenantScoped(ctx).workItemSla.updateMany({
+    where: { goal: { policy: { calendarId } }, calendarTrusted: true },
+    data: { calendarTrusted: false },
+  });
+  return r.count;
+}
+
+/**
  * แทนที่รายการวันหยุดของปีหนึ่งทั้งปี
  *
  * แทนที่ทั้งปี ไม่ใช่เพิ่มทีละวัน เพราะการตรวจกับประกาศเป็นการตรวจ **ทั้งรายการ**
@@ -196,6 +232,7 @@ export async function setHolidaysForYear(
     return { result: undefined, audit };
   });
 
+  await invalidateTrustForCalendar(ctx, calendarId);
   return { count: clean.length };
 }
 
@@ -249,6 +286,9 @@ export async function verifyCalendarYear(
       ],
     };
   });
+
+  // นาฬิกาที่คำนวณไว้ก่อนหน้ายังพกธงเก่าอยู่ — บังคับให้คำนวณใหม่
+  await invalidateTrustForCalendar(ctx, calendarId);
 }
 
 /** ปฏิทินทั้งหมดพร้อมสถานะของปีที่ระบุ — ใช้บนหน้าตั้งค่า */
