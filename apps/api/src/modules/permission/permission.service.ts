@@ -13,6 +13,7 @@ import { tenantScoped } from '../../infrastructure/prisma/tenant-scope';
 import {
   ALL_PERMISSION_KEYS,
   IMPLIED_BY,
+  isEnforced,
   resolveGrants,
   summarize,
   type PermissionKey,
@@ -185,7 +186,14 @@ export async function describeGrants(
   projectId: bigint,
 ): Promise<{
   schemeName: string | null;
-  rows: Array<{ permission: string; groups: string[]; impliedBy: string | null; impliedGroups: string[] }>;
+  rows: Array<{
+    permission: string;
+    groups: string[];
+    impliedBy: string | null;
+    impliedGroups: string[];
+    /** มีโค้ดตรวจคีย์นี้จริงหรือยัง — ให้สิทธิ์ที่ไม่มีผลคือการสร้างความเชื่อผิด */
+    enforced: boolean;
+  }>;
 }> {
   const db = tenantScoped(ctx);
   const project = await db.project.findFirst({
@@ -198,6 +206,7 @@ export async function describeGrants(
     groups: [] as string[],
     impliedBy: IMPLIED_BY[permission] ?? null,
     impliedGroups: [] as string[],
+    enforced: isEnforced(permission),
   }));
   // โปรเจกต์ที่ไม่มี scheme = ไม่มีใครทำอะไรได้เลย ไม่ใช่ทุกคนทำได้
   if (scheme === null) return { schemeName: null, rows: empty };
@@ -226,6 +235,7 @@ export async function describeGrants(
           source === null
             ? []
             : (byKey.get(source) ?? []).sort((a, b) => a.localeCompare(b, 'th')),
+        enforced: isEnforced(permission),
       };
     }),
   };

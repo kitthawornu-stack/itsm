@@ -63,7 +63,7 @@ Jira สะสมฟีเจอร์มา 20 ปี การไล่เท�
 ### Admin
 - [~] Workflow Editor แบบลากวาง + Condition / Validator / Post Function — *เอนจินครบสามชั้นและทำงานจริง · หน้าจอ **อ่านได้** แล้ว ยังแก้ไม่ได้*
 - [ ] Field Scheme + Screen Scheme — *`FieldConfig` มีในสคีมา ยังไม่มีหน้าจอ*
-- [~] Permission Scheme (ระดับโปรเจกต์และระดับฟิลด์) — *ระดับโปรเจกต์บังคับใช้ทุก endpoint และดูได้จากหน้าจอ · ยังแก้จากหน้าจอไม่ได้ · ระดับฟิลด์ (INVARIANT 3) ยังไม่ทำ*
+- [~] Permission Scheme (ระดับโปรเจกต์และระดับฟิลด์) — *ดูได้จากหน้าจอ · **9 จาก 16 คีย์บังคับใช้จริง** อีก 7 คีย์ยังไม่มีโค้ดตรวจและหน้าจอบอกไว้แล้ว (ตรวจด้วย `permission-coverage.spec.ts` ที่สแกนซอร์ส) · ยังแก้จากหน้าจอไม่ได้ · ระดับฟิลด์ (INVARIANT 3) ยังไม่ทำ*
 - [ ] Notification Scheme
 - [ ] Automation Rule Builder แบบ no-code
 - [~] REST API v1 + OpenAPI + Webhook — *35 endpoint ใช้งานจริง · ยังไม่มี OpenAPI และ webhook*

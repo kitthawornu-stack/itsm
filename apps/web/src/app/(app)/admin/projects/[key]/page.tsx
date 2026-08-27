@@ -40,6 +40,7 @@ interface Detail {
       groups: string[];
       impliedBy: string | null;
       impliedGroups: string[];
+      enforced: boolean;
     }>;
   };
   sla: {
@@ -223,7 +224,17 @@ export default async function ProjectDetailPage({
                 const none = r.groups.length === 0 && r.impliedGroups.length === 0;
                 return (
                   <tr key={r.permission} data-inactive={none ? 'true' : undefined}>
-                    <td>{PERMISSION_LABEL[r.permission] ?? r.permission}</td>
+                    <td>
+                      {PERMISSION_LABEL[r.permission] ?? r.permission}
+                      {/*
+                        คีย์ที่ยังไม่มีโค้ดตรวจ ต้องบอกให้เห็น — ไม่งั้นตารางนี้
+                        สร้างความเชื่อว่าให้สิทธิ์แล้วมีผล ซึ่งอันตรายกว่าไม่ให้
+                        เพราะไม่มีใครมาบ่นให้รู้ว่ามันไม่ทำงาน
+                      */}
+                      {r.enforced ? null : (
+                        <span className="cfg-implied"> · ยังไม่มีผลบังคับ</span>
+                      )}
+                    </td>
                     <td>
                       {/* แถวว่างคือคำตอบ ไม่ใช่ข้อมูลที่ขาด — ต้องอ่านออกว่า "ไม่มีใคร" */}
                       {r.groups.length === 0 ? (none ? 'ยังไม่มีใคร' : null) : r.groups.join(' · ')}
@@ -249,6 +260,12 @@ export default async function ProjectDetailPage({
         <p className="admin-empty">
           สิทธิ์ให้ผ่านกลุ่มเท่านั้น ไม่ให้รายบุคคล — จึงตอบได้เสมอว่าคนคนหนึ่งทำได้เพราะอยู่กลุ่มไหน
         </p>
+        {d.permissions.rows.some((r) => !r.enforced && r.groups.length > 0) ? (
+          <p className="admin-error" role="alert">
+            มีสิทธิ์ที่ให้กลุ่มไปแล้วแต่ยังไม่มีโค้ดตรวจ — การให้สิทธิ์นั้นยังไม่มีผลใด ๆ
+            และจะเริ่มมีผลทันทีในวันที่ฟีเจอร์นั้นถูกเขียนขึ้น
+          </p>
+        ) : null}
       </div>
 
       {/* ---------- SLA ---------- */}

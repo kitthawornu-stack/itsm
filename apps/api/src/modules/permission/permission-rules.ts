@@ -38,6 +38,38 @@ export const ALL_PERMISSION_KEYS = [
 /** คีย์สิทธิ์ที่ระบบรู้จัก — ตรงกับ enum `PermissionKey` ในสคีมา */
 export type PermissionKey = (typeof ALL_PERMISSION_KEYS)[number];
 
+/**
+ * คีย์ที่ **ยังไม่มีโค้ดเส้นไหนบังคับใช้**
+ *
+ * ทั้งเจ็ดคีย์นี้มีอยู่ใน enum · แสดงบนหน้าตั้งค่า · และให้กับกลุ่มได้จริง
+ * แต่ไม่มี `can()` หรือ `assertCan()` ที่ไหนถามถึงมันเลย
+ *
+ * ข้อมูล seed ให้ `BULK_EDIT` กับกลุ่ม IT Support ไว้แล้ว ผู้ดูแลที่เปิดหน้า
+ * ตั้งค่าจึงอ่านได้ว่า "แก้ไขหลายเรื่องพร้อมกัน — IT Support" ซึ่งเป็นความเชื่อ
+ * ที่หน้าจอสร้างขึ้นเองทั้งหมด: ฟีเจอร์นั้นยังไม่มี และต่อให้มี ก็ไม่มีอะไรตรวจคีย์นี้
+ *
+ * **สิทธิ์ที่ให้แล้วไม่มีผล อันตรายกว่าสิทธิ์ที่ยังไม่ได้ให้** — อย่างหลังทำให้
+ * มีคนมาบ่นแล้วได้แก้ อย่างแรกทำให้ทุกคนเชื่อว่าตั้งค่าเรียบร้อยแล้ว
+ *
+ * รายการนี้ไม่ได้ดูแลด้วยมือ — `permission-coverage.spec.ts` สแกนซอร์สจริง
+ * แล้วเทียบ ถ้าวันไหนมีคนเขียนโค้ดบังคับใช้คีย์เหล่านี้ เทสต์จะแดงทันที
+ * และบังคับให้มาลบชื่อออกจากที่นี่
+ */
+export const UNENFORCED_PERMISSIONS: readonly PermissionKey[] = [
+  'DELETE_ITEM',
+  'DELETE_COMMENT',
+  'LINK_ITEM',
+  'BULK_EDIT',
+  'MANAGE_SPRINT',
+  'MANAGE_PROJECT',
+  'VIEW_REPORT',
+] as const;
+
+/** คีย์นี้มีผลจริงหรือยัง */
+export function isEnforced(key: PermissionKey): boolean {
+  return !UNENFORCED_PERMISSIONS.includes(key);
+}
+
 /** สิทธิ์หนึ่งรายการที่ผูกกับกลุ่ม — `groupId` เป็น null คือ grant ที่ยังตั้งค่าไม่ครบ */
 export interface GrantRow {
   permission: string;

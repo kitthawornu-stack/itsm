@@ -13,4 +13,10 @@ export {
   permissionsFor,
   summaryFor,
 } from './permission.service';
-export { ALL_PERMISSION_KEYS, IMPLIED_BY, isStaff, summarize, type PermissionKey, type PermissionSummary } from './permission-rules';
+export {
+  ALL_PERMISSION_KEYS,
+  IMPLIED_BY,
+  UNENFORCED_PERMISSIONS,
+  isEnforced,
+  isStaff,
+  summarize, type PermissionKey, type PermissionSummary } from './permission-rules';
