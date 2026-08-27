@@ -54,7 +54,7 @@ Jira สะสมฟีเจอร์มา 20 ปี การไล่เท�
 - [ ] Component + Label
 
 ### Search & Report
-- [ ] HQL (ภาษาคิวรีแบบ JQL) + Saved Filter + แชร์ filter — *`packages/hql` ยังว่างเปล่า · เอนจินตัวที่ 4 ยังไม่เริ่ม*
+- [~] HQL (ภาษาคิวรีแบบ JQL) + Saved Filter + แชร์ filter — *เอนจินตัวที่ 4 มีของจริงแล้ว: lexer + parser + compiler → OpenSearch DSL · 30 เคสเขียนก่อนโค้ด · **ยังไม่ต่อเข้าหน้าค้นหา** และยังไม่มี Saved Filter*
 - [ ] Dashboard + Gadget 18 ชนิด + Wallboard
 - [ ] Agile Report 8 ตัว (Burndown, Burnup, Velocity, CFD, Sprint Report, Control Chart, Epic Report, Release Burndown)
 - [ ] Report Builder แบบ pivot
@@ -103,7 +103,7 @@ Jira สะสมฟีเจอร์มา 20 ปี การไล่เท�
 |---|---|---|---|
 | **0** Foundation | รากที่รื้อทีหลังไม่ได้ | 🟢 **ผ่านเกณฑ์หลักครบ** | กฎสามชั้นของ transition และ Screen Scheme ยังตั้งจากหน้าจอไม่ได้ · Storybook มี 14 คอมโพเนนต์จากเป้า 24 |
 | **1** Service Desk MVP | ตัวจริงตัวแรกที่มีคนใช้ | 🟡 **ประมาณ 60%** | Service Catalog · Email-to-Ticket · LINE · Approval · CSAT · Saved Filter · Bulk Action |
-| **2** Delivery | ฝั่งที่สู้กับ Jira ตรง ๆ | 🔴 **ยังไม่เริ่ม** | Board · Backlog · Sprint · Epic · Link · Roadmap · HQL (`packages/hql` ว่างเปล่า) |
+| **2** Delivery | ฝั่งที่สู้กับ Jira ตรง ๆ | 🔴 **ยังไม่เริ่ม** | Board · Backlog · Sprint · Epic · Link · Roadmap *(HQL มีเอนจินแล้ว รอต่อเข้าหน้าค้นหา)* |
 | **3** ITIL Depth | สิ่งที่ทำให้เป็น ITSM จริง | 🔴 **ยังไม่เริ่ม** | Problem · Change/CAB · CMDB · Knowledge Base · Approval หลายขั้น |
 | **4** Insight + Automation | จุดที่ผู้บริหารเห็นคุณค่า | 🔴 **ยังไม่เริ่ม** | Dashboard · Report · Automation · OpenAPI · Webhook · (SSO/LDAP ตัดออกแล้ว) |
 | **5** Hardening + SaaS | จากใช้เองสู่ขายได้ | 🔴 **ยังไม่เริ่ม** | ทดสอบโหลด · pentest · PDPA · Multi-tenant · เครื่องมือย้ายข้อมูล |
@@ -117,7 +117,7 @@ Jira สะสมฟีเจอร์มา 20 ปี การไล่เท�
 | ทุก transition ปรากฏใน history ครบถ้วน | ✅ บังคับด้วย `auditedTransaction` — mutation ที่ไม่เขียนประวัติโยน error |
 | Storybook มีคอมโพเนนต์ครบ 24 ตัว พร้อมสถานะ empty/loading/error | 🟡 **14 ตัว · 34 story** |
 | ทดสอบอัตโนมัติผ่าน ≥ 70% บนโมดูล core | ✅ 633 เทสต์ · เอนจินทั้งสี่มีชุดทดสอบเป็นข้อกำหนด |
-| spike เอนจินทั้ง 4 ตัวต้องมีของจริง | 🟡 **3 จาก 4** — workflow · SLA · LexoRank เสร็จ · **HQL ยังไม่เริ่ม** |
+| spike เอนจินทั้ง 4 ตัวต้องมีของจริง | ✅ **ครบ 4** — workflow · SLA · LexoRank · **HQL** (30 เคสเขียนก่อนโค้ด) |
 
 ### สิ่งที่ต้องรู้ก่อนขึ้น pilot
 
