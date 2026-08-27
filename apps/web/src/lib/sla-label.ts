@@ -18,12 +18,15 @@ export interface SlaSnapshotView {
   breachAt: string | null;
   breachedAt: string | null;
   isBreached: boolean;
+  /** ปฏิทินที่อยู่เบื้องหลังตัวเลขนี้ยืนยันแล้วหรือยัง — ไม่มีค่าถือว่ายังไม่ยืนยัน */
+  trusted?: boolean;
 }
 
 export type SlaBarView = {
   elapsedRatio: number;
   state: 'ok' | 'warning' | 'critical' | 'paused';
   label: string;
+  trusted: boolean;
 };
 
 const bkk = (iso: string): string =>
@@ -36,8 +39,15 @@ const bkk = (iso: string): string =>
   });
 
 export function toSlaBar(sla: SlaSnapshotView): SlaBarView {
+  /**
+   * ไม่มีค่า = ยังไม่ยืนยัน ไม่ใช่ยืนยันแล้ว
+   *
+   * API รุ่นเก่าหรือ response ที่ตกฟิลด์นี้ไป ต้องได้ผลไปทางระวังไว้ก่อน
+   * — ค่าปริยายที่เดาไปทาง "เชื่อได้" คือค่าปริยายที่ปิดบังปัญหา
+   */
+  const trusted = sla.trusted === true;
   if (sla.state === 'paused') {
-    return { elapsedRatio: Math.min(sla.ratio, 1), state: 'paused', label: '⏸ หยุดนาฬิกา' };
+    return { elapsedRatio: Math.min(sla.ratio, 1), state: 'paused', label: '⏸ หยุดนาฬิกา', trusted };
   }
   if (sla.isBreached) {
     // บอกด้วยว่าหลุดตอนไหน ไม่ใช่แค่ว่าหลุด — "ช้าไปเท่าไร" คือสิ่งที่ต้องคุยกันต่อ
@@ -46,6 +56,7 @@ export function toSlaBar(sla: SlaSnapshotView): SlaBarView {
       elapsedRatio: 1,
       state: 'critical',
       label: when === null ? 'หลุด SLA แล้ว' : `หลุด SLA เมื่อ ${when}`,
+      trusted,
     };
   }
 
@@ -63,5 +74,5 @@ export function toSlaBar(sla: SlaSnapshotView): SlaBarView {
     label = `เหลือ ${Math.round(workingHoursLeft)} ชม.`;
   }
 
-  return { elapsedRatio: Math.min(sla.ratio, 1), state, label };
+  return { elapsedRatio: Math.min(sla.ratio, 1), state, label, trusted };
 }

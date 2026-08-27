@@ -72,24 +72,43 @@ export interface SlaBarProps {
   state: SlaState;
   /** ข้อความเช่น "เหลือ 11 นาที" หรือ "⏸ หยุดนาฬิกา" */
   label: string;
+  /**
+   * ตัวเลขนี้มาจากปฏิทินวันหยุดที่มีคนยืนยันแล้วหรือยัง — ไม่ระบุถือว่ายืนยันแล้ว
+   *
+   * ตัวเลขที่นับจากปฏิทินซึ่งขาดวันหยุดไป หน้าตาเหมือนตัวเลขที่ถูกต้องทุกอย่าง
+   * ถ้าไม่ทำให้ต่างกันด้วยตา คนจะตัดสินใจจากมันโดยไม่รู้ว่ากำลังตัดสินใจจากอะไร
+   */
+  trusted?: boolean;
 }
 
-export function SlaBar({ elapsedRatio, state, label }: SlaBarProps): ReactNode {
+const UNTRUSTED_NOTE = 'ตัวเลขนี้คำนวณจากปฏิทินวันหยุดที่ยังไม่มีใครยืนยัน จึงอาจมากกว่าความเป็นจริง';
+
+export function SlaBar({ elapsedRatio, state, label, trusted = true }: SlaBarProps): ReactNode {
   const pct = Math.max(0, Math.min(1, elapsedRatio)) * 100;
   return (
     <span
       className="ui-sla"
       data-state={state}
+      data-trusted={trusted ? undefined : 'false'}
       role="meter"
       aria-valuenow={Math.round(pct)}
       aria-valuemin={0}
       aria-valuemax={100}
-      aria-label={label}
+      /* ผู้ใช้ screen reader ไม่เห็นเส้นประ ต้องได้ยินเป็นคำ */
+      aria-label={trusted ? label : `${label} — ${UNTRUSTED_NOTE}`}
+      title={trusted ? undefined : UNTRUSTED_NOTE}
     >
       <span className="ui-sla-track">
         <i className="ui-sla-fill" style={{ width: `${pct}%` } satisfies CSSProperties} />
       </span>
-      <span className="ui-sla-label">{label}</span>
+      <span className="ui-sla-label">
+        {/*
+          เครื่องหมายบอกความไม่แน่นอน มาก่อนข้อความเสมอ และไม่พึ่งสีอย่างเดียว
+          — สีเป็นช่องทางเดียวคือช่องทางที่ผู้ใช้ตาบอดสีไม่ได้รับ
+        */}
+        {trusted ? null : <span aria-hidden="true">≈ </span>}
+        {label}
+      </span>
     </span>
   );
 }

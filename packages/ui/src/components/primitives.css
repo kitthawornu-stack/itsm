@@ -186,6 +186,20 @@
   background: var(--border-strong);
 }
 
+/*
+  ตัวเลขที่เชื่อไม่ได้ — เส้นประและสีจาง
+  บอกด้วยรูปร่าง ไม่ใช่ด้วยสีอย่างเดียว เพราะสีเป็นช่องทางเดียวคือช่องทาง
+  ที่ผู้ใช้ตาบอดสีไม่ได้รับ · และ title/aria-label อธิบายเป็นคำอีกชั้น
+*/
+.ui-sla[data-trusted='false'] .ui-sla-track {
+  background: transparent;
+  border: 1px dashed var(--border-strong);
+}
+
+.ui-sla[data-trusted='false'] .ui-sla-fill {
+  opacity: 0.55;
+}
+
 .ui-sla-label {
   font-family: var(--font-mono);
   font-size: 9.5px;

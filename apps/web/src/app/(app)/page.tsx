@@ -29,6 +29,7 @@ interface ApiRow {
     breachedAt: string | null;
     ratio: number;
     isBreached: boolean;
+    trusted: boolean;
   } | null;
 }
 

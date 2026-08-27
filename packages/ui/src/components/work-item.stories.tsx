@@ -92,6 +92,29 @@ export const PriorityLabelHidden: Story = {
   },
 };
 
+export const SlaUntrusted: Story = {
+  name: 'SlaBar — ตัวเลขที่ยังเชื่อไม่ได้',
+  render: () => (
+    <Row>
+      <SlaBar elapsedRatio={0.25} state="ok" label="เหลือ 6 ชม." trusted={false} />
+      <SlaBar elapsedRatio={0.74} state="warning" label="เหลือ 48 นาที" trusted={false} />
+      <SlaBar elapsedRatio={1} state="critical" label="หลุด SLA เมื่อ 24 ส.ค. 16:30" trusted={false} />
+      <SlaBar elapsedRatio={0.4} state="paused" label="⏸ หยุดนาฬิกา" trusted={false} />
+    </Row>
+  ),
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'ตัวเลขที่คำนวณจากปฏิทินวันหยุดที่ยังไม่มีใครยืนยัน — ปฏิทินที่ขาดวันสงกรานต์ ' +
+          'ให้ตัวเลขที่หน้าตาปกติทุกอย่าง ถ้าไม่ทำให้ต่างกันด้วยตา คนจะตัดสินใจจากมัน ' +
+          'โดยไม่รู้ว่ากำลังตัดสินใจจากอะไร · บอกด้วย **รูปร่าง** (เส้นประ + เครื่องหมาย ≈) ' +
+          'ไม่ใช่ด้วยสีอย่างเดียว และมี title กับ aria-label อธิบายเป็นคำอีกชั้น',
+      },
+    },
+  },
+};
+
 export const SlaStates: Story = {
   name: 'SlaBar — ทั้งสี่สถานะ',
   render: () => (
