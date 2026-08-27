@@ -20,6 +20,7 @@
  *     -e BOOTSTRAP_ADMIN_PASSWORD='ประโยคที่ยาวพอ' \
  *     api node dist/scripts/bootstrap.js
  */
+import { createProject } from '../modules/tenancy';
 import { prismaClient } from '../infrastructure/prisma/client';
 import { hashPassword } from '../modules/identity/password';
 
@@ -269,27 +270,32 @@ async function ensureStarterProject(
     },
   });
 
-  const project = await prismaClient.project.create({
-    data: {
-      tenantId,
-      key: 'SD',
-      name: 'ศูนย์บริการไอที',
-      type: 'SERVICE_DESK',
-      permissionSchemeId: schemeId,
-      notifyGroupId: adminGroupId,
-    },
-    select: { id: true },
-  });
-  // ตัวนับคีย์ต้องมีตั้งแต่แรก — ไม่งั้นงานใบแรกสร้างไม่ได้
-  await prismaClient.projectCounter.create({ data: { tenantId, projectId: project.id, lastValue: 0 } });
-
   const issueType = await prismaClient.issueType.create({
     data: { tenantId, name: 'Incident', iconKey: 'incident', isSubtask: false },
     select: { id: true },
   });
-  await prismaClient.workflowScheme.create({
-    data: { tenantId, projectId: project.id, issueTypeId: issueType.id, workflowId: workflow.id },
-  });
+
+  /**
+   * สร้างผ่าน `createProject` ตัวเดียวกับที่หน้าจอเรียก
+   *
+   * เดิมที่นี่เขียน INSERT เองทีละตาราง ผลคือเส้นทางที่ผู้ใช้ใช้จริงไม่เคยถูกรัน
+   * ตอนติดตั้ง และเส้นทางที่รันตอนติดตั้งไม่เคยถูกใช้จริง — สองเส้นทางที่ทำ
+   * สิ่งเดียวกันแต่ไม่มีใครยืนยันว่าตรงกัน คือที่ที่ความต่างจะสะสมโดยไม่มีใครเห็น
+   *
+   * ตอนนี้ทุกการติดตั้งรันโค้ดชุดเดียวกับที่ผู้ดูแลกดปุ่มเรียก
+   */
+  await createProject(
+    { tenantId, actorId: null },
+    {
+      key: 'SD',
+      name: 'ศูนย์บริการไอที',
+      type: 'SERVICE_DESK',
+      permissionSchemeId: schemeId,
+      workflowId: workflow.id,
+      issueTypeIds: [issueType.id],
+      notifyGroupId: adminGroupId,
+    },
+  );
 
   // สิทธิ์: ทุกคนแจ้งและคุยได้ · ผู้ดูแลจัดการงานได้
   const grants: Array<[string, bigint]> = [

@@ -5,3 +5,4 @@
 // ESLint import/no-restricted-paths บังคับให้โมดูลอื่นเข้าถึงได้เฉพาะผ่านไฟล์นี้
 
 export * from './project.service';
+export * from './project-create.service';

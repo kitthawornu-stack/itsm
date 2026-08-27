@@ -23,6 +23,16 @@ import { listGroups } from '../identity';
 import { describeSlaPolicy } from '../sla';
 import { describeProjectWorkflows } from '../workflow';
 import { ProjectNotFoundError, listProjects, projectByKey, projectSchemeId } from './project.service';
+import {
+  DuplicateProjectKeyError,
+  InvalidProjectKeyError,
+  ProjectNeedsSchemeError,
+  ProjectNeedsWorkflowError,
+  UnknownReferenceError,
+  createProject,
+  projectCreationOptions,
+  type ProjectTypeName,
+} from './project-create.service';
 
 @Controller('admin/projects')
 export class ProjectAdminController {
@@ -31,6 +41,66 @@ export class ProjectAdminController {
     await assertTenantAdmin(ctx);
     const rows = await listProjects(ctx);
     return { rows: rows.map(({ id, ...rest }) => ({ id: id.toString(), ...rest })) };
+  }
+
+  /** ตัวเลือกสำหรับฟอร์มสร้างโปรเจกต์ — ต้องมาก่อน `:key` ไม่งั้นถูกจับเป็นคีย์ */
+  @Get('new/options')
+  async options(@Ctx() ctx: TenantContext): Promise<unknown> {
+    await assertTenantAdmin(ctx);
+    return projectCreationOptions(ctx);
+  }
+
+  @Post()
+  async create(
+    @Ctx() ctx: TenantContext,
+    @Body()
+    body: {
+      key?: unknown;
+      name?: unknown;
+      type?: unknown;
+      permissionSchemeId?: unknown;
+      workflowId?: unknown;
+      issueTypeIds?: unknown;
+      notifyGroupId?: unknown;
+    },
+  ): Promise<unknown> {
+    await assertTenantAdmin(ctx);
+    const id = (v: unknown): bigint | null =>
+      typeof v === 'string' && /^\d+$/.test(v) ? BigInt(v) : null;
+    const schemeId = id(body.permissionSchemeId);
+    const workflowId = id(body.workflowId);
+    const issueTypeIds = Array.isArray(body.issueTypeIds)
+      ? body.issueTypeIds.map(id).filter((v): v is bigint => v !== null)
+      : [];
+
+    try {
+      if (schemeId === null) throw new ProjectNeedsSchemeError();
+      if (workflowId === null) throw new ProjectNeedsWorkflowError();
+      const created = await createProject(ctx, {
+        key: typeof body.key === 'string' ? body.key : '',
+        name: typeof body.name === 'string' ? body.name : '',
+        type: body.type as ProjectTypeName,
+        permissionSchemeId: schemeId,
+        workflowId,
+        issueTypeIds,
+        notifyGroupId: id(body.notifyGroupId),
+      });
+      return { ok: true, key: created.key };
+    } catch (e) {
+      if (
+        e instanceof InvalidProjectKeyError ||
+        e instanceof DuplicateProjectKeyError ||
+        e instanceof ProjectNeedsSchemeError ||
+        e instanceof ProjectNeedsWorkflowError ||
+        e instanceof UnknownReferenceError
+      ) {
+        throw new HttpException(
+          { error: 'invalid', message: e.message },
+          HttpStatus.UNPROCESSABLE_ENTITY,
+        );
+      }
+      throw e;
+    }
   }
 
   @Get(':key')

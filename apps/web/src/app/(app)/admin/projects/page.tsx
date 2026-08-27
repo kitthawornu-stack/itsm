@@ -1,7 +1,8 @@
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 
-import { apiFetch } from '@/lib/api';
+import { ProjectCreate } from '@/components/project-create';
+import { API_BASE, apiFetch } from '@/lib/api';
 
 export const dynamic = 'force-dynamic';
 
@@ -45,8 +46,10 @@ export default async function ProjectsPage(): Promise<ReactNode> {
         สถานะ ปุ่ม เงื่อนไข และสิทธิ์ ทั้งหมดอยู่ในนี้
       </p>
 
+      <ProjectCreate apiBase={API_BASE} />
+
       {rows.length === 0 ? (
-        <p className="admin-empty">ยังไม่มีโปรเจกต์ — สร้างได้จาก bootstrap ตอนติดตั้งเท่านั้นในตอนนี้</p>
+        <p className="admin-empty">ยังไม่มีโปรเจกต์</p>
       ) : (
         <div className="admin-table-wrap">
           <table className="admin-table">
