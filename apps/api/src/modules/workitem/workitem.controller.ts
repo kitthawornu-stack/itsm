@@ -67,6 +67,13 @@ import {
   assignableUsers,
 } from './assign.service';
 import {
+  BULK_MAX,
+  BulkTooManyItemsError,
+  NothingSelectedError,
+  bulkEditWorkItems,
+  type BulkEditResult,
+} from './bulk-edit.service';
+import {
   InvalidFieldValueError,
   NothingToUpdateError,
   editWorkItem,
@@ -920,6 +927,80 @@ export class WorkItemController {
         throw new HttpException(
           { error: 'transition_not_allowed', message: e.message },
           HttpStatus.FORBIDDEN,
+        );
+      }
+      throw e;
+    }
+  }
+
+  /**
+   * แก้ไขหลายเรื่องพร้อมกัน
+   *
+   * **ตอบ 200 แม้บางใบทำไม่สำเร็จ** — ผลรายใบอยู่ใน `items`
+   * ชุดที่สำเร็จ 48 จาก 50 ใบไม่ใช่คำขอที่ผิด และการตอบ 4xx จะทำให้หน้าจอ
+   * ทิ้งผลทั้งชุดแล้วบอกว่า "ล้มเหลว" ทั้งที่ 48 ใบถูกแก้ไปแล้วจริง
+   *
+   * 4xx เก็บไว้สำหรับความผิดพลาดที่เป็นของ **คำขอทั้งชุด**:
+   * ไม่ได้เลือกอะไร · เกินเพดาน · ค่าที่กรอกไม่มีอยู่จริง · ไม่มีสิทธิ์
+   */
+  @Post('bulk')
+  @HttpCode(HttpStatus.OK)
+  async bulk(
+    @Ctx() ctx: TenantContext,
+    @Body()
+    body: { itemKeys?: unknown; assigneeId?: unknown; priorityRank?: unknown },
+  ): Promise<BulkEditResult & { max: number }> {
+    if (ctx.actorId === null) {
+      throw new HttpException({ message: 'ไม่พบผู้ใช้สำหรับแก้ไขงาน' }, HttpStatus.FORBIDDEN);
+    }
+    const keys = Array.isArray(body.itemKeys)
+      ? body.itemKeys.filter((k): k is string => typeof k === 'string')
+      : [];
+
+    /*
+      แยก "ไม่ส่งฟิลด์" ออกจาก "ส่ง null" ให้ชัดตั้งแต่ขอบ HTTP
+      ไม่ส่ง = ไม่แตะ · null = ล้างค่า · JSON แยกสองอย่างนี้ได้ แต่ต้องเขียนให้ตรง
+    */
+    const changes: { assigneeId?: bigint | null; priorityRank?: number | null } = {};
+    if ('assigneeId' in body) {
+      const raw = body.assigneeId;
+      /*
+        แปลงจากชนิดที่รู้แน่เท่านั้น — `String(unknown)` ให้ `[object Object]`
+        เมื่อมีคนส่ง object มา แล้ว `BigInt()` จะโยน error ที่อ่านไม่ออกเลย
+        (บทเรียนเดียวกับที่ CLAUDE.md บันทึกไว้)
+      */
+      changes.assigneeId =
+        typeof raw === 'string' && raw !== ''
+          ? BigInt(raw)
+          : typeof raw === 'number'
+            ? BigInt(raw)
+            : null;
+    }
+    if ('priorityRank' in body) {
+      const raw = body.priorityRank;
+      const n = typeof raw === 'number' ? raw : typeof raw === 'string' && raw !== '' ? Number(raw) : null;
+      changes.priorityRank = n === null || Number.isNaN(n) ? null : n;
+    }
+
+    try {
+      return { ...(await bulkEditWorkItems(ctx, keys, changes)), max: BULK_MAX };
+    } catch (e) {
+      if (e instanceof BulkTooManyItemsError) {
+        throw new HttpException(
+          { error: 'too_many_items', message: e.message, max: BULK_MAX },
+          HttpStatus.UNPROCESSABLE_ENTITY,
+        );
+      }
+      if (e instanceof NothingSelectedError) {
+        throw new HttpException(
+          { error: 'nothing_selected', message: e.message },
+          HttpStatus.UNPROCESSABLE_ENTITY,
+        );
+      }
+      if (e instanceof InvalidFieldValueError || e instanceof AssigneeNotEligibleError) {
+        throw new HttpException(
+          { error: 'invalid_value', message: e.message },
+          HttpStatus.UNPROCESSABLE_ENTITY,
         );
       }
       throw e;
