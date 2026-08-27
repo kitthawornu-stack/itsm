@@ -1,13 +1,10 @@
-import { ReportForm } from '@/components/report-form';
+import { ReportForm, type Options } from '@/components/report-form';
 import { API_BASE, apiFetch } from '@/lib/api';
 
 export const dynamic = 'force-dynamic';
 
-interface Options {
-  projects: Array<{ key: string; name: string }>;
-  issueTypes: Array<{ name: string; icon: string }>;
-  priorities: Array<{ rank: number; name: string }>;
-}
+// ชนิดมาจากคอมโพเนนต์ที่ใช้มันจริง ไม่ประกาศซ้ำ —
+// สองสำเนาของชนิดเดียวกันคือสองสำเนาที่จะไม่ตรงกันในวันที่มีคนแก้แค่ที่เดียว
 
 // ที่อยู่ฝั่งเบราว์เซอร์ — ต่างจากที่ server component ใช้ ดู lib/api.ts
 const API = API_BASE;

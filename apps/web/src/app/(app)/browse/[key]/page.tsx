@@ -43,6 +43,7 @@ interface Detail {
   updatedAt: string;
   transitions: Array<{ id: string; name: string; requiredFields: string[] }>;
   resolution: string | null;
+  fields?: Array<{ name: string; value: string }>;
   resolutions?: string[];
   history: HistoryRow[];
 }
@@ -178,6 +179,20 @@ export default async function WorkItemDetail({
             <>
               <h2 className="detail-section-title">รายละเอียด</h2>
               <p className="detail-description">{detail.description}</p>
+            </>
+          )}
+
+          {detail.fields === undefined || detail.fields.length === 0 ? null : (
+            <>
+              <h2 className="detail-section-title detail-section-gap">ข้อมูลเพิ่มเติม</h2>
+              <dl className="detail-extra">
+                {detail.fields.map((f) => (
+                  <div key={f.name}>
+                    <dt>{f.name}</dt>
+                    <dd>{f.value}</dd>
+                  </div>
+                ))}
+              </dl>
             </>
           )}
 

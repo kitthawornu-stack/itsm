@@ -3,9 +3,24 @@
 import { useState, type ReactNode } from 'react';
 import { Button, Field, Input, Select, Textarea } from '@itsm/ui';
 
-interface Options {
+interface FormField {
+  key: string;
+  name: string;
+  type: string;
+  isRequired: boolean;
+  options: string[];
+}
+
+interface IssueTypeOption {
+  name: string;
+  icon: string;
+  /** ฟิลด์เพิ่มเติมที่ผู้ดูแลตั้งไว้สำหรับ (โปรเจกต์ × ประเภทงาน) นี้ */
+  fields: FormField[];
+}
+
+export interface Options {
   projects: Array<{ key: string; name: string }>;
-  issueTypes: Array<{ name: string; icon: string }>;
+  issueTypes: IssueTypeOption[];
   priorities: Array<{ rank: number; name: string }>;
 }
 
@@ -29,12 +44,21 @@ export function ReportForm({ apiBase, options }: { apiBase: string; options: Opt
   const [summary, setSummary] = useState('');
   const [description, setDescription] = useState('');
   const [priority, setPriority] = useState('');
+  /**
+   * ค่าฟิลด์เพิ่มเติม เก็บตามคีย์ของฟิลด์
+   *
+   * ไม่ล้างตอนเปลี่ยนประเภทงาน — ฟิลด์ที่ชื่อเดียวกันมักหมายถึงสิ่งเดียวกัน
+   * และการล้างสิ่งที่ผู้ใช้พิมพ์ไปแล้วเพราะเขาเปลี่ยนใจเรื่องอื่น เป็นการลงโทษ
+   * ค่าที่ไม่ตรงกับฟิลด์ของประเภทใหม่จะไม่ถูกส่งไปอยู่แล้ว
+   */
+  const [fieldValues, setFieldValues] = useState<Record<string, string>>({});
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // แตะแล้วค่อยเตือน — ขึ้นสีแดงตั้งแต่ยังไม่ได้พิมพ์คือการดุคนที่ยังไม่ได้ทำอะไรผิด
   const [touched, setTouched] = useState(false);
 
   const summaryEmpty = summary.trim().length === 0;
+  const activeFields = issueTypes.find((t) => t.name === issueType)?.fields ?? [];
 
   /**
    * ชนิดงานผูกกับโปรเจกต์ ไม่ใช่รายการกลาง
@@ -76,6 +100,12 @@ export function ReportForm({ apiBase, options }: { apiBase: string; options: Opt
           summary,
           ...(description.trim() === '' ? {} : { description }),
           ...(priority === '' ? {} : { priorityRank: Number(priority) }),
+          // ส่งเฉพาะฟิลด์ของประเภทงานที่เลือกอยู่ — ค่าที่ค้างจากประเภทอื่นไม่เกี่ยว
+          fields: Object.fromEntries(
+            activeFields
+              .map((f) => [f.key, fieldValues[f.key] ?? ''] as const)
+              .filter(([, v]) => v !== ''),
+          ),
         }),
       });
       const data = (await res.json()) as { itemKey?: string; message?: string };
@@ -149,6 +179,52 @@ export function ReportForm({ apiBase, options }: { apiBase: string; options: Opt
           />
         </Field>
       </div>
+
+      {/*
+        ฟิลด์เพิ่มเติมที่ผู้ดูแลตั้งไว้
+        `field_config` มีข้อมูลอยู่ตั้งแต่ Spike B แต่ฟอร์มไม่เคยถามมันเลย
+        และสองในสี่ฟิลด์ของ SD ตั้งเป็นบังคับกรอกไว้ด้วย
+      */}
+      {activeFields.map((f) => (
+        <Field
+          key={f.key}
+          label={f.name}
+          htmlFor={`rf-cf-${f.key}`}
+          required={f.isRequired}
+          {...(f.type === 'LABELS' ? { hint: 'คั่นหลายค่าด้วยเครื่องหมายจุลภาค' } : {})}
+        >
+          {f.options.length > 0 ? (
+            <Select
+              id={`rf-cf-${f.key}`}
+              value={fieldValues[f.key] ?? ''}
+              onChange={(v) => {
+                setFieldValues((prev) => ({ ...prev, [f.key]: v }));
+              }}
+              options={f.options.map((o) => ({ value: o, label: o }))}
+              placeholder={f.isRequired ? 'เลือก' : 'ไม่ระบุ'}
+            />
+          ) : f.type === 'TEXTAREA' || f.type === 'RICH_TEXT' ? (
+            <Textarea
+              id={`rf-cf-${f.key}`}
+              value={fieldValues[f.key] ?? ''}
+              onChange={(v) => {
+                setFieldValues((prev) => ({ ...prev, [f.key]: v }));
+              }}
+              rows={3}
+              maxLength={2000}
+            />
+          ) : (
+            <Input
+              id={`rf-cf-${f.key}`}
+              value={fieldValues[f.key] ?? ''}
+              onChange={(v) => {
+                setFieldValues((prev) => ({ ...prev, [f.key]: v }));
+              }}
+              maxLength={255}
+            />
+          )}
+        </Field>
+      ))}
 
       {options.projects.length > 1 ? (
         <Field label="ส่งเรื่องไปที่ทีม" htmlFor="rf-project">

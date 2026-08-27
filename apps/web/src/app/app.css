@@ -1066,3 +1066,29 @@
   color: var(--text-muted);
   padding: 0 var(--space-2);
 }
+
+/* ---------- ฟิลด์เพิ่มเติมบนหน้ารายละเอียด ----------
+   ชื่อคลาสต้องไม่ชนกับ `.detail-fields` ของแถบข้าง — ครั้งแรกตั้งชื่อซ้ำ
+   แล้วกฎ grid ของบล็อกนี้ไปทับแถบข้างทั้งแถบโดยไม่มี error ที่ไหน
+   เห็นได้ด้วยตาอย่างเดียว (CLAUDE.md — การชนกันของ selector) */
+
+.detail-extra {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--space-3);
+  margin: 0 0 var(--space-6);
+}
+
+.detail-extra dt {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  line-height: var(--line-height-body);
+}
+
+.detail-extra dd {
+  margin: 0;
+  font-size: 13px;
+  line-height: var(--line-height-body);
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}

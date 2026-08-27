@@ -35,7 +35,15 @@ import {
 import { tenantScoped } from '../../infrastructure/prisma/tenant-scope';
 import type { TenantContext } from '@itsm/types';
 
-import { listResolutions } from '../field';
+import {
+  RequiredFieldsMissingError,
+  UnknownFieldOptionError,
+  displayFieldsFor,
+  formFieldsFor,
+  listResolutions,
+  prepareFieldValues,
+  saveFieldValues,
+} from '../field';
 import { SearchIndexNotReadyError, searchWorkItems } from '../search-index';
 import { slaForWorkItems, type SlaSnapshot } from '../sla';
 import {
@@ -87,6 +95,29 @@ export interface WorkItemListRow {
   sla: SlaSnapshot | null;
 }
 
+
+/**
+ * หา (projectId, issueTypeId) จากคีย์ที่ผู้ใช้ส่งมา — null เมื่อหาไม่เจอ
+ *
+ * คืน null แทนการโยน เพราะ `createWorkItem` มี error ของตัวเองที่อธิบายได้ดีกว่า
+ * (โปรเจกต์ไม่มีจริง vs ประเภทงานยังไม่ได้ผูก) · ที่นี่แค่ต้องรู้ว่าจะตรวจฟิลด์ไหม
+ */
+async function resolveFormScope(
+  ctx: TenantContext,
+  projectKey: string | undefined,
+  issueTypeName: string | undefined,
+): Promise<{ projectId: bigint; issueTypeId: bigint } | null> {
+  if (projectKey === undefined || issueTypeName === undefined) return null;
+  const db = tenantScoped(ctx);
+  const project = await db.project.findFirst({ where: { key: projectKey }, select: { id: true } });
+  if (project === null) return null;
+  const scheme = await db.workflowScheme.findFirst({
+    where: { projectId: project.id, issueType: { name: issueTypeName } },
+    select: { issueTypeId: true },
+  });
+  if (scheme === null) return null;
+  return { projectId: project.id, issueTypeId: scheme.issueTypeId };
+}
 
 /**
  * ดึงข้อความล้วนออกจาก `description` ที่เก็บเป็น structured document
@@ -287,7 +318,20 @@ export class WorkItemController {
 
     return {
       projects,
-      issueTypes: schemes.map((s) => ({ name: s.issueType.name, icon: s.issueType.iconKey })),
+      /**
+       * ฟิลด์ที่ต้องถามมาพร้อมประเภทงานเลย
+       *
+       * `field_config` มีข้อมูลอยู่ตั้งแต่ Spike B แต่ฟอร์มไม่เคยถามมันเลย —
+       * และสองในสี่ฟิลด์ของ SD ตั้งเป็นบังคับกรอกไว้ด้วย
+       */
+      issueTypes: await Promise.all(
+        schemes.map(async (s) => ({
+          name: s.issueType.name,
+          icon: s.issueType.iconKey,
+          fields:
+            project === null ? [] : await formFieldsFor(ctx, project.id, s.issueTypeId),
+        })),
+      ),
       priorities,
     };
   }
@@ -315,6 +359,8 @@ export class WorkItemController {
       description?: string;
       priorityRank?: number | string;
       assigneeId?: string;
+      /** ค่าฟิลด์เพิ่มเติม คีย์คือ `field_definition.key` */
+      fields?: Record<string, unknown>;
     },
   ): Promise<{ id: string; itemKey: string; status: string }> {
     if (ctx.actorId === null) {
@@ -327,6 +373,40 @@ export class WorkItemController {
       );
     }
 
+    /**
+     * ตรวจฟิลด์บังคับ **ก่อน** สร้างงาน
+     *
+     * ถ้าสร้างก่อนแล้วค่อยตรวจ จะได้ตั๋วที่ขาดฟิลด์บังคับค้างอยู่ในระบบ
+     * และไม่มีอะไรพากลับไปเติม — ผู้ใช้เห็นข้อความผิดพลาดแล้วปิดหน้าไป
+     * โดยที่ตั๋วถูกสร้างไปแล้วเรียบร้อย
+     */
+    const scope = await resolveFormScope(ctx, body.project, body.issueType);
+    let fieldValues: Awaited<ReturnType<typeof prepareFieldValues>> = [];
+    try {
+      if (scope !== null) {
+        fieldValues = await prepareFieldValues(
+          ctx,
+          scope.projectId,
+          scope.issueTypeId,
+          body.fields ?? {},
+        );
+      }
+    } catch (e) {
+      if (e instanceof RequiredFieldsMissingError) {
+        throw new HttpException(
+          { error: 'validation_failed', message: e.message, missingFields: e.fields },
+          HttpStatus.UNPROCESSABLE_ENTITY,
+        );
+      }
+      if (e instanceof UnknownFieldOptionError) {
+        throw new HttpException(
+          { error: 'validation_failed', message: e.message },
+          HttpStatus.UNPROCESSABLE_ENTITY,
+        );
+      }
+      throw e;
+    }
+
     try {
       const created = await createWorkItem(ctx, {
         projectKey: body.project,
@@ -336,6 +416,15 @@ export class WorkItemController {
         ...(body.priorityRank === undefined ? {} : { priorityRank: Number(body.priorityRank) }),
         ...(body.assigneeId === undefined ? {} : { assigneeId: BigInt(body.assigneeId) }),
       });
+      /**
+       * เขียนค่าฟิลด์หลังสร้างงาน ไม่ใช่ในทรานแซกชันเดียวกัน
+       *
+       * `setFieldValues` เขียน EAV และ snapshot ในทรานแซกชันของตัวเอง (ADR-001)
+       * การซ้อนอีกชั้นจะถือล็อกบน `work_item` นานเกินจำเป็น
+       * ค่าบังคับถูกตรวจไปแล้วข้างบน ที่เหลือคือการเขียนซึ่งกู้ได้ด้วย
+       * `rebuildSnapshot` ถ้าล้ม — ต่างจากการปล่อยตั๋วที่ขาดฟิลด์บังคับ
+       */
+      await saveFieldValues(ctx, created.id, fieldValues);
       return { id: created.id.toString(), itemKey: created.itemKey, status: created.statusName };
     } catch (e) {
       if (e instanceof SummaryRequiredError) {
@@ -418,6 +507,13 @@ export class WorkItemController {
       assignee: item.assignee?.displayName ?? null,
       reporter: item.reporter.displayName,
       fieldSnapshot: item.fieldSnapshot,
+      /**
+       * ฟิลด์เพิ่มเติมพร้อมชื่อที่คนอ่านได้
+       *
+       * `fieldSnapshot` ดิบใช้คีย์ระบบ (`impact`, `urgency`) ซึ่งไม่มีความหมาย
+       * กับผู้ใช้ · แปลงเป็นชื่อฟิลด์ตามลำดับที่ผู้ดูแลตั้งไว้
+       */
+      fields: await displayFieldsFor(ctx, item.projectId, item.issueTypeId, item.fieldSnapshot),
       sla: sla.get(item.id.toString()) ?? null,
       // ให้หน้าจอซ่อนปุ่มที่กดไม่ได้ — ไม่ใช่กลไกป้องกัน เซิร์ฟเวอร์ปฏิเสธเองอยู่แล้ว
       permissions: await summaryFor(ctx, item.projectId),
