@@ -177,15 +177,6 @@ async function resolveResolution(
   return row;
 }
 
-/** ผลการแก้ไขทั้งหมดของ tenant — ใช้เติมตัวเลือกตอนปิดงาน */
-export async function listResolutions(ctx: TenantContext): Promise<string[]> {
-  const rows = await tenantScoped(ctx).resolution.findMany({
-    orderBy: { id: 'asc' },
-    select: { name: true },
-  });
-  return rows.map((r) => r.name);
-}
-
 /** transition ที่ผู้ใช้ควรเห็นปุ่มบนงานใบนี้ */
 export async function availableTransitions(
   ctx: TenantContext,

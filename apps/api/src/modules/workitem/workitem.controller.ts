@@ -35,6 +35,7 @@ import {
 import { tenantScoped } from '../../infrastructure/prisma/tenant-scope';
 import type { TenantContext } from '@itsm/types';
 
+import { listResolutions } from '../field';
 import { SearchIndexNotReadyError, searchWorkItems } from '../search-index';
 import { slaForWorkItems, type SlaSnapshot } from '../sla';
 import {
@@ -43,7 +44,6 @@ import {
   UnknownResolutionError,
   applyTransition,
   availableTransitions,
-  listResolutions,
 } from '../workflow';
 import {
   IssueTypeNotConfiguredError,

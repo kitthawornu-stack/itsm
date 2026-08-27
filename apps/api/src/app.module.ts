@@ -10,6 +10,7 @@ import {
   SelfServiceController,
   UserAdminController,
 } from './modules/identity/user-admin.controller';
+import { LookupController } from './modules/field/lookup.controller';
 import { HealthController } from './modules/health/health.controller';
 import { NotificationController } from './modules/notification/notification.controller';
 import { WorkItemController } from './modules/workitem/workitem.controller';
@@ -26,6 +27,7 @@ import { WorkItemController } from './modules/workitem/workitem.controller';
     IdentityController,
     UserAdminController,
     SelfServiceController,
+    LookupController,
     WorkItemController,
     NotificationController,
   ],
