@@ -184,6 +184,41 @@ function appliesToCurrentStatus(t: TransitionDefinition, ctx: TransitionContext)
 }
 
 /**
+ * สถานะของนาฬิกาที่ต้องบันทึกเมื่อสถานะงานเปลี่ยน
+ *
+ * `recompute` = ไม่มีเหตุการณ์ใหม่ แต่ยังต้องคำนวณใหม่ · ละข้อนี้แล้วนาฬิกาที่
+ * เพิ่งเริ่มจะไม่เคยตั้งงานแจ้งเตือนเลย เพราะงานถูกตั้งตอนคำนวณใหม่เท่านั้น
+ */
+export type SlaEffect = 'stop' | 'reopen' | 'pause' | 'resume' | 'recompute';
+
+export interface StatusShape {
+  category: string;
+  pausesSla: boolean;
+}
+
+/**
+ * แปลงการเปลี่ยนสถานะเป็นเหตุการณ์ของนาฬิกา
+ *
+ * แยกออกมาเป็นฟังก์ชันบริสุทธิ์เพราะตารางนี้คือที่ที่พลาดแล้วเงียบที่สุด:
+ * เลือกผิดหนึ่งช่อง นาฬิกาก็เดินผิดไปทั้งใบโดยไม่มี error ให้เห็น
+ * และเคสที่สำคัญที่สุด — ออกจากหมวด DONE — เคยไม่มีช่องของตัวเองเลย
+ * มันตกไปที่ `recompute` ซึ่งคำนวณนาฬิกาที่ปิดไปแล้วใหม่ แล้วได้ "จบแล้ว"
+ * เหมือนเดิมทุกครั้ง
+ */
+export function slaEffectOfTransition(
+  from: StatusShape | null,
+  to: StatusShape,
+): SlaEffect {
+  if (to.category === 'DONE') return 'stop';
+  // ออกจาก DONE = เปิดใหม่ · ต้องมาก่อนการตรวจ pausesSla เพราะนาฬิกาที่ปิดแล้ว
+  // ต้องถูกปลุกก่อน จะพักทีหลังก็เรื่องของรอบใหม่
+  if (from?.category === 'DONE') return 'reopen';
+  if (to.pausesSla && from?.pausesSla !== true) return 'pause';
+  if (!to.pausesSla && from?.pausesSla === true) return 'resume';
+  return 'recompute';
+}
+
+/**
  * ฟิลด์ที่ transition นี้จะเรียกร้องเมื่อกด
  *
  * หน้าจอต้องรู้ **ก่อน** กด ไม่ใช่รู้จากข้อความ error หลังกดแล้วถูกปฏิเสธ

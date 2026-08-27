@@ -17,7 +17,13 @@ import {
   type BusinessCalendar,
 } from './business-calendar';
 
-export type SlaEventKind = 'start' | 'pause' | 'resume' | 'stop' | 'target-change';
+export type SlaEventKind =
+  | 'start'
+  | 'pause'
+  | 'resume'
+  | 'stop'
+  | 'reopen'
+  | 'target-change';
 
 export interface SlaEvent {
   kind: SlaEventKind;
@@ -113,7 +119,14 @@ export function computeSla(
     if (prev !== undefined && e.at.getTime() < prev.at.getTime()) {
       throw new SlaEventOrderError(prev, e);
     }
-    if (stopped) break;
+    /**
+     * นาฬิกาที่ปิดไปแล้วไม่รับเหตุการณ์อะไรอีก **ยกเว้นการเปิดใหม่**
+     *
+     * ต้อง `continue` ไม่ใช่ `break` — ถ้าออกจากลูปทันทีที่เจอเหตุการณ์
+     * ที่ถูกละเว้น `reopen` ที่อยู่ถัดไปจะไม่มีวันถูกอ่าน และตั๋วที่เปิดใหม่
+     * จะค้างอยู่ที่ met/breached ตลอดไปโดยไม่มี error ให้เห็น
+     */
+    if (stopped && e.kind !== 'reopen') continue;
 
     switch (e.kind) {
       case 'start':
@@ -134,6 +147,26 @@ export function computeSla(
       case 'resume':
         // resume ขณะที่เดินอยู่แล้วไม่มีผล
         if (started && runningSince === null) runningSince = e.at;
+        break;
+
+      /**
+       * เปิดใหม่ = **นาฬิกาเรือนใหม่** ไม่ใช่เรือนเดิมเดินต่อ (หมวด F)
+       *
+       * ต่างจาก `resume` ตรงนี้: resume คืนนาฬิกาที่พักไว้ให้เดินต่อจากยอดเดิม
+       * ส่วน reopen เริ่มนับใหม่จากศูนย์ เพราะงานรอบใหม่คืองานคนละรอบ
+       * และทีมได้เป้าใหม่เต็มจำนวนสำหรับรอบนั้น
+       *
+       * ถ้าต่อยอดจากรอบก่อนแทน ตั๋วที่เคยเกือบหลุดจะหลุดทันทีที่กดเปิดใหม่
+       * ทั้งที่ยังไม่มีใครทำอะไรเลย
+       *
+       * เป้าไม่ถูกล้าง — ความสำคัญที่ยกระดับไปแล้วไม่ได้ย้อนกลับเองเพราะปิดงาน
+       */
+      case 'reopen':
+        elapsedMs = 0;
+        breachedAt = null;
+        stopped = false;
+        started = true;
+        runningSince = e.at;
         break;
 
       case 'stop':

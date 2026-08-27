@@ -359,6 +359,185 @@ describe('SLA · F · ตั๋วที่ถูกเปิดใหม่ห�
   });
 });
 
+/**
+ * ตั๋วที่เปิดใหม่ต้องได้นาฬิกาเรือนใหม่ — และ "เรือนใหม่" ต้องเกิดขึ้นได้จริง
+ *
+ * หมวด F ประกาศไว้ตั้งแต่ต้นว่านาฬิกาเรือนเดิมจบไปแล้ว และตั๋วที่เปิดใหม่
+ * ต้องนับใหม่ · แต่ไม่เคยมีเหตุการณ์ชนิดไหนที่ทำให้เกิดเรือนใหม่ได้เลย
+ * ผลจริงที่วัดได้: ตั๋วที่กดเปิดใหม่ นาฬิกาค้างอยู่ที่ met/breached ตลอดไป
+ * `breachAt` เป็น null หน้าคิวจึงไม่แสดงแรงกดดันใด ๆ และไม่มีการแจ้งเตือน
+ * รอบใหม่สักครั้ง — เงียบสนิทโดยไม่มี error
+ *
+ * `reopen` คือเหตุการณ์ที่ประกาศเจตนานั้นชัด ๆ · ต้องเป็นชนิดของตัวเอง
+ * ไม่ใช่ `resume` เพราะสองอย่างนี้ต่างกัน: resume = นาฬิกาเรือนเดิมเดินต่อ
+ * จากยอดเดิม · reopen = เริ่มนับใหม่จากศูนย์ ตามที่หมวด F กำหนดไว้
+ */
+describe('SLA · F2 · เปิดใหม่ = นาฬิกาเรือนใหม่บนรายการเหตุการณ์เดิม', () => {
+  const closedThenReopened: SlaEvent[] = [
+    ev('start', '2026-08-25T09:00:00'),
+    ev('stop', '2026-08-25T12:00:00'), // ใช้ไป 3 ชม. จากเป้า 4 ชม.
+    ev('reopen', '2026-08-25T14:00:00'),
+  ];
+
+  it('นาฬิกากลับมาเดิน ไม่ค้างอยู่ที่ met', () => {
+    const s = computeSla(office, 4 * HOUR, closedThenReopened, th('2026-08-25T15:00:00'));
+    expect(s.state).toBe('running');
+  });
+
+  it('**นับจากศูนย์ ไม่ใช่ต่อยอดจากรอบก่อน**', () => {
+    const s = computeSla(office, 4 * HOUR, closedThenReopened, th('2026-08-25T15:00:00'));
+    // 3 ชม. ของรอบก่อนต้องไม่ตามมา — ไม่งั้นเปิดใหม่ครั้งเดียวก็หลุดทันที
+    expect(s.elapsedMs).toBe(HOUR);
+    expect(s.remainingMs).toBe(3 * HOUR);
+  });
+
+  it('**breachAt กลับมามีค่า** — หน้าคิวต้องนับถอยหลังรอบใหม่ได้', () => {
+    const s = computeSla(office, 4 * HOUR, closedThenReopened, th('2026-08-25T15:00:00'));
+    expect(s.breachAt).not.toBeNull();
+  });
+
+  it('**นาฬิกาที่หลุดรอบก่อน กลับมาเป็นยังไม่หลุดในรอบใหม่**', () => {
+    const s = computeSla(
+      office,
+      HOUR,
+      [
+        ev('start', '2026-08-25T09:00:00'),
+        ev('stop', '2026-08-25T13:00:00'), // ใช้ไป 4 ชม. จากเป้า 1 ชม. = หลุด
+        ev('reopen', '2026-08-25T14:00:00'),
+      ],
+      th('2026-08-25T14:30:00'),
+    );
+    // รายงานว่าหลุดอยู่ตอนนี้ ทั้งที่หลุดของรอบที่ปิดไปแล้ว คือการตอบผิดคำถาม
+    expect(s.isBreached).toBe(false);
+    expect(s.breachedAt).toBeNull();
+    expect(s.elapsedMs).toBe(30 * 60_000);
+  });
+
+  it('**หลุดอีกครั้งในรอบใหม่ ต้องรายงานเวลาที่หลุดของรอบใหม่**', () => {
+    // เคสนี้เป็นเคสเดียวที่พิสูจน์การล้าง breachedAt ได้
+    // เคสที่ไม่หลุดซ้ำผ่านหมดแม้ไม่ล้าง เพราะตัวกรอง `isBreached ? … : null`
+    // ตอนคืนค่าบังผลไว้ — เป็นกับดักเดียวกับที่บันทึกไว้ใน CLAUDE.md
+    const s = computeSla(
+      office,
+      HOUR,
+      [
+        ev('start', '2026-08-25T09:00:00'),
+        ev('stop', '2026-08-25T13:00:00'), // หลุดตั้งแต่ 10:00 ของรอบก่อน
+        ev('reopen', '2026-08-25T14:00:00'),
+      ],
+      th('2026-08-25T16:00:00'), // รอบใหม่ใช้ไป 2 ชม. จากเป้า 1 ชม.
+    );
+    expect(s.isBreached).toBe(true);
+    // 15:00 คือจุดที่รอบใหม่ข้ามเป้า · ถ้าได้ 10:00 แปลว่าค่าของรอบที่ปิดไปแล้ว
+    // ตามมาหลอกรายงานและการกู้แจ้งเตือนที่ตกหล่น
+    expect(s.breachedAt?.toISOString()).toBe(th('2026-08-25T15:00:00').toISOString());
+  });
+
+  it('ปิดอีกครั้งหลังเปิดใหม่ นับเฉพาะรอบหลัง', () => {
+    const s = computeSla(
+      office,
+      4 * HOUR,
+      [...closedThenReopened, ev('stop', '2026-08-25T16:00:00')],
+      th('2026-08-26T10:00:00'),
+    );
+    expect(s.state).toBe('met');
+    expect(s.elapsedMs).toBe(2 * HOUR);
+  });
+
+  it('พักและกลับมาเดินในรอบใหม่ทำงานตามปกติ', () => {
+    const s = computeSla(
+      office,
+      4 * HOUR,
+      [
+        ...closedThenReopened,
+        ev('pause', '2026-08-25T15:00:00'),
+        ev('resume', '2026-08-26T09:00:00'),
+      ],
+      th('2026-08-26T10:00:00'),
+    );
+    expect(s.state).toBe('running');
+    expect(s.elapsedMs).toBe(2 * HOUR);
+  });
+
+  it('เปิดใหม่ซ้อนกันสองครั้ง นับจากครั้งหลังสุด', () => {
+    const s = computeSla(
+      office,
+      4 * HOUR,
+      [...closedThenReopened, ev('reopen', '2026-08-25T16:00:00')],
+      th('2026-08-25T17:00:00'),
+    );
+    expect(s.elapsedMs).toBe(HOUR);
+  });
+
+  it('**resume หลัง stop ยังถูกละเว้นเหมือนเดิม** — เปิดใหม่ต้องประกาศเจตนาชัด', () => {
+    const s = computeSla(
+      office,
+      8 * HOUR,
+      [
+        ev('start', '2026-08-25T09:00:00'),
+        ev('stop', '2026-08-25T10:00:00'),
+        ev('resume', '2026-08-25T11:00:00'),
+      ],
+      th('2026-08-25T16:00:00'),
+    );
+    expect(s.state).toBe('met');
+    expect(s.elapsedMs).toBe(HOUR);
+  });
+
+  it('เหตุการณ์ที่ถูกละเว้นต้องไม่บังการเห็น reopen ที่ตามมาทีหลัง', () => {
+    // ถ้าโค้ดใช้ break แทน continue ตอนเจอเหตุการณ์หลัง stop
+    // reopen ที่อยู่ถัดไปจะไม่ถูกอ่านเลย และบั๊กเดิมกลับมาเงียบ ๆ
+    const s = computeSla(
+      office,
+      4 * HOUR,
+      [
+        ev('start', '2026-08-25T09:00:00'),
+        ev('stop', '2026-08-25T10:00:00'),
+        ev('resume', '2026-08-25T11:00:00'),
+        ev('reopen', '2026-08-25T13:00:00'),
+      ],
+      th('2026-08-25T14:00:00'),
+    );
+    expect(s.state).toBe('running');
+    expect(s.elapsedMs).toBe(HOUR);
+  });
+
+  it('เปิดใหม่โดยไม่เคยเริ่มมาก่อน ถือว่าเริ่มนับ ณ ตอนนั้น', () => {
+    const s = computeSla(
+      office,
+      4 * HOUR,
+      [ev('reopen', '2026-08-25T10:00:00')],
+      th('2026-08-25T11:00:00'),
+    );
+    expect(s.state).toBe('running');
+    expect(s.elapsedMs).toBe(HOUR);
+  });
+
+  it('เป้าที่เปลี่ยนไปก่อนปิด ยังมีผลกับรอบใหม่ — ความสำคัญไม่ได้ย้อนกลับเอง', () => {
+    const s = computeSla(
+      office,
+      4 * HOUR,
+      [
+        ev('start', '2026-08-25T09:00:00'),
+        ev('target-change', '2026-08-25T10:00:00', 2 * HOUR),
+        ev('stop', '2026-08-25T11:00:00'),
+        ev('reopen', '2026-08-25T13:00:00'),
+      ],
+      th('2026-08-25T14:00:00'),
+    );
+    expect(s.targetMs).toBe(2 * HOUR);
+    expect(s.elapsedMs).toBe(HOUR);
+  });
+
+  it('ตั้งการแจ้งเตือนของรอบใหม่ได้ครบทุกเกณฑ์', () => {
+    const s = computeSla(office, 4 * HOUR, closedThenReopened, th('2026-08-25T14:00:00'));
+    // นาฬิกาที่ค้างอยู่ที่ met คืนรายการว่างเสมอ — ตั๋วที่เปิดใหม่จะไม่มีใครเตือน
+    expect(notificationTimes(office, s, th('2026-08-25T14:00:00')).map((n) => n.threshold)).toEqual([
+      0.5, 0.75, 1,
+    ]);
+  });
+});
+
 describe('SLA · G · breachAt', () => {
   it('คำนวณจุดที่จะหลุดในวันเดียวกัน', () => {
     const s = computeSla(office, 4 * HOUR, [ev('start', '2026-08-25T09:00:00')], th('2026-08-25T10:00:00'));

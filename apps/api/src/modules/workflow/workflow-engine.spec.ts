@@ -16,6 +16,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   evaluateTransitions,
+  slaEffectOfTransition,
   validateTransition,
   TransitionNotAllowedError,
   ValidationFailedError,
@@ -218,5 +219,60 @@ describe('Workflow Engine · ลำดับการทำงานสามช
     const outcome = validateTransition(startTransition, ctx({ currentStatusId: STATUS.new.id }));
     expect(outcome.toStatusId).toBe(STATUS.investigating.id);
     expect(outcome.postFunctions).toHaveLength(0);
+  });
+});
+
+/**
+ * ตารางนี้เป็นจุดที่พลาดแล้วเงียบที่สุดของทั้งฟีเจอร์ SLA
+ *
+ * เลือกผิดหนึ่งช่อง นาฬิกาเดินผิดไปทั้งใบโดยไม่มี error สักบรรทัด
+ * และไม่มีหน้าจอไหนแสดงอาการ นอกจากตัวเลขที่ผิดในรายงานอีกสามเดือนถัดมา
+ */
+describe('slaEffectOfTransition', () => {
+  const todo = { category: 'TODO', pausesSla: false };
+  const doing = { category: 'IN_PROGRESS', pausesSla: false };
+  const waiting = { category: 'IN_PROGRESS', pausesSla: true };
+  const done = { category: 'DONE', pausesSla: false };
+
+  it('เข้าหมวด DONE = หยุดนาฬิกา', () => {
+    expect(slaEffectOfTransition(doing, done)).toBe('stop');
+  });
+
+  it('**ออกจากหมวด DONE = เปิดใหม่** ไม่ใช่แค่คำนวณใหม่', () => {
+    // ก่อนมีช่องนี้ กรณีนี้ตกไปที่ recompute ซึ่งคำนวณนาฬิกาที่ปิดแล้วใหม่
+    // แล้วได้ "จบแล้ว" เหมือนเดิมทุกครั้ง — ตั๋วที่เปิดใหม่จึงไม่มีนาฬิกาเดินเลย
+    expect(slaEffectOfTransition(done, doing)).toBe('reopen');
+    expect(slaEffectOfTransition(done, todo)).toBe('reopen');
+  });
+
+  it('เปิดใหม่เข้าสถานะที่พักนาฬิกา ก็ยังต้องปลุกนาฬิกาก่อน', () => {
+    // ถ้าตอบ pause นาฬิกาที่ปิดอยู่จะไม่มีอะไรปลุก แล้วค้างเป็น "จบแล้ว" ต่อไป
+    expect(slaEffectOfTransition(done, waiting)).toBe('reopen');
+  });
+
+  it('DONE ไป DONE ยังนับเป็นหยุด ไม่ใช่เปิดใหม่', () => {
+    // Resolved -> Closed เป็นเส้นทางปกติ ต้องไม่ปลุกนาฬิกาขึ้นมาเดินอีก
+    expect(slaEffectOfTransition(done, done)).toBe('stop');
+  });
+
+  it('เข้าสถานะที่พักนาฬิกา = พัก', () => {
+    expect(slaEffectOfTransition(doing, waiting)).toBe('pause');
+  });
+
+  it('พักอยู่แล้วเข้าสถานะที่พักอีก ไม่พักซ้ำ', () => {
+    expect(slaEffectOfTransition(waiting, waiting)).toBe('recompute');
+  });
+
+  it('ออกจากสถานะที่พัก = เดินต่อ', () => {
+    expect(slaEffectOfTransition(waiting, doing)).toBe('resume');
+  });
+
+  it('เปลี่ยนสถานะที่ไม่กระทบนาฬิกา ยังต้องคำนวณใหม่ ไม่ใช่ไม่ทำอะไร', () => {
+    expect(slaEffectOfTransition(todo, doing)).toBe('recompute');
+  });
+
+  it('ไม่รู้สถานะเดิม ถือว่าไม่เคยพักและไม่เคยปิด', () => {
+    expect(slaEffectOfTransition(null, doing)).toBe('recompute');
+    expect(slaEffectOfTransition(null, waiting)).toBe('pause');
   });
 });

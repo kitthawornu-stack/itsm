@@ -13,6 +13,7 @@ import { recomputeSla, recordSlaEvent } from '../sla';
 import {
   evaluateTransitions,
   requiredFieldsFor,
+  slaEffectOfTransition,
   validateTransition,
   type TransitionContext,
   type TransitionDefinition,
@@ -365,19 +366,17 @@ export async function applyTransition(
   // ผลที่ยอมรับได้: ถ้าขั้นนี้ล้ม สถานะเปลี่ยนแล้วแต่นาฬิกายังไม่อัปเดต
   // ซึ่งแก้ได้ด้วย recomputeSla() และไม่ทำให้ข้อมูลผิดถาวร
   const now = systemClock.nowUtc();
-  if (toStatus.category === 'DONE') {
-    await recordSlaEvent(ctx, item.id, 'stop', now);
-  } else if (toStatus.pausesSla && fromStatus?.pausesSla !== true) {
-    await recordSlaEvent(ctx, item.id, 'pause', now);
-  } else if (!toStatus.pausesSla && fromStatus?.pausesSla === true) {
-    await recordSlaEvent(ctx, item.id, 'resume', now);
-  } else {
-    // transition ที่ไม่กระทบการพัก/เดินของนาฬิกา **ก็ยังต้องคำนวณใหม่**
-    //
-    // เวอร์ชันแรกข้ามกรณีนี้ไป ผลคือนาฬิกาที่เพิ่งเริ่ม (New -> Investigating)
-    // ไม่เคยตั้งงานแจ้งเตือนเลย เพราะงานถูกตั้งตอน recomputeSla เท่านั้น
-    // และ recomputeSla ถูกเรียกเฉพาะตอนมีเหตุการณ์พัก/เดินต่อ/ปิด
+  const effect = slaEffectOfTransition(fromStatus, toStatus);
+  if (effect === 'recompute') {
+    /**
+     * transition ที่ไม่กระทบการพัก/เดินของนาฬิกา **ก็ยังต้องคำนวณใหม่**
+     *
+     * เวอร์ชันแรกข้ามกรณีนี้ไป ผลคือนาฬิกาที่เพิ่งเริ่ม (New -> Investigating)
+     * ไม่เคยตั้งงานแจ้งเตือนเลย เพราะงานถูกตั้งตอน recomputeSla เท่านั้น
+     */
     await recomputeSla(ctx, item.id, now);
+  } else {
+    await recordSlaEvent(ctx, item.id, effect, now);
   }
 
   return result;
