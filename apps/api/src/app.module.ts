@@ -10,6 +10,7 @@ import {
   SelfServiceController,
   UserAdminController,
 } from './modules/identity/user-admin.controller';
+import { IssueTypeController } from './modules/field/issue-type.controller';
 import { LookupController } from './modules/field/lookup.controller';
 import { CalendarController } from './modules/sla/calendar.controller';
 import { HealthController } from './modules/health/health.controller';
@@ -31,6 +32,7 @@ import { WorkItemController } from './modules/workitem/workitem.controller';
     UserAdminController,
     SelfServiceController,
     LookupController,
+    IssueTypeController,
     CalendarController,
     ProjectAdminController,
     WorkflowAdminController,

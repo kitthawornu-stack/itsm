@@ -181,9 +181,19 @@ describe('เลิกใช้', () => {
     }
   });
 
-  it('ไม่มีฟังก์ชันลบให้เรียก — การลบล้างค่าบนงานเก่าทุกใบ', async () => {
+  it('**ไม่มีฟังก์ชันลบผลการแก้ไขให้เรียก** — การลบล้างค่าบนงานเก่าทุกใบ', async () => {
+    /*
+      เดิมสแกนทั้งโมดูล `field` แล้วยืนยันว่าไม่มีชื่อไหนตรง /delete|remove/
+      ซึ่งกว้างเกินเจตนา — พอโมดูลมี `removeIssueType` เข้ามา เทสต์ก็แดง
+      ทั้งที่กฎเรื่องผลการแก้ไขไม่ได้เปลี่ยนอะไรเลย
+
+      กฎคือ "ห้ามลบ**ผลการแก้ไข**" ไม่ใช่ "ห้ามโมดูลนี้มีคำว่าลบ"
+    */
     const mod: Record<string, unknown> = await import('../src/modules/field');
-    expect(Object.keys(mod).filter((k) => /delete|remove/i.test(k))).toEqual([]);
+    const resolutionDeleters = Object.keys(mod).filter(
+      (k) => /resolution/i.test(k) && /delete|remove/i.test(k),
+    );
+    expect(resolutionDeleters).toEqual([]);
   });
 });
 

@@ -27,6 +27,7 @@ export default function AppLayout({ children }: { children: ReactNode }): ReactN
             <a href="/new">แจ้งปัญหา</a>
             <a href="/admin/projects">โปรเจกต์</a>
             <a href="/admin/workflows">workflow</a>
+            <a href="/admin/issue-types">ประเภทงาน</a>
             <a href="/admin/users">ผู้ใช้</a>
             <a href="/admin/resolutions">ผลการแก้ไข</a>
             <a href="/admin/calendars">วันหยุด</a>
