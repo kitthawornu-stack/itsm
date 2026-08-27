@@ -1,6 +1,13 @@
 # Jira Parity Checklist — เอกสารคุมขอบเขต v1.0
 
 **สถานะ:** 🟡 ร่าง — รอลงนาม · **ต้องลงนามก่อนเริ่ม Phase 0**
+**อัปเดตความคืบหน้าล่าสุด:** 2569-08-27 · commit `d382520`
+
+> ช่องหมายถูกในเอกสารนี้เคยว่างทั้ง 39 ข้อ ทั้งที่หลายข้อทำเสร็จไปแล้ว
+> **รายการติดตามที่ไม่มีใครอัปเดต ไม่ได้แปลว่างานไม่คืบ แต่แปลว่าไม่มีใครรู้ว่าคืบไปเท่าไร**
+>
+> สัญลักษณ์: `[x]` เสร็จและตรวจแล้ว · `[~]` ใช้งานได้บางส่วน (มีคำอธิบายกำกับ)
+> `[ ]` ยังไม่เริ่ม · `[❌]` ตัดออกจากขอบเขตพร้อมเหตุผล
 
 | ผู้ลงนาม | บทบาท | วันที่ |
 |---|---|---|
@@ -23,13 +30,13 @@ Jira สะสมฟีเจอร์มา 20 ปี การไล่เท�
 ## ✅ อยู่ใน v1.0
 
 ### Work Item
-- [ ] Issue Type ที่แอดมินสร้างเองได้ + ไอคอนต่อประเภท
-- [ ] ลำดับชั้น Epic → Story → Sub-task (ลึกสุด 3 ชั้น)
-- [ ] Issue Link 6 ชนิด (relates to, blocks, is blocked by, duplicates, causes, is caused by)
-- [ ] Custom Field 14 ชนิด
-- [ ] คอมเมนต์ + rich text + mention + ไฟล์แนบ
-- [ ] Watcher + Vote
-- [ ] ประวัติการแก้ไขทุกฟิลด์
+- [ ] Issue Type ที่แอดมินสร้างเองได้ + ไอคอนต่อประเภท — *สคีมาพร้อม · ยังสร้างจากหน้าจอไม่ได้*
+- [ ] ลำดับชั้น Epic → Story → Sub-task (ลึกสุด 3 ชั้น) — *มี `parentId` ในสคีมา ยังไม่มีตรรกะและหน้าจอ*
+- [ ] Issue Link 6 ชนิด (relates to, blocks, is blocked by, duplicates, causes, is caused by) — *สคีมาพร้อม โมดูล `link` ยังว่าง*
+- [~] Custom Field 14 ชนิด — *เอนจิน EAV + snapshot ครบ 14 ชนิด (ADR-001) · ยังไม่มีหน้าจอสร้างฟิลด์*
+- [~] คอมเมนต์ + rich text + mention + ไฟล์แนบ — *คอมเมนต์ (มีบันทึกภายใน) ✔ ไฟล์แนบ ✔ · rich text และ mention ยังไม่ทำ*
+- [ ] Watcher + Vote — *สคีมาพร้อม ยังไม่มีโค้ดเรียกใช้*
+- [x] ประวัติการแก้ไขทุกฟิลด์ — *บังคับด้วย `auditedTransaction` · mutation ที่ไม่เขียนประวัติจะโยน error (INVARIANT 2)*
 - [ ] Bulk edit (มอบหมาย · เปลี่ยนสถานะ · เปลี่ยนความสำคัญ · ติดป้าย · ย้ายโปรเจกต์)
 - [ ] Clone งาน
 - [ ] Time tracking (original / spent / remaining) + Worklog
@@ -47,29 +54,29 @@ Jira สะสมฟีเจอร์มา 20 ปี การไล่เท�
 - [ ] Component + Label
 
 ### Search & Report
-- [ ] HQL (ภาษาคิวรีแบบ JQL) + Saved Filter + แชร์ filter
+- [ ] HQL (ภาษาคิวรีแบบ JQL) + Saved Filter + แชร์ filter — *`packages/hql` ยังว่างเปล่า · เอนจินตัวที่ 4 ยังไม่เริ่ม*
 - [ ] Dashboard + Gadget 18 ชนิด + Wallboard
 - [ ] Agile Report 8 ตัว (Burndown, Burnup, Velocity, CFD, Sprint Report, Control Chart, Epic Report, Release Burndown)
 - [ ] Report Builder แบบ pivot
 - [ ] Scheduled export (PDF / XLSX / CSV)
 
 ### Admin
-- [ ] Workflow Editor แบบลากวาง + Condition / Validator / Post Function
-- [ ] Field Scheme + Screen Scheme
-- [ ] Permission Scheme (ระดับโปรเจกต์และระดับฟิลด์)
+- [~] Workflow Editor แบบลากวาง + Condition / Validator / Post Function — *เอนจินครบสามชั้นและทำงานจริง · หน้าจอ **อ่านได้** แล้ว ยังแก้ไม่ได้*
+- [ ] Field Scheme + Screen Scheme — *`FieldConfig` มีในสคีมา ยังไม่มีหน้าจอ*
+- [~] Permission Scheme (ระดับโปรเจกต์และระดับฟิลด์) — *ระดับโปรเจกต์บังคับใช้ทุก endpoint และดูได้จากหน้าจอ · ยังแก้จากหน้าจอไม่ได้ · ระดับฟิลด์ (INVARIANT 3) ยังไม่ทำ*
 - [ ] Notification Scheme
 - [ ] Automation Rule Builder แบบ no-code
-- [ ] REST API v1 + OpenAPI + Webhook
-- [ ] SSO (SAML / OIDC) + LDAP sync
-- [ ] Audit Log
+- [~] REST API v1 + OpenAPI + Webhook — *35 endpoint ใช้งานจริง · ยังไม่มี OpenAPI และ webhook*
+- [❌] SSO (SAML / OIDC) + LDAP sync — **ตัดออกจากขอบเขตตาม ADR-003** องค์กรไม่ได้ใช้ AD/LDAP · ยืนยันโดยผู้มีอำนาจตัดสิน 2569-08-26
+- [~] Audit Log — *`audit_log` และ `work_item_history` เขียนครบทุก mutation · ยังไม่มีหน้าจออ่าน*
 
 ### สิ่งที่ Jira **ไม่มี** แต่เราจะมี
-- [ ] ITSM ครบตาม ITIL 4 ในผลิตภัณฑ์เดียวกัน ไม่ต้องซื้อแยก
+- [~] ITSM ครบตาม ITIL 4 ในผลิตภัณฑ์เดียวกัน ไม่ต้องซื้อแยก — *Incident + Service Request ใช้งานได้ · Problem / Change / Knowledge ยังไม่เริ่ม*
 - [ ] CMDB + Impact Analysis ที่ผูกกับ Incident โดยตรง
-- [ ] SLA Engine ที่รู้จักวันหยุดราชการไทยและวันหยุดชดเชย
+- [x] SLA Engine ที่รู้จักวันหยุดราชการไทยและวันหยุดชดเชย — *144 เคสผ่าน · ⚠️ ปฏิทินที่ seed ไว้ยังเป็น `verified: false` ใช้บน production ไม่ได้จนกว่าจะสอบทานกับประกาศจริง*
 - [ ] แจ้งเตือนผ่าน LINE Messaging API
-- [ ] ส่วนติดต่อผู้ใช้และเอกสารภาษาไทยเต็มรูปแบบ ค้นหาภาษาไทยได้แม่นจริง
-- [ ] รองรับปีพุทธศักราช
+- [x] ส่วนติดต่อผู้ใช้และเอกสารภาษาไทยเต็มรูปแบบ ค้นหาภาษาไทยได้แม่นจริง — *`thai_text` analyzer ที่ประกอบเอง · 69 เคสผ่าน (ADR-005)*
+- [x] รองรับปีพุทธศักราช — *ทุกหน้าจอเรนเดอร์ด้วย `th-TH`*
 
 ---
 
@@ -85,6 +92,40 @@ Jira สะสมฟีเจอร์มา 20 ปี การไล่เท�
 | Issue Security Level (ซ่อนตั๋วบางใบจากบางคนในโปรเจกต์เดียวกัน) | ซับซ้อนสูงและกระทบทุกคิวรี · Permission Scheme ระดับโปรเจกต์เพียงพอสำหรับลูกค้าเป้าหมาย | มีลูกค้าที่ต้องการจริงและยอมจ่ายเพิ่ม |
 | Custom Field แบบคำนวณ / สูตร | ต้องมี expression engine และการจัดการ dependency ที่ซับซ้อน | หลัง GA |
 | Localization นอกจากไทย/อังกฤษ | ไม่มีตลาดในแผน 2 ปีแรก | มีลูกค้าต่างประเทศจริง |
+
+---
+
+## สถานะรายเฟส — 2569-08-27
+
+40 commit · 633 เทสต์ผ่าน · 35 endpoint · 9 หน้าจอ · 21 โมดูล (มีโค้ดจริง 10)
+
+| เฟส | ขอบเขต | สถานะ | ค้างอะไร |
+|---|---|---|---|
+| **0** Foundation | รากที่รื้อทีหลังไม่ได้ | 🟢 **ผ่านเกือบครบ** | Workflow Editor และ Screen Scheme จากหน้าจอ · Storybook มี 14 คอมโพเนนต์จากเป้า 24 |
+| **1** Service Desk MVP | ตัวจริงตัวแรกที่มีคนใช้ | 🟡 **ประมาณ 60%** | Service Catalog · Email-to-Ticket · LINE · Approval · CSAT · Saved Filter · Bulk Action |
+| **2** Delivery | ฝั่งที่สู้กับ Jira ตรง ๆ | 🔴 **ยังไม่เริ่ม** | Board · Backlog · Sprint · Epic · Link · Roadmap · HQL (`packages/hql` ว่างเปล่า) |
+| **3** ITIL Depth | สิ่งที่ทำให้เป็น ITSM จริง | 🔴 **ยังไม่เริ่ม** | Problem · Change/CAB · CMDB · Knowledge Base · Approval หลายขั้น |
+| **4** Insight + Automation | จุดที่ผู้บริหารเห็นคุณค่า | 🔴 **ยังไม่เริ่ม** | Dashboard · Report · Automation · OpenAPI · Webhook · (SSO/LDAP ตัดออกแล้ว) |
+| **5** Hardening + SaaS | จากใช้เองสู่ขายได้ | 🔴 **ยังไม่เริ่ม** | ทดสอบโหลด · pentest · PDPA · Multi-tenant · เครื่องมือย้ายข้อมูล |
+
+### Phase 0 — Exit Criteria ทีละข้อ
+
+| เกณฑ์ | ผล |
+|---|---|
+| แอดมินสร้าง Issue Type + workflow 5 สถานะ + ฟิลด์ 3 ตัว จาก UI โดยไม่แตะโค้ด | ❌ **ยังไม่ผ่าน** — ดูการตั้งค่าได้แล้ว แต่แก้ไม่ได้ ต้องผ่าน seed/bootstrap |
+| ผู้ใช้ 2 บทบาทเห็นปุ่ม transition ต่างกันตาม permission | ✅ ตรวจในเบราว์เซอร์จริงแล้ว ทั้งฝั่งซ่อนปุ่มและฝั่งเซิร์ฟเวอร์ปฏิเสธ |
+| ทุก transition ปรากฏใน history ครบถ้วน | ✅ บังคับด้วย `auditedTransaction` — mutation ที่ไม่เขียนประวัติโยน error |
+| Storybook มีคอมโพเนนต์ครบ 24 ตัว พร้อมสถานะ empty/loading/error | 🟡 **14 ตัว · 34 story** |
+| ทดสอบอัตโนมัติผ่าน ≥ 70% บนโมดูล core | ✅ 633 เทสต์ · เอนจินทั้งสี่มีชุดทดสอบเป็นข้อกำหนด |
+| spike เอนจินทั้ง 4 ตัวต้องมีของจริง | 🟡 **3 จาก 4** — workflow · SLA · LexoRank เสร็จ · **HQL ยังไม่เริ่ม** |
+
+### สิ่งที่ต้องรู้ก่อนขึ้น pilot
+
+1. **ปฏิทินวันหยุดยังเป็น `verified: false`** — `assertVerified()` ปฏิเสธบน production
+   ต้องสอบทานกับประกาศ ครม. จริงรายปีก่อน ไม่มีสูตรคำนวณ
+2. **สร้างโปรเจกต์ที่สองจากหน้าจอไม่ได้** — ทำได้ทาง `bootstrap.js` ทางเดียว
+3. **แก้สิทธิ์จากหน้าจอไม่ได้** — ดูได้แล้ว แต่การเปลี่ยนยังต้องเขียน SQL
+4. **ยังไม่มี Service Catalog** — ผู้แจ้งพิมพ์อิสระ ไม่ได้เลือกจากรายการบริการ
 
 ---
 

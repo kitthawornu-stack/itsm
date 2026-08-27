@@ -7,11 +7,16 @@
 |---|---|---|---|
 | [001](ADR-001-custom-field-storage.md) | วิธีเก็บ Custom Field | 🟢 ยอมรับ (Spike B · snapshot เร็วกว่า 7.4x) | Tech Lead |
 | [002](ADR-002-lexorank.md) | การจัดลำดับงานด้วย LexoRank | 🟢 ยอมรับ (Spike D · 19 เคสผ่าน) | Tech Lead |
-| [003](ADR-003-identity.md) | Keycloak หรือ In-house Auth | 🔴 ต้องตัดสิน | Tech Lead |
-| [004](ADR-004-modular-monolith.md) | Modular Monolith ไม่ใช่ Microservices | 🟡 ร่าง | Tech Lead |
+| [003](ADR-003-identity.md) | Keycloak หรือ In-house Auth | 🟢 ยอมรับ (In-house · ไม่ต่อ AD/LDAP · 2569-08-26) | Tech Lead |
+| [004](ADR-004-modular-monolith.md) | Modular Monolith ไม่ใช่ Microservices | 🟡 ร่าง — บังคับใน CI แล้ว รอเซ็นรับ | Tech Lead |
 | [005](ADR-005-search.md) | OpenSearch เป็นแหล่งค้นหาเดียว | 🟢 ยอมรับ (Spike C · 69 เคสผ่าน) | BE Lead |
 
 **สถานะ:** 🔴 ต้องตัดสิน · 🟡 ร่าง (รอเซ็นรับ) · 🟢 ยอมรับแล้ว · ⚫ ถูกแทนที่
+
+> ตารางนี้เคยค้างอยู่ที่ 🔴 สำหรับ ADR-003 ทั้งที่ตัวเอกสารเองเขียนว่าตัดสินแล้ว
+> และโค้ดที่ตัดสินใจนั้นสั่งไว้ถูกส่งไปแล้วห้า commit —
+> **ดัชนีที่ไม่ตรงกับเอกสารที่มันชี้ไป อันตรายกว่าไม่มีดัชนี**
+> เพราะคนอ่านสรุปจากตารางแล้วไม่เปิดเข้าไปดู
 
 ## รูปแบบ
 
