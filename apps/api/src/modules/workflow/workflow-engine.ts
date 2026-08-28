@@ -40,6 +40,15 @@ export interface TransitionContext {
   userGroupIds: bigint[];
   /** ค่าฟิลด์ปัจจุบันของ work item รวมทั้ง built-in และ custom field */
   fields: Record<string, unknown>;
+  /**
+   * สถานะการอนุมัติล่าสุดของงานใบนี้
+   *
+   * ส่งเข้ามาจากผู้เรียก ไม่ให้เอนจินไปอ่านเอง — เอนจินต้องเป็นฟังก์ชันบริสุทธิ์
+   * ทดสอบได้โดยไม่ต้องมีฐานข้อมูล (กติกาเดียวกับที่ห้ามอ่านนาฬิกาเองใน SLA Engine)
+   *
+   * `none` = ยังไม่เคยขออนุมัติเลย · ต่างจาก `rejected` ซึ่งขอแล้วถูกปฏิเสธ
+   */
+  approval?: 'none' | 'pending' | 'approved' | 'rejected';
 }
 
 export interface TransitionOutcome {
@@ -150,6 +159,27 @@ type ValidatorFn = (
 ) => { ok: true } | { ok: false; missingFields: string[] };
 
 const VALIDATORS: Record<string, ValidatorFn> = {
+  /**
+   * ต้องได้รับอนุมัติก่อนจึงจะกดปุ่มนี้ได้
+   *
+   * เป็นฟังก์ชันบริสุทธิ์เหมือนกฎอื่นทุกตัว — สถานะการอนุมัติถูกส่งเข้ามาใน
+   * context ไม่ใช่ให้เอนจินไปอ่านฐานข้อมูลเอง
+   *
+   * **แยก "ยังไม่ได้ขอ" ออกจาก "ถูกปฏิเสธ"** เพราะสองอย่างนี้ผู้ใช้ต้องทำ
+   * คนละอย่าง: อย่างแรกไปกดขออนุมัติ อย่างหลังต้องแก้เรื่องก่อนแล้วขอใหม่
+   */
+  'require-approval': (_config, ctx) => {
+    const state = ctx.approval ?? 'none';
+    if (state === 'approved') return { ok: true };
+    const reason =
+      state === 'pending'
+        ? 'รออนุมัติอยู่'
+        : state === 'rejected'
+          ? 'คำขออนุมัติถูกปฏิเสธ'
+          : 'ยังไม่ได้ขออนุมัติ';
+    return { ok: false, missingFields: [`การอนุมัติ (${reason})`] };
+  },
+
   /** ฟิลด์ที่ระบุต้องมีค่าครบทุกตัว — รายงานที่ขาดทั้งหมดในครั้งเดียว */
   'required-fields': (config, ctx) => {
     const required = Array.isArray(config['fields'])

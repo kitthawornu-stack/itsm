@@ -9,6 +9,7 @@ import { systemClock, type TenantContext } from '@itsm/types';
 
 import { auditedTransaction, change, type AuditEntry } from '../../infrastructure/audit/audited-transaction';
 import { tenantScoped } from '../../infrastructure/prisma/tenant-scope';
+import { approvalStateOf } from '../approval';
 import { recomputeSla, recordSlaEvent } from '../sla';
 import {
   evaluateTransitions,
@@ -153,6 +154,12 @@ async function buildContext(
     currentStatusId: item.statusId,
     assigneeId: item.assigneeId,
     userGroupIds: memberships.map((m) => m.groupId),
+    /*
+      อ่านสถานะการอนุมัติที่นี่ **แล้วส่งเข้าเอนจิน** ไม่ให้เอนจินไปอ่านเอง
+      กติกาเดียวกับที่ห้าม SLA Engine อ่านนาฬิกาเอง — เอนจินต้องทดสอบได้
+      โดยไม่ต้องมีฐานข้อมูล
+    */
+    approval: await approvalStateOf(ctx, item.id),
     fields: {
       ...item.fieldSnapshot,
       // built-in field ที่ validator อ้างถึงได้เหมือน custom field

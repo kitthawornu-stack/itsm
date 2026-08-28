@@ -66,6 +66,16 @@ const startTransition: TransitionDefinition = {
   rules: [],
 };
 
+/** transition ที่ต้องได้รับอนุมัติก่อน — ใช้ทดสอบ validator `require-approval` */
+const needsApproval: TransitionDefinition = {
+  id: 903n,
+  name: 'เริ่มจัดซื้อ',
+  fromStatusId: STATUS.new.id,
+  toStatusId: STATUS.investigating.id,
+  position: 2,
+  rules: [{ kind: 'VALIDATOR', ruleType: 'require-approval', config: {}, position: 1 }],
+};
+
 const escalate: TransitionDefinition = {
   id: 902n,
   name: 'ยกระดับเป็น Major Incident',
@@ -274,5 +284,51 @@ describe('slaEffectOfTransition', () => {
   it('ไม่รู้สถานะเดิม ถือว่าไม่เคยพักและไม่เคยปิด', () => {
     expect(slaEffectOfTransition(null, doing)).toBe('recompute');
     expect(slaEffectOfTransition(null, waiting)).toBe('pause');
+  });
+});
+
+describe('Workflow Engine · require-approval', () => {
+  /*
+    กฎนี้เป็นฟังก์ชันบริสุทธิ์เหมือนกฎอื่นทุกตัว — สถานะการอนุมัติถูกส่งเข้ามาใน
+    context ไม่ใช่ให้เอนจินไปอ่านฐานข้อมูลเอง (กติกาเดียวกับที่ห้าม SLA Engine
+    อ่านนาฬิกาเอง) · เทสต์ชุดนี้จึงรันได้โดยไม่ต้องมีฐานข้อมูลเลย
+  */
+  it('อนุมัติแล้วผ่าน', () => {
+    const outcome = validateTransition(
+      needsApproval,
+      ctx({ currentStatusId: STATUS.new.id, approval: 'approved' }),
+    );
+    expect(outcome.toStatusId).toBe(STATUS.investigating.id);
+  });
+
+  it('**ยังไม่ได้ขอ กับ ถูกปฏิเสธ ต้องได้ข้อความคนละอย่าง**', () => {
+    /*
+      สองสถานะนี้ผู้ใช้ต้องทำคนละอย่าง: อย่างแรกไปกดขออนุมัติ
+      อย่างหลังต้องแก้เรื่องก่อนแล้วค่อยขอใหม่ · ข้อความเดียวกันทำให้
+      คนที่ถูกปฏิเสธไปกดขอซ้ำแล้วโดนปฏิเสธซ้ำโดยไม่รู้ว่าทำไม
+    */
+    const messageFor = (approval: 'none' | 'pending' | 'rejected'): string => {
+      try {
+        validateTransition(needsApproval, ctx({ currentStatusId: STATUS.new.id, approval }));
+        return 'ผ่าน';
+      } catch (e) {
+        return (e as ValidationFailedError).missingFields.join(' ');
+      }
+    };
+    const none = messageFor('none');
+    const pending = messageFor('pending');
+    const rejected = messageFor('rejected');
+    expect(none).toContain('ยังไม่ได้ขออนุมัติ');
+    expect(pending).toContain('รออนุมัติอยู่');
+    expect(rejected).toContain('ถูกปฏิเสธ');
+    expect(new Set([none, pending, rejected]).size).toBe(3);
+  });
+
+  it('ไม่ส่ง approval มาเลย ถือว่ายังไม่ได้ขอ — ไม่ใช่ผ่าน', () => {
+    // ค่าที่ไม่ครบต้องแปลว่า "ยังไม่ผ่าน" ไม่ใช่ "ผ่าน"
+    // การเดาไปทางอนุญาตเมื่อข้อมูลไม่ครบ คือวิธีที่กลไกกันไว้รั่วบ่อยที่สุด
+    expect(() =>
+      validateTransition(needsApproval, ctx({ currentStatusId: STATUS.new.id })),
+    ).toThrow(ValidationFailedError);
   });
 });

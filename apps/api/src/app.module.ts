@@ -23,6 +23,7 @@ import {
   CatalogAdminController,
   CatalogController,
 } from './modules/catalog/catalog.controller';
+import { ApprovalController } from './modules/approval/approval.controller';
 import { WorkItemController } from './modules/workitem/workitem.controller';
 
 /**
@@ -47,6 +48,7 @@ import { WorkItemController } from './modules/workitem/workitem.controller';
     SavedFilterController,
     CatalogController,
     CatalogAdminController,
+    ApprovalController,
     NotificationController,
   ],
   /**

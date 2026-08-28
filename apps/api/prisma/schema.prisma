@@ -45,6 +45,7 @@ model Tenant {
   savedFilters      SavedFilter[]
   catalogItems      CatalogItem[]
   satisfactions     Satisfaction[]
+  approvals         Approval[]
   catalogCategories CatalogCategory[]
 
   @@map("tenant")
@@ -83,6 +84,8 @@ model User {
   @@index([tenantId, externalId])
   @@map("user")
   satisfactions Satisfaction[]
+  approvalsRequested Approval[] @relation("ApprovalRequester")
+  approvalsDecided   Approval[] @relation("ApprovalDecider")
 }
 
 /**
@@ -157,6 +160,7 @@ model UserGroup {
   members         GroupMember[]
   grants          PermissionGrant[]
   notifyProjects  Project[]         @relation("ProjectNotifyGroup")
+  approvals       Approval[]
 
   @@unique([tenantId, name])
   @@map("user_group")
@@ -589,6 +593,7 @@ model WorkItem {
   priority   Priority?      @relation(fields: [priorityId], references: [id], onDelete: SetNull)
   catalogItem CatalogItem?  @relation(fields: [catalogItemId], references: [id], onDelete: SetNull)
   satisfaction Satisfaction?
+  approvals    Approval[]
   resolution Resolution?    @relation(fields: [resolutionId], references: [id], onDelete: SetNull)
   reporter   User           @relation("WorkItemReporter", fields: [reporterId], references: [id], onDelete: Restrict)
   assignee   User?          @relation("WorkItemAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
@@ -1124,4 +1129,51 @@ model Satisfaction {
 
   @@index([tenantId, rating, createdAt])
   @@map("satisfaction")
+}
+
+// ============================================================
+// การอนุมัติขั้นเดียว
+//
+// **เก็บเป็นประวัติ ไม่ใช่แถวเดียวที่ถูกเขียนทับ** — คำขอที่ถูกปฏิเสธแล้วขอใหม่
+// ต้องตอบได้ว่าเคยถูกปฏิเสธเพราะอะไร · MySQL ไม่มี partial index จึงบังคับ
+// "หนึ่งคำขอที่ค้างอยู่" ด้วยโค้ด ไม่ใช่ด้วย unique index (CLAUDE.md §3)
+// ============================================================
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  /// ถูกยกเลิกเพราะมีเหตุอื่น เช่น งานถูกปิดไปก่อน — ไม่ใช่การตัดสินใจของคน
+  CANCELLED
+}
+
+model Approval {
+  id         BigInt @id @default(autoincrement())
+  tenantId   BigInt @map("tenant_id")
+  workItemId BigInt @map("work_item_id")
+
+  /// กลุ่มที่อนุมัติได้ — ให้ผ่านกลุ่มเท่านั้น เพื่อตอบได้ว่า "อนุมัติได้เพราะอยู่กลุ่มไหน"
+  approverGroupId BigInt @map("approver_group_id")
+  requestedById   BigInt @map("requested_by_id")
+  /// เหตุผลที่ขอ — ผู้อนุมัติต้องรู้ว่ากำลังอนุมัติอะไร ไม่ใช่เห็นแค่เลขที่เรื่อง
+  reason String? @db.Text
+
+  status     ApprovalStatus @default(PENDING)
+  decidedById BigInt?       @map("decided_by_id")
+  decidedAt   DateTime?     @map("decided_at") @db.DateTime(3)
+  /// เหตุผลที่ปฏิเสธ — การปฏิเสธที่ไม่บอกเหตุผลคือทางตันของผู้ขอ
+  decisionNote String?      @map("decision_note") @db.Text
+
+  createdAt DateTime @default(now()) @map("created_at") @db.DateTime(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.DateTime(3)
+
+  tenant        Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  workItem      WorkItem  @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+  approverGroup UserGroup @relation(fields: [approverGroupId], references: [id], onDelete: Restrict)
+  requestedBy   User      @relation("ApprovalRequester", fields: [requestedById], references: [id], onDelete: Restrict)
+  decidedBy     User?     @relation("ApprovalDecider", fields: [decidedById], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, workItemId, createdAt])
+  @@index([tenantId, status, createdAt])
+  @@map("approval")
 }

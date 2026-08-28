@@ -13,6 +13,7 @@ import {
 import { AssignControl } from '@/components/assign-control';
 import { EditItem } from '@/components/edit-item';
 import { CommentThread } from '@/components/comment-thread';
+import { ApprovalPanel } from '@/components/approval-panel';
 import { RatingForm, type Satisfaction } from '@/components/rating-form';
 import { toSlaBar, type SlaSnapshotView } from '@/lib/sla-label';
 
@@ -206,6 +207,12 @@ export default async function WorkItemDetail({
               current={detail.satisfaction ?? null}
             />
           ) : null}
+
+          {/*
+            การอนุมัติอยู่เหนือบทสนทนา — เป็นสิ่งที่กั้นไม่ให้งานเดินต่อ
+            ถ้าอยู่ล่างสุดจะไม่มีใครเห็นว่ากำลังรออะไรอยู่
+          */}
+          <ApprovalPanel apiBase={API} itemKey={detail.itemKey} />
 
           <h2 className="detail-section-title detail-section-gap">บทสนทนา</h2>
           <CommentThread apiBase={API} itemKey={detail.itemKey} />
