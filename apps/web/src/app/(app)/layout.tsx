@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 
+import { CommandPalette } from '@/components/command-palette';
 import { NotificationTray } from '@/components/notification-tray';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { UserMenu } from '@/components/user-menu';
@@ -19,6 +20,8 @@ const API = API_BASE;
 export default function AppLayout({ children }: { children: ReactNode }): ReactNode {
   return (
     <>
+        {/* Ctrl+K ได้ทุกหน้าที่ล็อกอินแล้ว — ไม่ใช่เฉพาะหน้าคิว */}
+        <CommandPalette apiBase={API} />
         <header className="app-header">
           <span className="app-logo" aria-hidden="true" />
           <b className="app-title">Helix</b>

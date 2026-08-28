@@ -131,15 +131,15 @@ Jira สะสมฟีเจอร์มา 20 ปี การไล่เท�
 
 ## สถานะรายเฟส — 2569-08-27
 
-**92 commit · 1,054 เทสต์ผ่าน · 7 CI task · 96 endpoint · 17 หน้าจอ · 21 โมดูล (มีโค้ดจริง 16) · 58 ไฟล์เทสต์**
+**95 commit · 1,054 เทสต์ผ่าน · 7 CI task · 96 endpoint · 17 หน้าจอ · 21 โมดูล (มีโค้ดจริง 16) · 58 ไฟล์เทสต์**
 
 เทสต์แยกตาม workspace: api 894 · worker 58 · ui 53 · **hql 30** · lexorank 19
 
 | เฟส | ขอบเขต | สถานะ | ทำได้แล้ว | ค้างอะไร |
 |---|---|---|---|---|
-| **0** Foundation | รากที่รื้อทีหลังไม่ได้ | 🟢 **5 จาก 6 เกณฑ์** | เกณฑ์ทั้งห้าข้อตรวจในเบราว์เซอร์จริงแล้ว | Storybook 20 จาก 24 คอมโพเนนต์ — เกณฑ์เดียวที่ยังไม่ผ่าน |
+| **0** Foundation | รากที่รื้อทีหลังไม่ได้ | 🟢 **5 จาก 6 เกณฑ์** | เกณฑ์ทั้งห้าข้อตรวจในเบราว์เซอร์จริงแล้ว | Storybook 21 ตัว · 73 story จาก 24 คอมโพเนนต์ — เกณฑ์เดียวที่ยังไม่ผ่าน |
 | **1** Service Desk MVP | ตัวจริงตัวแรกที่มีคนใช้ | 🟡 **12 จาก 14 รายการ** | แจ้งเรื่อง · คิว · รายละเอียด · คอมเมนต์ (มีบันทึกภายใน) · ไฟล์แนบ · มอบหมาย · workflow + ผลการแก้ไข · SLA + ปฏิทิน · แจ้งเตือนในแอปและอีเมล · Service Catalog · CSAT · Approval ขั้นเดียว | Email-to-Ticket · LINE |
-| **2** Delivery | ฝั่งที่สู้กับ Jira ตรง ๆ | 🟡 **4 จาก 12 รายการ** | HQL · Saved Filter (แชร์ได้) · Bulk Edit (มอบหมาย + ความสำคัญ + สถานะ) · Issue Link | Board · Backlog · Sprint · Epic · Roadmap · Story Point · Time Tracking · Command Palette |
+| **2** Delivery | ฝั่งที่สู้กับ Jira ตรง ๆ | 🟡 **5 จาก 12 รายการ** | HQL · Saved Filter (แชร์ได้) · Bulk Edit (มอบหมาย + ความสำคัญ + สถานะ) · Issue Link · Command Palette | Board · Backlog · Sprint · Epic · Roadmap · Story Point · Time Tracking |
 | **3** ITIL Depth | สิ่งที่ทำให้เป็น ITSM จริง | 🔴 **0 จาก 5 รายการ** | — | Problem · Change/CAB · CMDB · Knowledge Base · Approval หลายขั้น |
 | **4** Insight + Automation | จุดที่ผู้บริหารเห็นคุณค่า | 🟡 **1 จาก 5 รายการ** | รายงานพื้นฐาน (`/reports`) | Dashboard ที่จัดวางเองได้ · Automation · OpenAPI · Webhook *(SSO/LDAP ตัดออกตาม ADR-003)* |
 | **5** Hardening + SaaS | จากใช้เองสู่ขายได้ | 🔴 **0 จาก 5 รายการ** | — | ทดสอบโหลด · pentest · PDPA · Multi-tenant · เครื่องมือย้ายข้อมูล |
@@ -161,7 +161,7 @@ Jira สะสมฟีเจอร์มา 20 ปี การไล่เท�
 | แอดมินสร้าง Issue Type + workflow 5 สถานะ + ฟิลด์ 3 ตัว จาก UI โดยไม่แตะโค้ด | ✅ ตรวจในเบราว์เซอร์จริงครบทั้งสามส่วน แล้วแจ้งเรื่องด้วยของที่สร้างเอง |
 | ผู้ใช้ 2 บทบาทเห็นปุ่ม transition ต่างกันตาม permission | ✅ ทั้งฝั่งซ่อนปุ่มและฝั่งเซิร์ฟเวอร์ปฏิเสธ |
 | ทุก transition ปรากฏใน history ครบถ้วน | ✅ บังคับด้วย `auditedTransaction` — mutation ที่ไม่เขียนประวัติโยน error |
-| Storybook มีคอมโพเนนต์ครบ 24 ตัว พร้อมสถานะ empty/loading/error | 🟡 **20 ตัว · 67 story** — เกณฑ์เดียวที่ยังไม่ผ่าน · เหลือ 4 ตัว: Modal · Tabs · Toast · Tooltip |
+| Storybook มีคอมโพเนนต์ครบ 24 ตัว พร้อมสถานะ empty/loading/error | 🟡 **21 ตัว · 73 story** — เกณฑ์เดียวที่ยังไม่ผ่าน · เหลือ 3 ตัว: Tabs · Toast · Tooltip · **Modal เพิ่งเข้ามาพร้อมผู้ใช้จริง (แผงคำสั่ง) ไม่ใช่สร้างเพื่อให้ครบจำนวน** |
 | ทดสอบอัตโนมัติผ่าน ≥ 70% บนโมดูล core | ✅ 1,054 เทสต์ · เอนจินทั้งสี่เขียนชุดทดสอบเป็นข้อกำหนดก่อนโค้ด |
 | spike เอนจินทั้ง 4 ตัวต้องมีของจริง | ✅ workflow · SLA · LexoRank · HQL |
 
