@@ -81,6 +81,13 @@ import {
   type BulkEditResult,
 } from './bulk-edit.service';
 import {
+  NotResolvedYetError,
+  NotTheReporterError,
+  RatingOutOfRangeError,
+  rateWorkItem,
+  satisfactionFor,
+} from './satisfaction.service';
+import {
   InvalidFieldValueError,
   NothingToUpdateError,
   editWorkItem,
@@ -652,6 +659,12 @@ export class WorkItemController {
        */
       fields: await displayFieldsFor(ctx, item.projectId, item.issueTypeId, item.fieldSnapshot),
       sla: sla.get(item.id.toString()) ?? null,
+      /*
+        ความพอใจ · `canRate` บอกหน้าจอว่าจะโชว์แบบฟอร์มหรือแค่ผลลัพธ์
+        เงื่อนไขเดียวกับที่ service ใช้ปฏิเสธ — หน้าจอไม่ได้คิดกฎเอง
+      */
+      satisfaction: await satisfactionFor(ctx, item.itemKey),
+      canRate: item.reporterId === ctx.actorId && item.resolvedAt !== null,
       // ให้หน้าจอซ่อนปุ่มที่กดไม่ได้ — ไม่ใช่กลไกป้องกัน เซิร์ฟเวอร์ปฏิเสธเองอยู่แล้ว
       permissions: await summaryFor(ctx, item.projectId),
       // ตัวเลือกสำหรับฟอร์มแก้ไข ส่งมาพร้อมหน้าเลย ไม่ต้องยิงอีกคำขอ
@@ -1102,6 +1115,46 @@ export class WorkItemController {
       if (e instanceof InvalidFieldValueError || e instanceof AssigneeNotEligibleError) {
         throw new HttpException(
           { error: 'invalid_value', message: e.message },
+          HttpStatus.UNPROCESSABLE_ENTITY,
+        );
+      }
+      throw e;
+    }
+  }
+
+  /**
+   * ให้คะแนนความพอใจ
+   *
+   * `403` ทั้งกรณี "ไม่ใช่ผู้แจ้ง" และ "ไม่พบเรื่อง" — service ตั้งใจตอบเหมือนกัน
+   * เพื่อไม่ยืนยันว่าเลขที่เรื่องนั้นมีอยู่จริง
+   */
+  @Post(':key/rating')
+  @HttpCode(HttpStatus.OK)
+  async rate(
+    @Ctx() ctx: TenantContext,
+    @Param('key') key: string,
+    @Body() body: { rating?: unknown; comment?: unknown },
+  ): Promise<{ rating: number }> {
+    // แปลงจากชนิดที่รู้แน่เท่านั้น — ค่าที่ไม่ใช่ตัวเลขต้องไปตกที่ตัวตรวจช่วง
+    const rating =
+      typeof body.rating === 'number'
+        ? body.rating
+        : typeof body.rating === 'string'
+          ? Number(body.rating)
+          : Number.NaN;
+    try {
+      await rateWorkItem(ctx, key, {
+        rating,
+        ...(typeof body.comment === 'string' ? { comment: body.comment } : {}),
+      });
+      return { rating };
+    } catch (e) {
+      if (e instanceof NotTheReporterError) {
+        throw new HttpException({ error: 'forbidden', message: e.message }, HttpStatus.FORBIDDEN);
+      }
+      if (e instanceof NotResolvedYetError || e instanceof RatingOutOfRangeError) {
+        throw new HttpException(
+          { error: 'invalid_input', message: e.message },
           HttpStatus.UNPROCESSABLE_ENTITY,
         );
       }

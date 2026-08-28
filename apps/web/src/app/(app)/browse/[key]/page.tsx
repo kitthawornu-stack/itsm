@@ -13,6 +13,7 @@ import {
 import { AssignControl } from '@/components/assign-control';
 import { EditItem } from '@/components/edit-item';
 import { CommentThread } from '@/components/comment-thread';
+import { RatingForm, type Satisfaction } from '@/components/rating-form';
 import { toSlaBar, type SlaSnapshotView } from '@/lib/sla-label';
 
 import { TransitionButtons } from '@/components/transition-buttons';
@@ -45,6 +46,10 @@ interface Detail {
   transitions: Array<{ id: string; name: string; requiredFields: string[] }>;
   resolution: string | null;
   fields?: Array<{ name: string; value: string }>;
+  /** คะแนนความพอใจ — null เมื่อยังไม่มีใครตอบ ไม่ใช่ 0 คะแนน */
+  satisfaction?: Satisfaction | null;
+  /** ผู้ใช้คนนี้ให้คะแนนเรื่องนี้ได้ไหม — เงื่อนไขเดียวกับที่เซิร์ฟเวอร์ใช้ปฏิเสธ */
+  canRate?: boolean;
   resolutions?: string[];
   history: HistoryRow[];
 }
@@ -188,6 +193,19 @@ export default async function WorkItemDetail({
               </dl>
             </>
           )}
+
+          {/*
+            แบบสอบถามอยู่ **เหนือบทสนทนา** เมื่อเรื่องเพิ่งปิด — ถ้าอยู่ล่างสุด
+            ใต้ไทม์ไลน์ยาว ๆ จะไม่มีใครเลื่อนไปเจอ และเราจะไม่ได้คำตอบเลย
+            คนที่ให้คะแนนไม่ได้ (ไม่ใช่ผู้แจ้ง หรือเรื่องยังไม่ปิด) ไม่เห็นอะไรเลย
+          */}
+          {detail.canRate === true ? (
+            <RatingForm
+              apiBase={API}
+              itemKey={detail.itemKey}
+              current={detail.satisfaction ?? null}
+            />
+          ) : null}
 
           <h2 className="detail-section-title detail-section-gap">บทสนทนา</h2>
           <CommentThread apiBase={API} itemKey={detail.itemKey} />

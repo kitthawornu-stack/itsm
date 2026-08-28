@@ -44,6 +44,7 @@ model Tenant {
   auditLogs         AuditLog[]
   savedFilters      SavedFilter[]
   catalogItems      CatalogItem[]
+  satisfactions     Satisfaction[]
   catalogCategories CatalogCategory[]
 
   @@map("tenant")
@@ -81,6 +82,7 @@ model User {
   @@index([tenantId, isActive])
   @@index([tenantId, externalId])
   @@map("user")
+  satisfactions Satisfaction[]
 }
 
 /**
@@ -586,6 +588,7 @@ model WorkItem {
   status     WorkflowStatus @relation(fields: [statusId], references: [id], onDelete: Restrict)
   priority   Priority?      @relation(fields: [priorityId], references: [id], onDelete: SetNull)
   catalogItem CatalogItem?  @relation(fields: [catalogItemId], references: [id], onDelete: SetNull)
+  satisfaction Satisfaction?
   resolution Resolution?    @relation(fields: [resolutionId], references: [id], onDelete: SetNull)
   reporter   User           @relation("WorkItemReporter", fields: [reporterId], references: [id], onDelete: Restrict)
   assignee   User?          @relation("WorkItemAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
@@ -1084,4 +1087,41 @@ model CatalogItem {
   @@unique([tenantId, name])
   @@index([tenantId, isActive, sortOrder])
   @@map("catalog_item")
+}
+
+// ============================================================
+// CSAT — ความพอใจของผู้แจ้ง
+//
+// **ถามได้ครั้งเดียวคือตอนเพิ่งปิด** — ความรู้สึกต่อเรื่องที่ปิดไปสามเดือนแล้ว
+// ย้อนกลับไปถามไม่ได้ · ไม่เก็บตั้งแต่วันแรกคือไม่มีวันได้
+// ============================================================
+
+model Satisfaction {
+  id         BigInt @id @default(autoincrement())
+  tenantId   BigInt @map("tenant_id")
+  /// หนึ่งเรื่องหนึ่งคำตอบ — ไม่ใช่ประวัติการให้คะแนน
+  workItemId BigInt @unique @map("work_item_id")
+  /// คนที่ตอบ · เก็บไว้เพื่อยืนยันว่าเป็นผู้แจ้งจริง ไม่ใช่คนทำงานให้คะแนนตัวเอง
+  respondentId BigInt @map("respondent_id")
+
+  /// 1–5 · ตรวจในโค้ด ไม่ใช่ใน enum เพราะเกณฑ์อาจเปลี่ยนโดยไม่ต้อง migrate
+  rating  Int
+  comment String? @db.Text
+
+  /**
+   * เวลาที่เรื่องถูกปิด **ตอนที่ให้คะแนน**
+   *
+   * ไม่ใช่ค่าที่อ่านจาก work_item ตอนทำรายงาน — เรื่องที่ถูกเปิดใหม่ภายหลัง
+   * จะมี resolvedAt เป็น null หรือเป็นเวลาใหม่ แล้วคะแนนเก่าจะลอยไม่มีที่อ้างอิง
+   */
+  resolvedAt DateTime @map("resolved_at") @db.DateTime(3)
+  createdAt  DateTime @default(now()) @map("created_at") @db.DateTime(3)
+  updatedAt  DateTime @updatedAt @map("updated_at") @db.DateTime(3)
+
+  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  workItem   WorkItem @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+  respondent User     @relation(fields: [respondentId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, rating, createdAt])
+  @@map("satisfaction")
 }
