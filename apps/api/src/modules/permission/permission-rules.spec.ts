@@ -82,6 +82,8 @@ describe('summarize', () => {
       canTransition: false,
       canComment: true,
       canAttach: false,
+      // ผู้แจ้งทั่วไปเชื่อมโยงเรื่องไม่ได้ — เป็นงานของคนที่เห็นภาพรวมของคิว
+      canLink: false,
       seesInternal: false,
     });
   });

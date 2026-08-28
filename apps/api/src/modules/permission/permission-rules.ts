@@ -44,6 +44,8 @@ export type PermissionKey = (typeof ALL_PERMISSION_KEYS)[number];
  * ทั้งเจ็ดคีย์นี้มีอยู่ใน enum · แสดงบนหน้าตั้งค่า · และให้กับกลุ่มได้จริง
  * แต่ไม่มี `can()` หรือ `assertCan()` ที่ไหนถามถึงมันเลย
  *
+ * `LINK_ITEM` เพิ่งออกจากรายการนี้ — `link.service.ts` บังคับใช้จริงแล้ว
+ *
  * `BULK_EDIT` เคยอยู่ในรายการนี้ และเป็นตัวอย่างที่ชัดที่สุดของปัญหา: seed ให้กับ
  * กลุ่ม IT Support ไว้แล้ว ผู้ดูแลที่เปิดหน้าตั้งค่าจึงอ่านได้ว่า "แก้ไขหลายเรื่อง
  * พร้อมกัน — IT Support" ทั้งที่ฟีเจอร์นั้นยังไม่มี · ตอนนี้ `bulk-edit.service.ts`
@@ -59,7 +61,6 @@ export type PermissionKey = (typeof ALL_PERMISSION_KEYS)[number];
 export const UNENFORCED_PERMISSIONS: readonly PermissionKey[] = [
   'DELETE_ITEM',
   'DELETE_COMMENT',
-  'LINK_ITEM',
   'MANAGE_SPRINT',
   'MANAGE_PROJECT',
   'VIEW_REPORT',
@@ -153,6 +154,7 @@ export interface PermissionSummary {
   canTransition: boolean;
   canComment: boolean;
   canAttach: boolean;
+  canLink: boolean;
   seesInternal: boolean;
 }
 
@@ -165,6 +167,7 @@ export function summarize(permissions: ReadonlySet<PermissionKey>): PermissionSu
     canComment: permissions.has('ADD_COMMENT'),
     // แนบไฟล์ได้ถ้าแนบได้โดยตรง หรือแก้ไขงานได้อยู่แล้ว
     canAttach: permissions.has('MANAGE_ATTACHMENT') || permissions.has('EDIT_ITEM'),
+    canLink: permissions.has('LINK_ITEM'),
     seesInternal: isStaff(permissions),
   };
 }
