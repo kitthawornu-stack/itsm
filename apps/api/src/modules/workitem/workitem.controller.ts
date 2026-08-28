@@ -91,6 +91,7 @@ import {
 import {
   WatchTargetNotFoundError,
   isWatching,
+  mentionableUsers,
   unwatch,
   watch,
   watchersOf,
@@ -845,7 +846,7 @@ export class WorkItemController {
   async comment(
     @Ctx() ctx: TenantContext,
     @Param('key') key: string,
-    @Body() body: { body?: string; isInternal?: boolean | string },
+    @Body() body: { body?: string; isInternal?: boolean | string; mentions?: unknown },
   ): Promise<unknown> {
     if (ctx.actorId === null) {
       throw new HttpException({ message: 'ไม่พบผู้ใช้สำหรับเขียนความเห็น' }, HttpStatus.FORBIDDEN);
@@ -856,6 +857,13 @@ export class WorkItemController {
         body: body.body ?? '',
         // มาจาก JSON ดิบ — "true" เป็นสตริงได้ ต้องแปลงเอง ไม่ใช่เชื่อชนิดที่ประกาศ
         isInternal: body.isInternal === true || body.isInternal === 'true',
+        /*
+          รายการคนที่หน้าจอบอกว่าถูกกล่าวถึง — service ไม่เชื่อมันตรง ๆ
+          ตรวจสิทธิ์ทุกคน และตรวจว่า `@ชื่อ` อยู่ในข้อความจริงก่อนยอมรับ
+        */
+        mentions: Array.isArray(body.mentions)
+          ? body.mentions.filter((m): m is string => typeof m === 'string')
+          : [],
       });
     } catch (e) {
       if (e instanceof EmptyCommentError) {
@@ -1052,6 +1060,30 @@ export class WorkItemController {
       }
       throw e;
     }
+  }
+
+  /**
+   * รายชื่อคนที่เรียกถึงได้ในเรื่องนี้
+   *
+   * แยกจาก `assignable` เพราะเกณฑ์คนละอย่าง — เรียกถึงได้ถ้าเปิดโปรเจกต์ได้
+   * ส่วนรับงานได้ต้องมีสิทธิ์อีกชุด · การใช้รายการเดียวกันจะตัดคนที่รู้คำตอบ
+   * แต่รับงานไม่ได้ ออกจากเมนูเรียกถึงเงียบ ๆ
+   */
+  @Get(':key/mentionable')
+  async mentionable(
+    @Ctx() ctx: TenantContext,
+    @Param('key') key: string,
+  ): Promise<{ rows: Array<{ id: string; displayName: string }> }> {
+    const item = await tenantScoped(ctx).workItem.findFirst({
+      where: { itemKey: key },
+      select: { projectId: true },
+    });
+    if (item === null) {
+      throw new HttpException({ error: 'not_found', message: `ไม่พบงาน ${key}` }, HttpStatus.NOT_FOUND);
+    }
+    // รายชื่อนี้เปิดเผยว่าใครอยู่ในโปรเจกต์ — ต้องคอมเมนต์ได้ก่อนถึงจะขอดูได้
+    await assertCan(ctx, item.projectId, 'ADD_COMMENT');
+    return { rows: await mentionableUsers(ctx, item.projectId) };
   }
 
   /** รายชื่อคนที่มอบหมายงานใบนี้ให้ได้ */
