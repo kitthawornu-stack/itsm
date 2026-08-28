@@ -431,6 +431,18 @@ export interface LinkButtonProps {
   disabled?: boolean;
   /** งานที่ทำลายของ — แสดงเป็นสีวิกฤต */
   tone?: 'default' | 'danger';
+  /**
+   * ชื่อสำหรับ screen reader เมื่อข้อความบนปุ่มไม่พอแยกแยะ
+   *
+   * รายการที่มีปุ่ม "ถอด" ทุกบรรทัด ทำให้คนที่ไล่ปุ่มด้วยคีย์บอร์ดได้ยิน
+   * "ถอด ถอด ถอด" โดยไม่รู้ว่าอันไหนของอะไร
+   *
+   * **ต้องเป็น prop ชื่อนี้ ไม่ใช่ `aria-label`** — TypeScript ปล่อยแอตทริบิวต์
+   * ที่มีขีดกลางผ่านไปโดยไม่ตรวจว่าคอมโพเนนต์รับหรือเปล่า · การเขียน
+   * `aria-label` บนคอมโพเนนต์ที่ไม่ได้รับมันจึงหายไปเงียบ ๆ ทั้งที่ typecheck
+   * และ lint เขียวหมด
+   */
+  ariaLabel?: string;
 }
 
 /**
@@ -447,6 +459,7 @@ export function LinkButton({
   onClick,
   disabled = false,
   tone = 'default',
+  ariaLabel,
 }: LinkButtonProps): ReactNode {
   return (
     <button
@@ -455,6 +468,7 @@ export function LinkButton({
       data-tone={tone}
       disabled={disabled}
       onClick={onClick}
+      {...(ariaLabel === undefined ? {} : { 'aria-label': ariaLabel })}
     >
       {children}
     </button>

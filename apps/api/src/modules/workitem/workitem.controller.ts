@@ -10,6 +10,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
   HttpException,
@@ -86,6 +87,15 @@ import {
   type BulkTransitionOption,
   type BulkTransitionResult,
 } from './bulk-transition.service';
+import {
+  DuplicateLinkError,
+  LINK_TYPES,
+  LinkTargetNotFoundError,
+  SelfLinkError,
+  linkWorkItems,
+  linksOf,
+  unlinkWorkItems,
+} from '../link';
 import {
   NotResolvedYetError,
   NotTheReporterError,
@@ -178,6 +188,31 @@ function toBulkHttpError(e: unknown): unknown {
   if (e instanceof NothingSelectedError) {
     return new HttpException(
       { error: 'nothing_selected', message: e.message },
+      HttpStatus.UNPROCESSABLE_ENTITY,
+    );
+  }
+  return e;
+}
+
+
+/** ป้ายภาษาคนของแต่ละความสัมพันธ์ — ให้หน้าจอไม่ต้องเก็บรายการของตัวเอง */
+const LINK_TYPE_LABEL: Record<(typeof LINK_TYPES)[number], string> = {
+  RELATES_TO: 'เกี่ยวข้องกับ',
+  BLOCKS: 'ขวางเรื่อง',
+  IS_BLOCKED_BY: 'ติดอยู่ที่',
+  DUPLICATES: 'ซ้ำกับ',
+  CAUSES: 'เป็นสาเหตุของ',
+  IS_CAUSED_BY: 'เกิดจาก',
+};
+
+/** error ของการเชื่อมโยง → HTTP */
+function toLinkHttpError(e: unknown): unknown {
+  if (e instanceof LinkTargetNotFoundError) {
+    return new HttpException({ message: e.message }, HttpStatus.NOT_FOUND);
+  }
+  if (e instanceof SelfLinkError || e instanceof DuplicateLinkError) {
+    return new HttpException(
+      { error: 'invalid_link', message: e.message },
       HttpStatus.UNPROCESSABLE_ENTITY,
     );
   }
@@ -707,6 +742,12 @@ export class WorkItemController {
        */
       resolution: item.resolution?.name ?? null,
       resolutions: await listResolutions(ctx),
+      /*
+        ความสัมพันธ์กับเรื่องอื่น — ส่งมาพร้อมหน้า ไม่ยิงอีกคำขอ
+        `linksOf` กรองปลายทางที่ผู้ใช้เปิดดูไม่ได้ออกให้แล้ว
+      */
+      links: await linksOf(ctx, item.id),
+      linkTypes: LINK_TYPES.map((t) => ({ value: t, label: LINK_TYPE_LABEL[t] })),
       createdAt: item.createdAt.toISOString(),
       updatedAt: item.updatedAt.toISOString(),
       // ปุ่มที่ผู้ใช้คนนี้เห็นได้จริง — ผ่าน CONDITION ชั้นแรกของ workflow engine แล้ว
@@ -1208,6 +1249,62 @@ export class WorkItemController {
       return { ...res, max: BULK_MAX };
     } catch (e) {
       throw toBulkHttpError(e);
+    }
+  }
+
+  /**
+   * เชื่อมเรื่องนี้เข้ากับอีกเรื่อง
+   *
+   * `422` เมื่อเชื่อมกับตัวเองหรือซ้ำ — เป็นความผิดของคำขอ
+   * `404` เมื่อปลายทางไม่มีอยู่จริง **หรือเปิดดูไม่ได้** — service ตั้งใจตอบ
+   * เหมือนกันทั้งสองกรณี เพื่อไม่ยืนยันว่าเลขที่เรื่องนั้นมีอยู่
+   */
+  @Post(':key/links')
+  @HttpCode(HttpStatus.CREATED)
+  async addLink(
+    @Ctx() ctx: TenantContext,
+    @Param('key') key: string,
+    @Body() body: { targetKey?: unknown; type?: unknown },
+  ): Promise<{ id: string }> {
+    const targetKey = typeof body.targetKey === 'string' ? body.targetKey : '';
+    const raw = typeof body.type === 'string' ? body.type : '';
+    // ชนิดที่ไม่รู้จักคือคำขอที่ผิด ไม่ใช่ค่าที่ควรตกไปเป็นค่าปริยาย
+    const type = LINK_TYPES.find((t) => t === raw);
+    if (type === undefined) {
+      throw new HttpException(
+        { error: 'unknown_link_type', message: 'ไม่รู้จักความสัมพันธ์ที่เลือก' },
+        HttpStatus.UNPROCESSABLE_ENTITY,
+      );
+    }
+    try {
+      const r = await linkWorkItems(ctx, key, targetKey, type);
+      return { id: r.id.toString() };
+    } catch (e) {
+      throw toLinkHttpError(e);
+    }
+  }
+
+  /** ถอดความสัมพันธ์ — ถอดจากฝั่งไหนก็ได้ เพราะเป็นแถวเดียวกัน */
+  @Delete(':key/links/:linkId')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async removeLink(
+    @Ctx() ctx: TenantContext,
+    @Param('linkId') linkId: string,
+  ): Promise<void> {
+    /*
+      คีย์ที่ไม่ใช่ตัวเลขต้องตอบ 404 เหมือนลิงก์ที่ไม่มีอยู่ ไม่ใช่ระเบิดเป็น 500
+      — `BigInt('abc')` โยน SyntaxError ซึ่งไปโผล่เป็น Internal Server Error
+    */
+    let id: bigint;
+    try {
+      id = BigInt(linkId);
+    } catch {
+      throw new HttpException({ message: 'ไม่พบความสัมพันธ์ที่ระบุ' }, HttpStatus.NOT_FOUND);
+    }
+    try {
+      await unlinkWorkItems(ctx, id);
+    } catch (e) {
+      throw toLinkHttpError(e);
     }
   }
 

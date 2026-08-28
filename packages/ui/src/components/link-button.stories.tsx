@@ -60,3 +60,24 @@ export const LinkRow: Story = {
     </div>
   ),
 };
+
+export const LinkNamedForScreenReader: Story = {
+  name: 'LinkButton · ชื่อสำหรับ screen reader',
+  render: () => (
+    /*
+      สถานะจริงที่มีอยู่ในแอป: รายการที่ทุกบรรทัดมีปุ่มข้อความเดียวกัน
+      คนที่ไล่ปุ่มด้วยคีย์บอร์ดจะได้ยิน "ถอด ถอด ถอด" โดยไม่รู้ว่าอันไหนของอะไร
+      — story นี้มีไว้ให้เห็นว่าปุ่มยังหน้าตาเหมือนเดิม แต่ชื่อที่อ่านออกเสียงต่างกัน
+    */
+    <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: 8 }}>
+      {['SD-101', 'SD-102', 'SD-103'].map((k) => (
+        <li key={k} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <code>{k}</code>
+          <LinkButton ariaLabel={`ถอดความสัมพันธ์กับ ${k}`} onClick={() => undefined}>
+            ถอด
+          </LinkButton>
+        </li>
+      ))}
+    </ul>
+  ),
+};

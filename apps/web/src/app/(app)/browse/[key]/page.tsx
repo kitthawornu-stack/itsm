@@ -17,6 +17,7 @@ import { ApprovalPanel } from '@/components/approval-panel';
 import { RatingForm, type Satisfaction } from '@/components/rating-form';
 import { toSlaBar, type SlaSnapshotView } from '@/lib/sla-label';
 
+import { LinkPanel, type LinkRow } from '@/components/link-panel';
 import { TransitionButtons } from '@/components/transition-buttons';
 import { API_BASE, apiFetch } from '@/lib/api';
 
@@ -39,7 +40,7 @@ interface Detail {
   priority: { rank: number; name: string } | null;
   assignee: string | null;
   description: string | null;
-  permissions?: { canAssign: boolean; canEdit: boolean };
+  permissions?: { canAssign: boolean; canEdit: boolean; canLink?: boolean };
   priorities?: Array<{ rank: number; name: string }>;
   reporter: string;
   createdAt: string;
@@ -52,6 +53,8 @@ interface Detail {
   /** ผู้ใช้คนนี้ให้คะแนนเรื่องนี้ได้ไหม — เงื่อนไขเดียวกับที่เซิร์ฟเวอร์ใช้ปฏิเสธ */
   canRate?: boolean;
   resolutions?: string[];
+  links?: LinkRow[];
+  linkTypes?: Array<{ value: string; label: string }>;
   history: HistoryRow[];
 }
 
@@ -180,6 +183,14 @@ export default async function WorkItemDetail({
               <p className="detail-description">{detail.description}</p>
             </>
           )}
+
+          <LinkPanel
+            apiBase={API}
+            itemKey={detail.itemKey}
+            links={detail.links ?? []}
+            types={detail.linkTypes ?? []}
+            canLink={detail.permissions?.canLink ?? false}
+          />
 
           {detail.fields === undefined || detail.fields.length === 0 ? null : (
             <>
