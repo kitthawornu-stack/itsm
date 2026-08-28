@@ -93,10 +93,31 @@ export async function auditedTransaction<T>(
     }
 
     if (systemRows.length > 0) {
+      /*
+        เก็บ **ชื่อผู้ทำ ณ ตอนที่ทำ** ไว้ในแถวด้วย ไม่ใช่พึ่ง relation อย่างเดียว
+
+        `audit_log.actor_id` เป็น `onDelete: SetNull` — ลบผู้ใช้เมื่อไร ร่องรอย
+        ทั้งหมดของคนนั้นจะกลายเป็น "ไม่มี actor" ซึ่งแยกจาก "ระบบทำเอง" ไม่ได้เลย
+        ผู้ตรวจสอบจะอ่านได้ว่าระบบเปลี่ยนสิทธิ์เอง ทั้งที่จริงมีคนทำแต่ลาออกไปแล้ว
+
+        audit ที่ลืมว่าใครทำเมื่อบัญชีถูกลบ ไม่ใช่ audit · การซ้ำข้อมูลตรงนี้
+        จึงเป็นความตั้งใจ ไม่ใช่ความผิดพลาด
+      */
+      const actorName =
+        ctx.actorId === null
+          ? null
+          : ((
+              await tx.user.findUnique({
+                where: { id: ctx.actorId },
+                select: { displayName: true },
+              })
+            )?.displayName ?? null);
+
       await tx.auditLog.createMany({
         data: systemRows.map((e) => ({
           tenantId: ctx.tenantId,
           actorId: ctx.actorId,
+          actorName,
           action: e.action,
           entityType: e.entityType,
           entityId: e.entityId,

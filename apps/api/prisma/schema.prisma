@@ -248,6 +248,11 @@ model AuditLog {
   tenantId   BigInt   @map("tenant_id")
   actorId    BigInt?  @map("actor_id")
   action     String   @db.VarChar(64) // e.g. "permission.grant", "user.deactivate"
+  /// ชื่อผู้ทำ ณ ตอนที่ทำ — เก็บซ้ำโดยตั้งใจ
+  ///
+  /// `actorId` เป็น SetNull เมื่อผู้ใช้ถูกลบ ร่องรอยจึงกลายเป็น "ไม่มี actor"
+  /// ซึ่งแยกจาก "ระบบทำเอง" ไม่ได้ · audit ที่ลืมว่าใครทำ ไม่ใช่ audit
+  actorName  String?  @map("actor_name") @db.VarChar(255)
   entityType String   @map("entity_type") @db.VarChar(64)
   entityId   String   @map("entity_id") @db.VarChar(64)
   payload    Json?
