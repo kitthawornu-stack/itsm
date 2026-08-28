@@ -1909,3 +1909,25 @@
   font-size: 12px;
   color: var(--text-faint);
 }
+
+/* ---------- แก้ไข/ลบความเห็น ---------- */
+
+.thread-edited {
+  font-size: 11.5px;
+  color: var(--text-faint);
+  line-height: 1.6;
+}
+
+/* ปุ่มชิดขวาของแถวหัวความเห็น — ไม่แย่งที่ชื่อกับเวลา */
+.thread-tools {
+  margin-inline-start: auto;
+  display: inline-flex;
+  gap: var(--space-2);
+}
+
+.thread-edit {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-top: var(--space-1);
+}

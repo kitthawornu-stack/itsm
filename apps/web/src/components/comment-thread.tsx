@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
-import { Button, Checkbox, Textarea, Timestamp } from '@itsm/ui';
+import { Button, Checkbox, LinkButton, Textarea, Timestamp } from '@itsm/ui';
 
 interface CommentRow {
   id: string;
@@ -9,6 +9,10 @@ interface CommentRow {
   isInternal: boolean;
   author: string;
   createdAt: string;
+  /** null = ยังไม่เคยแก้ · บทสนทนาที่แก้เงียบ ๆ ใช้เป็นหลักฐานไม่ได้ */
+  editedAt?: string | null;
+  canEdit?: boolean;
+  canDelete?: boolean;
 }
 
 const COMMENT_MAX = 10_000;
@@ -28,6 +32,9 @@ export function CommentThread({
   itemKey: string;
 }): ReactNode {
   const [rows, setRows] = useState<CommentRow[] | null>(null);
+  /** ความเห็นที่กำลังแก้อยู่ — null คือไม่ได้แก้อะไร */
+  const [editing, setEditing] = useState<{ id: string; text: string } | null>(null);
+  const [busy, setBusy] = useState(false);
   const [draft, setDraft] = useState('');
   const [internal, setInternal] = useState(false);
   const [sending, setSending] = useState(false);
@@ -53,6 +60,59 @@ export function CommentThread({
   useEffect(() => {
     void load();
   }, [load]);
+
+  async function saveEdit(): Promise<void> {
+    if (editing === null) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch(`${apiBase}/api/v1/work-items/${itemKey}/comments/${editing.id}`, {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ body: editing.text }),
+      });
+      if (!res.ok) {
+        const d = (await res.json()) as { message?: string };
+        setError(d.message ?? `แก้ไขไม่สำเร็จ (HTTP ${String(res.status)})`);
+        return;
+      }
+      setEditing(null);
+      await load();
+    } catch {
+      setError('เชื่อมต่อเซิร์ฟเวอร์ไม่ได้');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /**
+   * ลบความเห็น
+   *
+   * ไม่ถามยืนยันซ้ำ เพราะ **การลบไม่ได้ทำลายหลักฐาน** — `deletedAt` ยังบอกได้ว่า
+   * เคยมีความเห็นตรงนี้ และ audit บันทึกว่าใครลบเมื่อไร · กล่องยืนยันที่ขึ้น
+   * ทุกครั้งจะถูกกดผ่านโดยไม่อ่านภายในสัปดาห์แรก แล้วก็ไม่ได้กันอะไรเลย
+   */
+  async function remove(id: string): Promise<void> {
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch(`${apiBase}/api/v1/work-items/${itemKey}/comments/${id}`, {
+        method: 'DELETE',
+        credentials: 'include',
+      });
+      if (!res.ok && res.status !== 204) {
+        const d = (await res.json().catch(() => ({}))) as { message?: string };
+        setError(d.message ?? `ลบไม่สำเร็จ (HTTP ${String(res.status)})`);
+        return;
+      }
+      await load();
+    } catch {
+      setError('เชื่อมต่อเซิร์ฟเวอร์ไม่ได้');
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function send(): Promise<void> {
     if (draft.trim() === '') return;
@@ -93,8 +153,69 @@ export function CommentThread({
                 <b>{c.author}</b>
                 <Timestamp utc={c.createdAt} />
                 {c.isInternal ? <span className="thread-internal">เห็นเฉพาะทีม</span> : null}
+                {/*
+                  ป้าย "แก้ไขแล้ว" ต้องเห็นได้เสมอ ไม่ใช่ซ่อนไว้ใน tooltip —
+                  ผู้แจ้งที่กลับมาอ่านแล้วเจอข้อความไม่เหมือนที่จำได้
+                  ต้องรู้ว่ามันถูกแก้ ไม่ใช่คิดว่าตัวเองจำผิด
+                */}
+                {c.editedAt === null || c.editedAt === undefined ? null : (
+                  <span className="thread-edited">แก้ไขแล้ว</span>
+                )}
+                <span className="thread-tools">
+                  {c.canEdit === true && editing === null ? (
+                    <LinkButton
+                      ariaLabel={`แก้ไขความเห็นของ ${c.author}`}
+                      onClick={() => {
+                        setEditing({ id: c.id, text: c.body });
+                      }}
+                    >
+                      แก้ไข
+                    </LinkButton>
+                  ) : null}
+                  {c.canDelete === true && editing === null ? (
+                    <LinkButton
+                      tone="danger"
+                      disabled={busy}
+                      ariaLabel={`ลบความเห็นของ ${c.author}`}
+                      onClick={() => void remove(c.id)}
+                    >
+                      ลบ
+                    </LinkButton>
+                  ) : null}
+                </span>
               </div>
-              <p className="thread-body">{c.body}</p>
+              {editing !== null && editing.id === c.id ? (
+                <div className="thread-edit">
+                  <Textarea
+                    id={`thread-edit-${c.id}`}
+                    value={editing.text}
+                    onChange={(v) => {
+                      setEditing({ id: c.id, text: v });
+                    }}
+                    rows={3}
+                    maxLength={COMMENT_MAX}
+                  />
+                  <div className="thread-actions">
+                    <Button
+                      variant="primary"
+                      type="button"
+                      disabled={busy || editing.text.trim() === ''}
+                      onClick={() => void saveEdit()}
+                    >
+                      {busy ? 'กำลังบันทึก…' : 'บันทึก'}
+                    </Button>
+                    <LinkButton
+                      onClick={() => {
+                        setEditing(null);
+                      }}
+                    >
+                      ยกเลิก
+                    </LinkButton>
+                  </div>
+                </div>
+              ) : (
+                <p className="thread-body">{c.body}</p>
+              )}
             </li>
           ))}
         </ul>

@@ -16,6 +16,7 @@ import {
   HttpException,
   HttpStatus,
   Param,
+  Patch,
   Post,
   Query,
   Res,
@@ -94,6 +95,12 @@ import {
   watch,
   watchersOf,
 } from './watcher.service';
+import {
+  CommentNotFoundError,
+  NotCommentAuthorError,
+  deleteComment,
+  editComment,
+} from './comment-edit.service';
 import {
   DuplicateLinkError,
   LINK_TYPES,
@@ -220,6 +227,38 @@ function toLinkHttpError(e: unknown): unknown {
   if (e instanceof SelfLinkError || e instanceof DuplicateLinkError) {
     return new HttpException(
       { error: 'invalid_link', message: e.message },
+      HttpStatus.UNPROCESSABLE_ENTITY,
+    );
+  }
+  return e;
+}
+
+
+/**
+ * id ของความเห็นจาก URL
+ *
+ * ค่าที่ไม่ใช่ตัวเลขต้องตอบ 404 เหมือนความเห็นที่ไม่มีอยู่ ไม่ใช่ระเบิดเป็น 500
+ * — `BigInt('abc')` โยน SyntaxError ซึ่งไปโผล่เป็น Internal Server Error
+ */
+function parseCommentId(raw: string): bigint {
+  try {
+    return BigInt(raw);
+  } catch {
+    throw new HttpException({ message: 'ไม่พบความเห็นที่ระบุ' }, HttpStatus.NOT_FOUND);
+  }
+}
+
+/** error ของการแก้/ลบความเห็น → HTTP */
+function toCommentHttpError(e: unknown): unknown {
+  if (e instanceof CommentNotFoundError) {
+    return new HttpException({ message: e.message }, HttpStatus.NOT_FOUND);
+  }
+  if (e instanceof NotCommentAuthorError) {
+    return new HttpException({ error: 'not_author', message: e.message }, HttpStatus.FORBIDDEN);
+  }
+  if (e instanceof EmptyCommentError) {
+    return new HttpException(
+      { error: 'validation_failed', message: 'ต้องพิมพ์ข้อความก่อนบันทึก', missingFields: ['body'] },
       HttpStatus.UNPROCESSABLE_ENTITY,
     );
   }
@@ -829,6 +868,43 @@ export class WorkItemController {
         throw new HttpException({ error: 'not_found', message: e.message }, HttpStatus.NOT_FOUND);
       }
       throw e;
+    }
+  }
+
+  /**
+   * แก้ไขความเห็นของตัวเอง
+   *
+   * `403` เมื่อไม่ใช่ผู้เขียน — **ไม่มีสิทธิ์ไหนเปิดทางให้แก้ข้อความของคนอื่น**
+   * ข้อความปฏิเสธจึงบอกทางออกที่ถูก (ลบแล้วเขียนใหม่) ไม่ใช่ให้ไปหาสิทธิ์เพิ่ม
+   */
+  @Patch(':key/comments/:commentId')
+  @HttpCode(HttpStatus.OK)
+  async editComment(
+    @Ctx() ctx: TenantContext,
+    @Param('commentId') commentId: string,
+    @Body() body: { body?: unknown },
+  ): Promise<{ ok: true }> {
+    const id = parseCommentId(commentId);
+    try {
+      await editComment(ctx, id, typeof body.body === 'string' ? body.body : '');
+      return { ok: true };
+    } catch (e) {
+      throw toCommentHttpError(e);
+    }
+  }
+
+  /** ลบความเห็น — ผู้เขียนลบของตัวเองได้เสมอ ลบของคนอื่นต้องมี `DELETE_COMMENT` */
+  @Delete(':key/comments/:commentId')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async removeComment(
+    @Ctx() ctx: TenantContext,
+    @Param('commentId') commentId: string,
+  ): Promise<void> {
+    const id = parseCommentId(commentId);
+    try {
+      await deleteComment(ctx, id);
+    } catch (e) {
+      throw toCommentHttpError(e);
     }
   }
 
