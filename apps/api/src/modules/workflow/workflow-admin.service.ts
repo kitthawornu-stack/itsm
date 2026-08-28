@@ -15,6 +15,12 @@ import type { TenantContext } from '@itsm/types';
 
 import { auditedTransaction } from '../../infrastructure/audit/audited-transaction';
 import { tenantScoped } from '../../infrastructure/prisma/tenant-scope';
+import {
+  KNOWN_POST_FUNCTIONS,
+  RULE_CATALOG,
+  type RuleCatalogEntry,
+  type RuleKind,
+} from './workflow-engine';
 
 export type StatusCategoryName = 'TODO' | 'IN_PROGRESS' | 'DONE';
 export const STATUS_CATEGORIES: readonly StatusCategoryName[] = ['TODO', 'IN_PROGRESS', 'DONE'];
@@ -485,5 +491,191 @@ export async function transitionsOf(
      * โดยไม่รู้ว่ากำลังลบอะไรไปพร้อมกัน
      */
     ruleCount: t._count.rules,
+  }));
+}
+
+/**
+ * กฎที่ระบบไม่รู้จัก
+ *
+ * ตรวจ **ตอนบันทึก** ไม่ใช่ตอนมีคนกดปุ่ม — กฎที่เอนจินไม่รู้จักทำให้ทุก transition
+ * ของ workflow นั้นโยน `UnknownRuleError` ทันที คือปุ่มทั้งชุดกดไม่ได้
+ * และคนที่เจอคือผู้ใช้ ไม่ใช่ผู้ดูแลที่ตั้งค่าผิด
+ */
+export class UnknownRuleTypeError extends Error {
+  constructor(readonly kind: string, readonly ruleType: string) {
+    super(`ระบบไม่รู้จักกฎ ${kind}/${ruleType}`);
+    this.name = 'UnknownRuleTypeError';
+  }
+}
+
+export class RuleConfigRequiredError extends Error {
+  constructor(readonly what: string) {
+    super(`กฎนี้ต้องระบุ${what}`);
+    this.name = 'RuleConfigRequiredError';
+  }
+}
+
+export class TransitionNotFoundError extends Error {
+  constructor(readonly id: bigint) {
+    super(`ไม่พบเส้นทาง #${id.toString()}`);
+    this.name = 'TransitionNotFoundError';
+  }
+}
+
+/** รายการกฎที่หน้าจอเลือกได้ — มาจากเอนจิน ไม่ใช่รายการที่หน้าจอเขียนเอง */
+export function ruleCatalog(): readonly RuleCatalogEntry[] {
+  return RULE_CATALOG;
+}
+
+export interface AddRuleInput {
+  transitionId: bigint;
+  kind: RuleKind;
+  ruleType: string;
+  /** ฟิลด์ที่ต้องกรอก (required-fields) หรือกลุ่มที่เห็นปุ่ม (in-group) หรือชื่อเป้า SLA */
+  fields?: string[];
+  groupIds?: string[];
+  goal?: string;
+}
+
+export async function addTransitionRule(
+  ctx: TenantContext,
+  input: AddRuleInput,
+): Promise<{ id: bigint }> {
+  const entry = RULE_CATALOG.find((e) => e.kind === input.kind && e.ruleType === input.ruleType);
+  if (entry === undefined) throw new UnknownRuleTypeError(input.kind, input.ruleType);
+
+  const db = tenantScoped(ctx);
+  const t = await db.workflowTransition.findFirst({
+    where: { id: input.transitionId },
+    select: { id: true, name: true, workflowId: true },
+  });
+  if (t === null) throw new TransitionNotFoundError(input.transitionId);
+
+  /*
+    กฎที่ต้องมี config แต่ไม่ได้กรอก จะกลายเป็นกฎที่ไม่ทำอะไรเลย
+    (`required-fields` ที่ไม่มีฟิลด์ = ผ่านเสมอ) หรือกันทุกคนออก
+    (`in-group` ที่ไม่มีกลุ่ม = ไม่มีใครเห็นปุ่มเลย) · ทั้งสองอย่างเงียบทั้งคู่
+  */
+  /*
+    ชนิดของคอลัมน์ JSON ใน Prisma รับ `InputJsonValue` ไม่ใช่ `Record<string, unknown>`
+    ประกาศให้ตรงตั้งแต่ต้น ดีกว่า cast ตอนส่ง — บทเรียนเรื่องชนิดที่โกหกแล้ว lint
+    โกหกตาม (CLAUDE.md §4)
+  */
+  const config: Record<string, string[] | string> = {};
+  if (entry.needsConfig === 'fields') {
+    const fields = (input.fields ?? []).map((f) => f.trim()).filter((f) => f !== '');
+    if (fields.length === 0) throw new RuleConfigRequiredError('ฟิลด์อย่างน้อยหนึ่งตัว');
+    config['fields'] = fields;
+  }
+  if (entry.needsConfig === 'groups') {
+    const groups = (input.groupIds ?? []).filter((g) => g !== '');
+    if (groups.length === 0) throw new RuleConfigRequiredError('กลุ่มอย่างน้อยหนึ่งกลุ่ม');
+    config['groupIds'] = groups;
+  }
+  if (entry.needsConfig === 'goal' && input.goal !== undefined && input.goal.trim() !== '') {
+    config['goal'] = input.goal.trim();
+  }
+
+  const last = await db.transitionRule.findFirst({
+    where: { transitionId: input.transitionId, kind: input.kind },
+    orderBy: { position: 'desc' },
+    select: { position: true },
+  });
+
+  return auditedTransaction(ctx, 'workflow.rule.add', async (tx) => {
+    const row = await tx.transitionRule.create({
+      data: {
+        tenantId: ctx.tenantId,
+        transitionId: input.transitionId,
+        kind: input.kind,
+        ruleType: input.ruleType,
+        config,
+        position: (last?.position ?? 0) + 1,
+      },
+      select: { id: true },
+    });
+    return {
+      result: row,
+      audit: [
+        {
+          kind: 'system',
+          action: 'workflow.rule.add',
+          entityType: 'transition_rule',
+          entityId: row.id.toString(),
+          payload: { transition: t.name, ruleKind: input.kind, ruleType: input.ruleType, config },
+        },
+      ],
+    };
+  });
+}
+
+export async function removeTransitionRule(ctx: TenantContext, ruleId: bigint): Promise<void> {
+  const db = tenantScoped(ctx);
+  const rule = await db.transitionRule.findFirst({
+    where: { id: ruleId },
+    include: { transition: { select: { name: true } } },
+  });
+  if (rule === null) throw new TransitionNotFoundError(ruleId);
+
+  await auditedTransaction(ctx, 'workflow.rule.remove', async (tx) => {
+    await tx.transitionRule.delete({ where: { id: ruleId } });
+    return {
+      result: undefined,
+      audit: [
+        {
+          kind: 'system',
+          action: 'workflow.rule.remove',
+          entityType: 'transition_rule',
+          entityId: ruleId.toString(),
+          payload: {
+            transition: rule.transition.name,
+            ruleKind: rule.kind,
+            ruleType: rule.ruleType,
+          },
+        },
+      ],
+    };
+  });
+}
+
+/**
+ * ชื่อกฎที่ผู้ดูแลอ่าน — แยกสามกรณีที่ต้องทำคนละอย่าง
+ *
+ *   อยู่ในรายการ        ใช้ชื่อภาษาคน
+ *   เอนจินรู้จักแต่ยังไม่ได้ทำ  บอกว่ายังไม่มีผล — ไม่ใช่ให้ไปลบทิ้ง
+ *   เอนจินไม่รู้จักเลย     บอกว่าไม่รู้จัก — อันนี้ต้องลบจริง เพราะทำให้ปุ่มทั้งชุดพัง
+ */
+function labelOf(kind: string, ruleType: string): string {
+  const known = RULE_CATALOG.find((e) => e.kind === kind && e.ruleType === ruleType);
+  if (known !== undefined) return known.label;
+  if (kind === 'POST_FUNCTION' && KNOWN_POST_FUNCTIONS.has(ruleType)) {
+    return `${ruleType} (ยังไม่ได้ทำ — ตั้งไว้ได้แต่ยังไม่มีผล)`;
+  }
+  return `${ruleType} (ระบบไม่รู้จัก — ทำให้ปุ่มนี้กดไม่ได้)`;
+}
+
+/** กฎทั้งหมดของเส้นทางหนึ่ง เรียงตามชั้นและลำดับ */
+export async function rulesOf(
+  ctx: TenantContext,
+  transitionId: bigint,
+): Promise<Array<{ id: string; kind: string; ruleType: string; label: string; config: unknown }>> {
+  const rows = await tenantScoped(ctx).transitionRule.findMany({
+    where: { transitionId },
+    orderBy: [{ kind: 'asc' }, { position: 'asc' }],
+  });
+  return rows.map((r) => ({
+    id: r.id.toString(),
+    kind: r.kind,
+    ruleType: r.ruleType,
+    /*
+      กฎที่อยู่ในฐานข้อมูลแต่ไม่มีในรายการ ต้องแสดงชื่อดิบ ไม่ใช่ซ่อน —
+      กฎที่มองไม่เห็นแต่ยังทำงานอยู่ คือสิ่งที่ผู้ดูแลหาสาเหตุไม่เจอ
+
+      **แยกสองกรณีออกจากกัน** — เจอตอนดูหน้าจอจริง: `notify` ขึ้นว่า
+      "ระบบไม่รู้จัก" ทั้งที่เอนจินรู้จักดี แค่ยังไม่ได้เขียนโค้ดรัน
+      ผู้ดูแลที่เห็นคำนั้นจะคิดว่าข้อมูลเสียและไปลบทิ้ง ทั้งที่ควรปล่อยไว้รอ
+    */
+    label: labelOf(r.kind, r.ruleType),
+    config: r.config,
   }));
 }

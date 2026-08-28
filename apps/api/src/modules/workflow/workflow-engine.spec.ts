@@ -15,6 +15,8 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  KNOWN_POST_FUNCTIONS,
+  RULE_CATALOG,
   evaluateTransitions,
   slaEffectOfTransition,
   validateTransition,
@@ -330,5 +332,65 @@ describe('Workflow Engine · require-approval', () => {
     expect(() =>
       validateTransition(needsApproval, ctx({ currentStatusId: STATUS.new.id })),
     ).toThrow(ValidationFailedError);
+  });
+});
+
+describe('RULE_CATALOG · รายการที่หน้าจอเลือกได้ ต้องตรงกับกฎที่เอนจินรู้จักจริง', () => {
+  /*
+    รายการที่ดูแลด้วยมือคือรายการที่จะไม่ตรงกับความจริงในวันที่มีคนแก้แค่ฝั่งเดียว
+    (บทเรียนเดียวกับ `UNENFORCED_PERMISSIONS` และเอกสารสถานะ)
+
+    ถ้าเทสต์นี้แดง แปลว่าเพิ่มหรือลบกฎแล้วลืมแก้อีกฝั่ง — แก้รายการ ไม่ใช่แก้เทสต์
+  */
+  it('ตัวสแกนอ่านรายการเจอจริง — ไม่ใช่ผ่านเพราะทั้งสองฝั่งว่าง', () => {
+    expect(RULE_CATALOG.length).toBeGreaterThan(5);
+    expect(KNOWN_POST_FUNCTIONS.size).toBeGreaterThan(3);
+  });
+
+  it('**ทุกกฎในรายการ ต้องเป็นกฎที่เอนจินรันได้จริง**', () => {
+    for (const e of RULE_CATALOG) {
+      const t: TransitionDefinition = {
+        id: 990n,
+        name: 'ทดสอบ',
+        fromStatusId: STATUS.new.id,
+        toStatusId: STATUS.investigating.id,
+        position: 1,
+        rules: [{ kind: e.kind, ruleType: e.ruleType, config: {}, position: 1 }],
+      };
+      /*
+        กฎที่เอนจินไม่รู้จักจะโยน UnknownRuleError · กฎที่รู้จักอาจโยน
+        TransitionNotAllowedError หรือ ValidationFailedError ซึ่งแปลว่า
+        "รันได้แต่ไม่ผ่าน" — เป็นคนละเรื่องกัน
+      */
+      try {
+        validateTransition(t, ctx({ currentStatusId: STATUS.new.id }));
+      } catch (err) {
+        expect(
+          (err as Error).name,
+          `กฎ ${e.kind}/${e.ruleType} อยู่ในรายการแต่เอนจินไม่รู้จัก`,
+        ).not.toBe('UnknownRuleError');
+      }
+    }
+  });
+
+  it('**ทุก POST_FUNCTION ที่เอนจินรู้จัก ต้องมีในรายการ** — ยกเว้นที่ยังไม่ได้ทำ', () => {
+    // `notify` กับ `fire-webhook` ยังไม่มีโค้ดรันจริง จึงยังไม่ควรให้เลือกจากหน้าจอ
+    // การให้เลือกกฎที่ตั้งแล้วไม่เกิดอะไรขึ้น คือการโกหกผู้ดูแล
+    const notImplemented = new Set(['notify', 'fire-webhook']);
+    const inCatalog = new Set(
+      RULE_CATALOG.filter((e) => e.kind === 'POST_FUNCTION').map((e) => e.ruleType),
+    );
+    for (const fn of KNOWN_POST_FUNCTIONS) {
+      if (notImplemented.has(fn)) {
+        expect(inCatalog.has(fn), `${fn} ยังไม่ได้ทำ ต้องไม่อยู่ในรายการให้เลือก`).toBe(false);
+        continue;
+      }
+      expect(inCatalog.has(fn), `${fn} เอนจินรู้จักแต่หน้าจอเลือกไม่ได้`).toBe(true);
+    }
+  });
+
+  it('ไม่มีกฎซ้ำในรายการ', () => {
+    const keys = RULE_CATALOG.map((e) => `${e.kind}/${e.ruleType}`);
+    expect(new Set(keys).size).toBe(keys.length);
   });
 });

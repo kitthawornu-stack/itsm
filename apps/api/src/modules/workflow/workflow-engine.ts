@@ -194,6 +194,111 @@ const VALIDATORS: Record<string, ValidatorFn> = {
 // POST_FUNCTION — ชื่อที่รองรับ (การรันจริงอยู่ใน workflow.service)
 // ============================================================
 
+/**
+ * รายการกฎที่ **หน้าจอเลือกได้** พร้อมคำอธิบายภาษาคน
+ *
+ * ประกาศไว้ข้างเดียวกับตัวกฎจริง เพื่อให้เพิ่มกฎใหม่แล้วลืมเพิ่มที่นี่ไม่ได้ —
+ * `workflow-engine.spec.ts` เทียบสองฝั่งให้ · รายการที่ดูแลด้วยมือแยกไฟล์
+ * คือรายการที่จะไม่ตรงกับความจริงในวันที่มีคนแก้แค่ฝั่งเดียว
+ *
+ * `needsConfig` บอกหน้าจอว่ากฎนี้ต้องกรอกอะไรเพิ่ม — กฎที่ต้องมี config
+ * แต่ไม่ได้กรอก จะกลายเป็นกฎที่ไม่ทำอะไรเลยหรือกันทุกคนออก
+ */
+export interface RuleCatalogEntry {
+  kind: RuleKind;
+  ruleType: string;
+  label: string;
+  hint: string;
+  needsConfig: 'none' | 'fields' | 'groups' | 'goal';
+}
+
+export const RULE_CATALOG: readonly RuleCatalogEntry[] = [
+  {
+    kind: 'CONDITION',
+    ruleType: 'assignee-is-current-user',
+    label: 'เฉพาะผู้รับผิดชอบงานนี้',
+    hint: 'คนอื่นจะไม่เห็นปุ่มนี้เลย',
+    needsConfig: 'none',
+  },
+  {
+    kind: 'CONDITION',
+    ruleType: 'in-group',
+    label: 'เฉพาะคนในกลุ่มที่กำหนด',
+    hint: 'เลือกกลุ่มที่เห็นปุ่มนี้ได้',
+    needsConfig: 'groups',
+  },
+  {
+    kind: 'CONDITION',
+    ruleType: 'has-assignee',
+    label: 'ต้องมีผู้รับผิดชอบแล้ว',
+    hint: 'งานที่ยังไม่มีคนรับ จะไม่เห็นปุ่มนี้',
+    needsConfig: 'none',
+  },
+  {
+    kind: 'CONDITION',
+    ruleType: 'is-unassigned',
+    label: 'ต้องยังไม่มีผู้รับผิดชอบ',
+    hint: 'ใช้กับปุ่ม "รับงานนี้"',
+    needsConfig: 'none',
+  },
+  {
+    kind: 'VALIDATOR',
+    ruleType: 'required-fields',
+    label: 'ต้องกรอกฟิลด์ให้ครบ',
+    hint: 'ระบุคีย์ฟิลด์ที่ต้องมีค่า',
+    needsConfig: 'fields',
+  },
+  {
+    kind: 'VALIDATOR',
+    ruleType: 'require-approval',
+    label: 'ต้องได้รับอนุมัติก่อน',
+    hint: 'กดปุ่มนี้ไม่ได้จนกว่าคำขออนุมัติจะผ่าน',
+    needsConfig: 'none',
+  },
+  {
+    kind: 'POST_FUNCTION',
+    ruleType: 'stop-sla',
+    label: 'หยุดนาฬิกา SLA',
+    hint: 'ใช้กับปุ่มที่ทำให้งานจบ',
+    needsConfig: 'goal',
+  },
+  {
+    kind: 'POST_FUNCTION',
+    ruleType: 'start-sla',
+    label: 'เริ่มนาฬิกา SLA',
+    hint: '',
+    needsConfig: 'goal',
+  },
+  {
+    kind: 'POST_FUNCTION',
+    ruleType: 'pause-sla',
+    label: 'พักนาฬิกา SLA',
+    hint: 'ใช้กับสถานะที่รอคนอื่นตอบ',
+    needsConfig: 'goal',
+  },
+  {
+    kind: 'POST_FUNCTION',
+    ruleType: 'set-resolution',
+    label: 'ตั้งผลการแก้ไข',
+    hint: 'ผู้กดจะถูกถามว่าจบเรื่องนี้อย่างไร',
+    needsConfig: 'none',
+  },
+  {
+    kind: 'POST_FUNCTION',
+    ruleType: 'assign-to-current-user',
+    label: 'มอบหมายให้คนที่กด',
+    hint: 'ใช้กับปุ่ม "รับงานนี้"',
+    needsConfig: 'none',
+  },
+  {
+    kind: 'POST_FUNCTION',
+    ruleType: 'clear-assignee',
+    label: 'ปลดผู้รับผิดชอบ',
+    hint: 'คืนงานเข้ากอง',
+    needsConfig: 'none',
+  },
+];
+
 export const KNOWN_POST_FUNCTIONS = new Set([
   'stop-sla',
   'start-sla',

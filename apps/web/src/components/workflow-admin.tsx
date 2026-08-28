@@ -20,15 +20,44 @@ interface Status {
   itemCount: number;
 }
 
+interface Rule {
+  id: string;
+  kind: string;
+  ruleType: string;
+  label: string;
+  config: unknown;
+}
+
+interface CatalogEntry {
+  kind: 'CONDITION' | 'VALIDATOR' | 'POST_FUNCTION';
+  ruleType: string;
+  label: string;
+  hint: string;
+  needsConfig: 'none' | 'fields' | 'groups' | 'goal';
+}
+
 interface Transition {
   id: string;
   name: string;
   from: string | null;
   to: string;
   ruleCount: number;
+  rules?: Rule[];
 }
 
-type Detail = WorkflowRow & { statuses: Status[]; transitions: Transition[] };
+type Detail = WorkflowRow & {
+  statuses: Status[];
+  transitions: Transition[];
+  /** รายการกฎที่เลือกได้ — มาจากเอนจิน ไม่ใช่รายการที่หน้าจอเขียนเอง */
+  ruleCatalog?: CatalogEntry[];
+};
+
+/** ชื่อชั้นของกฎเป็นภาษาคน — CONDITION/VALIDATOR ไม่มีความหมายกับผู้ดูแล */
+const KIND_LABEL: Record<string, string> = {
+  CONDITION: 'ใครเห็นปุ่ม',
+  VALIDATOR: 'ต้องผ่านอะไรก่อน',
+  POST_FUNCTION: 'กดแล้วทำอะไรต่อ',
+};
 
 const CATEGORIES = [
   { value: 'TODO', label: 'ยังไม่เริ่ม' },
@@ -48,6 +77,123 @@ const CATEGORY_LABEL: Record<string, string> = {
  * หน้าจอจึงบอกจำนวนกฎที่มีอยู่ ไม่ใช่ซ่อนไว้ — การลบปุ่มลบกฎไปด้วย
  * และผู้ดูแลต้องรู้ว่ากำลังลบอะไรไปพร้อมกัน
  */
+
+/**
+ * เพิ่มกฎหนึ่งข้อให้เส้นทางหนึ่งเส้น
+ *
+ * แยกเป็นคอมโพเนนต์ของตัวเองเพราะมี state ของตัวเอง (กฎที่เลือก + ค่าที่กรอก)
+ * ถ้าใช้ state ร่วมกันทั้งตาราง การพิมพ์ในแถวหนึ่งจะไปโผล่ในอีกแถว
+ *
+ * **ช่องกรอก config ขึ้นตามกฎที่เลือก** — กฎที่ต้องมีค่าแต่ไม่มีช่องให้กรอก
+ * จะถูกบันทึกเป็นกฎที่ไม่ทำอะไรเลย หรือกันทุกคนออก
+ */
+function RuleAdder({
+  catalog,
+  busy,
+  onAdd,
+}: {
+  catalog: CatalogEntry[];
+  busy: boolean;
+  onAdd: (body: Record<string, unknown>) => void;
+}): ReactNode {
+  const [open, setOpen] = useState(false);
+  const [pick, setPick] = useState('');
+  const [text, setText] = useState('');
+
+  const entry = catalog.find((e) => `${e.kind}/${e.ruleType}` === pick);
+  const needs = entry?.needsConfig ?? 'none';
+  const ready =
+    entry !== undefined && (needs === 'none' || needs === 'goal' || text.trim() !== '');
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        className="admin-linkish rule-add"
+        disabled={busy || catalog.length === 0}
+        onClick={() => {
+          setOpen(true);
+        }}
+      >
+        + เพิ่มกฎ
+      </button>
+    );
+  }
+
+  return (
+    <div className="rule-form">
+      <Select
+        value={pick}
+        onChange={(v) => {
+          setPick(v);
+          setText('');
+        }}
+        placeholder="เลือกกฎ"
+        options={catalog.map((e) => ({
+          value: `${e.kind}/${e.ruleType}`,
+          label: `${KIND_LABEL[e.kind] ?? e.kind} · ${e.label}`,
+        }))}
+      />
+      {entry === undefined ? null : <p className="cfg-implied">{entry.hint}</p>}
+
+      {needs === 'fields' ? (
+        <Input
+          value={text}
+          onChange={setText}
+          placeholder="คีย์ฟิลด์ คั่นด้วยจุลภาค เช่น resolution, impact"
+          maxLength={200}
+        />
+      ) : null}
+      {needs === 'groups' ? (
+        <Input
+          value={text}
+          onChange={setText}
+          placeholder="รหัสกลุ่ม คั่นด้วยจุลภาค"
+          maxLength={200}
+        />
+      ) : null}
+      {needs === 'goal' ? (
+        <Input value={text} onChange={setText} placeholder="ชื่อเป้า SLA (ไม่บังคับ)" maxLength={64} />
+      ) : null}
+
+      <div className="admin-btn-row">
+        <Button
+          variant="primary"
+          disabled={busy || !ready}
+          onClick={() => {
+            if (entry === undefined) return;
+            const parts = text
+              .split(',')
+              .map((x) => x.trim())
+              .filter((x) => x !== '');
+            onAdd({
+              kind: entry.kind,
+              ruleType: entry.ruleType,
+              ...(needs === 'fields' ? { fields: parts } : {}),
+              ...(needs === 'groups' ? { groupIds: parts } : {}),
+              ...(needs === 'goal' && text.trim() !== '' ? { goal: text.trim() } : {}),
+            });
+            setOpen(false);
+            setPick('');
+            setText('');
+          }}
+        >
+          เพิ่ม
+        </Button>
+        <button
+          type="button"
+          className="admin-linkish"
+          onClick={() => {
+            setOpen(false);
+          }}
+        >
+          ยกเลิก
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function WorkflowAdmin({ apiBase }: { apiBase: string }): ReactNode {
   const [rows, setRows] = useState<WorkflowRow[] | null>(null);
   const [selected, setSelected] = useState('');
@@ -313,8 +459,52 @@ export function WorkflowAdmin({ apiBase }: { apiBase: string }): ReactNode {
                   {/*
             การลบปุ่มลบกฎไปด้วย (onDelete: Cascade)
             ต้องเห็นจำนวนก่อนกดลบ ไม่ใช่รู้ตอนที่เงื่อนไขหายไปแล้ว
-            */}
-                  {t.ruleCount === 0 ? '—' : `${String(t.ruleCount)} ข้อ`}
+
+            แสดงกฎทุกข้อตรงนี้ ไม่ใช่แค่จำนวน — จำนวนบอกว่ามีอะไรอยู่
+            แต่ไม่บอกว่ามันทำอะไร ซึ่งเป็นสิ่งเดียวที่ผู้ดูแลต้องรู้ก่อนแก้
+          */}
+                  {t.rules === undefined || t.rules.length === 0 ? (
+                    '—'
+                  ) : (
+                    <ul className="rule-list">
+                      {t.rules.map((r) => (
+                        <li key={r.id}>
+                          <span className="cfg-implied">{KIND_LABEL[r.kind] ?? r.kind}: </span>
+                          {r.label}
+                          <button
+                            type="button"
+                            className="admin-linkish rule-del"
+                            disabled={busy}
+                            onClick={() => {
+                              void send(
+                                `/${detail.id}/transitions/${t.id}/rules/${r.id}/remove`,
+                                {},
+                                `ลบกฎ "${r.label}" แล้ว`,
+                              );
+                            }}
+                          >
+                            ลบกฎ
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+
+                  {/*
+            เพิ่มกฎได้จากที่นี่ — ก่อนหน้านี้ต้องเขียน SQL เท่านั้น
+            ซึ่งแปลว่ากฎอย่าง "ต้องได้รับอนุมัติก่อน" ไม่มีใครเปิดใช้ได้เลย
+          */}
+                  <RuleAdder
+                    catalog={detail.ruleCatalog ?? []}
+                    busy={busy}
+                    onAdd={(body) => {
+                      void send(
+                        `/${detail.id}/transitions/${t.id}/rules`,
+                        body,
+                        'เพิ่มกฎแล้ว',
+                      );
+                    }}
+                  />
                 </td>
                 <td className="admin-actions">
                   <button

@@ -12,16 +12,23 @@ import {
   DuplicateNameError,
   InitialStatusRequiredError,
   NameRequiredError,
+  RuleConfigRequiredError,
   StatusHasTransitionsError,
   StatusInUseError,
   StatusNotFoundError,
+  TransitionNotFoundError,
+  UnknownRuleTypeError,
   WorkflowNotFoundError,
   addStatus,
   addTransition,
+  addTransitionRule,
   createWorkflow,
   listWorkflowsAdmin,
   removeStatus,
   removeTransition,
+  removeTransitionRule,
+  ruleCatalog,
+  rulesOf,
   setInitialStatus,
   statusesOf,
   transitionsOf,
@@ -32,10 +39,16 @@ function mapError(e: unknown): never {
   if (e instanceof WorkflowNotFoundError || e instanceof StatusNotFoundError) {
     throw new HttpException({ error: 'not_found', message: e.message }, HttpStatus.NOT_FOUND);
   }
+  if (e instanceof TransitionNotFoundError) {
+    throw new HttpException({ error: 'not_found', message: e.message }, HttpStatus.NOT_FOUND);
+  }
   if (
     e instanceof NameRequiredError ||
     e instanceof DuplicateNameError ||
-    e instanceof InitialStatusRequiredError
+    e instanceof InitialStatusRequiredError ||
+    // กฎที่ระบบไม่รู้จัก หรือ config ไม่ครบ = ข้อมูลที่ส่งมาใช้ไม่ได้ ไม่ใช่ระบบพัง
+    e instanceof UnknownRuleTypeError ||
+    e instanceof RuleConfigRequiredError
   ) {
     throw new HttpException(
       { error: 'invalid', message: e.message },
@@ -80,7 +93,14 @@ export class WorkflowAdminController {
     }
     const statuses = await statusesOf(ctx, wid);
     const transitions = await transitionsOf(ctx, wid);
-    return { ...header, statuses, transitions };
+    /*
+      ส่งกฎของทุกเส้นทางมาพร้อมกัน ไม่ให้หน้าจอยิงต่ออีกเส้นทางละคำขอ
+      · และส่งรายการกฎที่เลือกได้มาด้วย เพราะมันมาจากเอนจิน ไม่ใช่จากหน้าจอ
+    */
+    const withRules = await Promise.all(
+      transitions.map(async (t) => ({ ...t, rules: await rulesOf(ctx, BigInt(t.id)) })),
+    );
+    return { ...header, statuses, transitions: withRules, ruleCatalog: ruleCatalog() };
   }
 
   @Post()
@@ -183,6 +203,58 @@ export class WorkflowAdminController {
         requireId(id, 'รหัส workflow'),
         requireId(transitionId, 'รหัสเส้นทาง'),
       );
+      return { ok: true };
+    } catch (e) {
+      return mapError(e);
+    }
+  }
+
+  @Post(':id/transitions/:transitionId/rules')
+  async addRule(
+    @Ctx() ctx: TenantContext,
+    @Param('transitionId') transitionId: string,
+    @Body()
+    body: {
+      kind?: unknown;
+      ruleType?: unknown;
+      fields?: unknown;
+      groupIds?: unknown;
+      goal?: unknown;
+    },
+  ): Promise<{ id: string }> {
+    await assertTenantAdmin(ctx);
+    const kind = body.kind;
+    if (kind !== 'CONDITION' && kind !== 'VALIDATOR' && kind !== 'POST_FUNCTION') {
+      throw new HttpException(
+        { error: 'invalid_input', message: 'ชั้นของกฎไม่ถูกต้อง' },
+        HttpStatus.UNPROCESSABLE_ENTITY,
+      );
+    }
+    const strings = (v: unknown): string[] =>
+      Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [];
+    try {
+      const r = await addTransitionRule(ctx, {
+        transitionId: requireId(transitionId, 'รหัสเส้นทาง'),
+        kind,
+        ruleType: typeof body.ruleType === 'string' ? body.ruleType : '',
+        fields: strings(body.fields),
+        groupIds: strings(body.groupIds),
+        ...(typeof body.goal === 'string' ? { goal: body.goal } : {}),
+      });
+      return { id: r.id.toString() };
+    } catch (e) {
+      return mapError(e);
+    }
+  }
+
+  @Post(':id/transitions/:transitionId/rules/:ruleId/remove')
+  async dropRule(
+    @Ctx() ctx: TenantContext,
+    @Param('ruleId') ruleId: string,
+  ): Promise<{ ok: true }> {
+    await assertTenantAdmin(ctx);
+    try {
+      await removeTransitionRule(ctx, requireId(ruleId, 'รหัสกฎ'));
       return { ok: true };
     } catch (e) {
       return mapError(e);
