@@ -255,6 +255,14 @@ async function main(): Promise<void> {
       { tenantId, schemeId: schemeSd.id, permission: 'BROWSE_PROJECT', groupId: groupAdmin.id },
       { tenantId, schemeId: schemeSw.id, permission: 'BROWSE_PROJECT', groupId: groupDev.id },
       { tenantId, schemeId: schemeSw.id, permission: 'CREATE_ITEM', groupId: groupDev.id },
+      /*
+        คอมเมนต์ในโปรเจกต์ของตัวเอง
+
+        กลุ่ม "พนักงานทั้งหมด" ไม่มีสิทธิ์อะไรบน PLAT เลย · Engineering
+        จึงเป็นแหล่งเดียว และเดิมไม่มี `ADD_COMMENT` — ผลคือนักพัฒนา
+        คอมเมนต์งานของตัวเองไม่ได้ (เจอตอน QA: `/mentionable` ตอบ 403)
+      */
+      { tenantId, schemeId: schemeSw.id, permission: 'ADD_COMMENT', groupId: groupDev.id },
       { tenantId, schemeId: schemeSw.id, permission: 'EDIT_ITEM', groupId: groupDev.id },
       { tenantId, schemeId: schemeSw.id, permission: 'TRANSITION_ITEM', groupId: groupDev.id },
       { tenantId, schemeId: schemeSw.id, permission: 'MANAGE_SPRINT', groupId: groupDev.id },

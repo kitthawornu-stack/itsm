@@ -15,3 +15,4 @@ export * from './watcher.service';
 export * from './comment-edit.service';
 export * from './satisfaction.service';
 export * from './mention';
+export * from './hierarchy.service';
