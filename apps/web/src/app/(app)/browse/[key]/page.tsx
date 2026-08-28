@@ -17,6 +17,7 @@ import { ApprovalPanel } from '@/components/approval-panel';
 import { RatingForm, type Satisfaction } from '@/components/rating-form';
 import { toSlaBar, type SlaSnapshotView } from '@/lib/sla-label';
 
+import { HierarchyPanel, type ChildRow, type ParentRow } from '@/components/hierarchy-panel';
 import { LinkPanel, type LinkRow } from '@/components/link-panel';
 import { WatchButton } from '@/components/watch-button';
 import { TransitionButtons } from '@/components/transition-buttons';
@@ -55,6 +56,8 @@ interface Detail {
   canRate?: boolean;
   resolutions?: string[];
   links?: LinkRow[];
+  parent?: ParentRow | null;
+  children?: { rows: ChildRow[]; done: number };
   /** ผู้ใช้คนนี้เฝ้าดูเรื่องนี้อยู่ไหม */
   watching?: boolean;
   watchers?: Array<{ userId: string; displayName: string }>;
@@ -193,6 +196,15 @@ export default async function WorkItemDetail({
               <p className="detail-description">{detail.description}</p>
             </>
           )}
+
+          <HierarchyPanel
+            apiBase={API}
+            itemKey={detail.itemKey}
+            parent={detail.parent ?? null}
+            children={detail.children?.rows ?? []}
+            done={detail.children?.done ?? 0}
+            canEdit={detail.permissions?.canEdit ?? false}
+          />
 
           <LinkPanel
             apiBase={API}

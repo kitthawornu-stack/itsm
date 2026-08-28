@@ -97,6 +97,16 @@ import {
   watchersOf,
 } from './watcher.service';
 import {
+  CrossProjectParentError,
+  HierarchyCycleError,
+  HierarchyTargetNotFoundError,
+  SelfParentError,
+  WrongHierarchyLevelError,
+  childrenOf,
+  parentOf,
+  setParent,
+} from './hierarchy.service';
+import {
   CommentNotFoundError,
   NotCommentAuthorError,
   deleteComment,
@@ -794,6 +804,9 @@ export class WorkItemController {
         `linksOf` กรองปลายทางที่ผู้ใช้เปิดดูไม่ได้ออกให้แล้ว
       */
       links: await linksOf(ctx, item.id),
+      // ลำดับชั้น — เรื่องหลักและงานย่อยพร้อมความคืบหน้า
+      parent: await parentOf(ctx, item.id),
+      children: await childrenOf(ctx, item.id),
       // ผู้เฝ้าดู — ให้หน้าจอแสดงปุ่มที่ถูกด้าน และบอกว่ามีใครตามเรื่องนี้อยู่บ้าง
       watching: await isWatching(ctx, item.id),
       watchers: await watchersOf(ctx, item.id),
@@ -1367,6 +1380,43 @@ export class WorkItemController {
       return { ...res, max: BULK_MAX };
     } catch (e) {
       throw toBulkHttpError(e);
+    }
+  }
+
+  /**
+   * ผูก/ถอดเรื่องหลัก
+   *
+   * `422` เมื่อชั้นไม่ต่อกัน · ข้ามโปรเจกต์ · วนกลับมาหาตัวเอง — ทั้งหมดเป็น
+   * ความผิดของคำขอ ไม่ใช่ของงาน · ข้อความบอกเหตุผลที่ผู้ใช้แก้ได้เอง
+   */
+  @Post(':key/parent')
+  @HttpCode(HttpStatus.OK)
+  async setItemParent(
+    @Ctx() ctx: TenantContext,
+    @Param('key') key: string,
+    @Body() body: { parentKey?: unknown },
+  ): Promise<{ ok: true }> {
+    // ไม่ส่งมา หรือส่งค่าที่ไม่ใช่สตริง = ถอดออก
+    const parentKey = typeof body.parentKey === 'string' ? body.parentKey : null;
+    try {
+      await setParent(ctx, key, parentKey === '' ? null : parentKey);
+      return { ok: true };
+    } catch (e) {
+      if (e instanceof HierarchyTargetNotFoundError) {
+        throw new HttpException({ message: e.message }, HttpStatus.NOT_FOUND);
+      }
+      if (
+        e instanceof SelfParentError ||
+        e instanceof WrongHierarchyLevelError ||
+        e instanceof CrossProjectParentError ||
+        e instanceof HierarchyCycleError
+      ) {
+        throw new HttpException(
+          { error: 'invalid_parent', message: e.message },
+          HttpStatus.UNPROCESSABLE_ENTITY,
+        );
+      }
+      throw e;
     }
   }
 

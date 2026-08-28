@@ -2037,3 +2037,22 @@
   color: var(--text-muted);
   line-height: 1.6;
 }
+
+/* ---------- โครงของงาน ---------- */
+
+.hier-parent,
+.hier-children {
+  margin-bottom: var(--space-3);
+}
+
+.hier-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.hier-who {
+  flex: none;
+  font-size: 11.5px;
+  color: var(--text-faint);
+}
