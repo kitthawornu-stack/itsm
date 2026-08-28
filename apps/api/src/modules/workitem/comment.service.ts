@@ -19,7 +19,8 @@ import {
 import { tenantScoped } from '../../infrastructure/prisma/tenant-scope';
 import { PermissionDeniedError, assertCan, can } from '../permission';
 import { WorkItemNotFoundError } from './workitem.service';
-import { eligibleWatcherIds } from './watcher.service';
+import { eligibleMentions, eligibleWatcherIds } from './watcher.service';
+import { mentionsIn } from './mention';
 import {
   commentAudience,
   commentDedupeKey,
@@ -63,6 +64,13 @@ export interface CommentView {
 export interface AddCommentInput {
   itemKey: string;
   body: string;
+  /**
+   * คนที่หน้าจอบอกว่าถูกกล่าวถึง
+   *
+   * เซิร์ฟเวอร์ **ไม่เชื่อรายการนี้ตรง ๆ** — ตรวจสิทธิ์ทุกคน และตรวจว่า
+   * `@ชื่อ` ปรากฏในข้อความจริง ก่อนยอมรับ
+   */
+  mentions?: readonly string[];
   isInternal?: boolean;
 }
 
@@ -140,31 +148,67 @@ export async function addComment(
     const watcherIds = await eligibleWatcherIds(ctx, item.id, item.projectId, {
       internal: isInternal,
     });
+
+    /*
+      การกล่าวถึง — ตรวจสองชั้นก่อนยอมรับ
+
+      1. **สิทธิ์** เกณฑ์เดียวกับผู้เฝ้าดู · เรียกคนที่เปิดเรื่องไม่ได้แล้วส่ง
+         หัวข้อกับเนื้อความไปให้ คือการรั่วแบบเดียวกันเป๊ะ
+      2. **ชื่อต้องอยู่ในข้อความจริง** · ถ้าเชื่อรายการที่หน้าจอส่งมาตรง ๆ
+         ใครก็ส่ง id ใครก็ได้มาพร้อมข้อความที่ไม่มีชื่อเขา แล้วคนคนนั้น
+         ได้แจ้งเตือนว่าถูกเรียก แต่เปิดเข้าไปหาไม่เจอว่าใครเรียก
+    */
+    const claimed = (input.mentions ?? [])
+      .map((v) => {
+        try {
+          return BigInt(v);
+        } catch {
+          // ค่าที่ไม่ใช่ตัวเลขคือคำขอที่พัง ไม่ใช่การกล่าวถึง — ทิ้งเงียบ ๆ ได้
+          return null;
+        }
+      })
+      .filter((v): v is bigint => v !== null);
+    const allowed = await eligibleMentions(ctx, item.projectId, claimed, {
+      internal: isInternal,
+    });
+    const mentionIds = mentionsIn(body, allowed).map((m) => m.userId);
     const audience = commentAudience({
       authorId,
       reporterId: item.reporterId,
       assigneeId: item.assigneeId,
       isInternal,
       watcherIds,
+      mentionIds,
     });
     if (audience.length > 0) {
-      const text = commentNotificationText({
-        itemKey: item.itemKey,
-        summary: item.summary,
-        authorName: author?.displayName ?? 'ไม่ทราบชื่อ',
-        body,
-        isInternal,
-      });
+      const textFor = (mentioned: boolean): { title: string; body: string } =>
+        commentNotificationText({
+          itemKey: item.itemKey,
+          summary: item.summary,
+          authorName: author?.displayName ?? 'ไม่ทราบชื่อ',
+          body,
+          isInternal,
+          mentioned,
+        });
       await tx.notification.createMany({
-        data: audience.map((r) => ({
-          tenantId: ctx.tenantId,
-          userId: r.userId,
-          workItemId: item.id,
-          kind: isInternal ? 'comment.internal' : 'comment.added',
-          title: text.title,
-          body: text.body,
-          dedupeKey: commentDedupeKey(row.id, r.userId),
-        })),
+        data: audience.map((r) => {
+          const mentioned = r.reason === 'mention';
+          const text = textFor(mentioned);
+          return {
+            tenantId: ctx.tenantId,
+            userId: r.userId,
+            workItemId: item.id,
+            /*
+              ชนิดต่างกันเพื่อให้กล่องแจ้งเตือนจัดลำดับได้ — การถูกเรียกชื่อ
+              โดยตรงเป็นสัญญาณที่แรงกว่า "มีความเห็นใหม่" ซึ่งผู้รับผิดชอบ
+              เห็นทุกวันจนเลิกอ่าน
+            */
+            kind: mentioned ? 'comment.mention' : isInternal ? 'comment.internal' : 'comment.added',
+            title: text.title,
+            body: text.body,
+            dedupeKey: commentDedupeKey(row.id, r.userId),
+          };
+        }),
         // unique index บน (tenantId, dedupeKey) เป็นด่านสุดท้าย
         // ถ้าชนแปลว่าเคยแจ้งไปแล้ว ซึ่งไม่ใช่ความผิดพลาดที่ต้องล้มทั้งความเห็น
         skipDuplicates: true,

@@ -175,6 +175,62 @@ export async function eligibleWatcherIds(
   return out;
 }
 
+/**
+ * ผู้ใช้ที่ถูกกล่าวถึง **และมีสิทธิ์เห็นความเห็นใบนี้จริง**
+ *
+ * ใช้เกณฑ์เดียวกับผู้เฝ้าดู เพราะเป็นคำถามเดียวกัน: ใครเปิดเรื่องนี้ได้ตอนนี้
+ * และถ้าเป็นบันทึกภายใน ใครเห็นบันทึกภายในได้ · การกล่าวถึงคนที่เปิดเรื่อง
+ * ไม่ได้ แล้วส่งหัวข้อกับเนื้อความไปให้ คือการรั่วแบบเดียวกันเป๊ะ
+ */
+export async function eligibleMentions(
+  ctx: TenantContext,
+  projectId: bigint,
+  userIds: readonly bigint[],
+  opts: { internal?: boolean } = {},
+): Promise<Array<{ userId: bigint; displayName: string }>> {
+  if (userIds.length === 0) return [];
+  const users = await tenantScoped(ctx).user.findMany({
+    where: { id: { in: [...new Set(userIds)] }, isActive: true, isSystem: false },
+    select: { id: true, displayName: true },
+  });
+
+  const out: Array<{ userId: bigint; displayName: string }> = [];
+  for (const u of users) {
+    const keys = await permissionsFor({ ...ctx, actorId: u.id }, projectId);
+    if (!keys.has('BROWSE_PROJECT')) continue;
+    if (opts.internal === true && !keys.has('VIEW_INTERNAL_COMMENT')) continue;
+    out.push({ userId: u.id, displayName: u.displayName });
+  }
+  return out;
+}
+
+/**
+ * คนที่เรียกถึงได้ในเรื่องนี้ — สำหรับรายการเลือกบนหน้าจอ
+ *
+ * เกณฑ์คือ "เปิดโปรเจกต์นี้ได้" ไม่ใช่ "รับงานได้" · คนที่มอบหมายงานให้ไม่ได้
+ * ก็ยังตอบคำถามได้ · การใช้รายชื่อผู้รับงานมาทำเมนูเรียกถึง จะตัดคนที่
+ * รู้คำตอบออกไปเงียบ ๆ
+ *
+ * รายชื่อนี้เปิดเผยว่าใครอยู่ในโปรเจกต์ ผู้เรียกจึงต้องคอมเมนต์ได้ก่อน
+ */
+export async function mentionableUsers(
+  ctx: TenantContext,
+  projectId: bigint,
+): Promise<Array<{ id: string; displayName: string }>> {
+  const users = await tenantScoped(ctx).user.findMany({
+    where: { isActive: true, isSystem: false },
+    select: { id: true, displayName: true },
+    orderBy: { displayName: 'asc' },
+  });
+
+  const out: Array<{ id: string; displayName: string }> = [];
+  for (const u of users) {
+    const keys = await permissionsFor({ ...ctx, actorId: u.id }, projectId);
+    if (keys.has('BROWSE_PROJECT')) out.push({ id: u.id.toString(), displayName: u.displayName });
+  }
+  return out;
+}
+
 /** ผู้ใช้ปัจจุบันเฝ้าดูเรื่องนี้อยู่ไหม — ให้หน้าจอแสดงปุ่มที่ถูกด้าน */
 export async function isWatching(ctx: TenantContext, workItemId: bigint): Promise<boolean> {
   if (ctx.actorId === null) return false;

@@ -19,12 +19,19 @@ export interface CommentContext {
    * ถ้าเอาการตรวจสิทธิ์มาไว้ที่นี่ด้วย จะทดสอบเคส "เมื่อไรจะไม่ส่ง" ไม่ได้เลย
    */
   watcherIds?: readonly bigint[];
+  /**
+   * คนที่ถูก **กล่าวถึงในข้อความ** และผู้เรียกตรวจแล้วว่ามีสิทธิ์เห็นความเห็นใบนี้
+   *
+   * แยกจากผู้เฝ้าดูเพราะเป็นสัญญาณที่แรงกว่า: ผู้เฝ้าดูเลือกจะตาม
+   * แต่คนที่ถูกกล่าวถึงคือคนที่ **มีคนเรียกโดยตรง** และมักมีคำถามรออยู่
+   */
+  mentionIds?: readonly bigint[];
 }
 
 export interface Recipient {
   /** null = ระดับทีม ยังไม่ระบุตัวบุคคล */
   userId: bigint | null;
-  reason: 'reporter' | 'assignee' | 'team' | 'watcher';
+  reason: 'reporter' | 'assignee' | 'team' | 'watcher' | 'mention';
 }
 
 /**
@@ -37,7 +44,18 @@ export interface Recipient {
  *      — คำถามของผู้แจ้งที่ไม่มีใครเห็น คือความเงียบที่แย่ที่สุดของศูนย์บริการ
  */
 export function commentAudience(c: CommentContext): Recipient[] {
-  return withWatchers(baseAudience(c), c);
+  /*
+    ลำดับสำคัญ: การกล่าวถึงมาก่อน
+
+    คนที่ทั้งถูกกล่าวถึงและเป็นผู้รับผิดชอบ ต้องได้แจ้งเตือนใบเดียว **แบบที่
+    บอกว่าถูกเรียก** ไม่ใช่ใบที่บอกว่า "มีความเห็นใหม่ในงานที่คุณรับผิดชอบ"
+    ซึ่งเป็นข้อความที่เขาเห็นทุกวันจนเลิกอ่าน · ถ้าเติมทีหลัง ตัวกันซ้ำจะทิ้ง
+    ใบที่แรงกว่าและเก็บใบที่อ่อนกว่าไว้แทน
+  */
+  const mentions: Recipient[] = [...new Set(c.mentionIds ?? [])]
+    .filter((id) => id !== c.authorId)
+    .map((id) => ({ userId: id, reason: 'mention' as const }));
+  return withWatchers([...mentions, ...baseAudience(c)], c);
 }
 
 /**
@@ -49,8 +67,15 @@ export function commentAudience(c: CommentContext): Recipient[] {
  * ซึ่งกลบเจตนาและทำให้ `skipDuplicates` ซ่อนบั๊กอื่นไปด้วย
  */
 function withWatchers(base: Recipient[], c: CommentContext): Recipient[] {
-  const seen = new Set(base.map((r) => (r.userId === null ? 'team' : r.userId.toString())));
-  const out = [...base];
+  const seen = new Set<string>();
+  const out: Recipient[] = [];
+  // ยุบซ้ำในตัว base เองด้วย — คนที่ถูกกล่าวถึงอาจเป็นผู้รับผิดชอบพร้อมกัน
+  for (const r of base) {
+    const key = r.userId === null ? 'team' : r.userId.toString();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(r);
+  }
   for (const id of c.watcherIds ?? []) {
     // ไม่แจ้งคนที่เขียนเอง แม้เขาจะกดเฝ้าดูไว้ — กฎข้อ 1 ใช้กับผู้เฝ้าดูด้วย
     if (id === c.authorId) continue;
@@ -102,10 +127,21 @@ export function commentNotificationText(params: {
   authorName: string;
   body: string;
   isInternal: boolean;
+  /** ผู้รับคนนี้ถูกกล่าวถึงโดยตรงหรือไม่ — พาดหัวคนละแบบ */
+  mentioned?: boolean;
 }): { title: string; body: string } {
-  const title = params.isInternal
-    ? `${params.itemKey} มีบันทึกภายในจาก ${params.authorName}`
-    : `${params.itemKey} ${params.authorName} แสดงความเห็น`;
+  /*
+    พาดหัวของคนที่ถูกกล่าวถึงต้องต่างจากของคนที่แค่เกี่ยวข้อง
+
+    "มีความเห็นใหม่" เป็นข้อความที่ผู้รับผิดชอบเห็นทุกวันจนเลิกอ่าน ·
+    ถ้าการถูกเรียกชื่อโดยตรงใช้พาดหัวเดียวกัน มันจะหายไปในกองเดียวกัน
+    และคนถามก็จะไม่ได้คำตอบ แล้วกลับไปถามในแชทเหมือนเดิม
+  */
+  const title = params.mentioned === true
+    ? `${params.itemKey} ${params.authorName} เรียกถึงคุณ`
+    : params.isInternal
+      ? `${params.itemKey} มีบันทึกภายในจาก ${params.authorName}`
+      : `${params.itemKey} ${params.authorName} แสดงความเห็น`;
 
   // ตัดข้อความยาวในตัวแจ้งเตือน — คนต้องกดเข้าไปอ่านฉบับเต็มที่หน้างาน
   const excerpt = params.body.length > 300 ? `${params.body.slice(0, 300)}…` : params.body;
