@@ -24,6 +24,7 @@ import {
   CatalogController,
 } from './modules/catalog/catalog.controller';
 import { ApprovalController } from './modules/approval/approval.controller';
+import { AuditController } from './modules/audit/audit.controller';
 import { WorkItemController } from './modules/workitem/workitem.controller';
 
 /**
@@ -49,6 +50,7 @@ import { WorkItemController } from './modules/workitem/workitem.controller';
     CatalogController,
     CatalogAdminController,
     ApprovalController,
+    AuditController,
     NotificationController,
   ],
   /**
