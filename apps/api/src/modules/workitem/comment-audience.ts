@@ -11,12 +11,20 @@ export interface CommentContext {
   reporterId: bigint;
   assigneeId: bigint | null;
   isInternal: boolean;
+  /**
+   * ผู้เฝ้าดูที่ **มีสิทธิ์เห็นความเห็นใบนี้แล้ว**
+   *
+   * ผู้เรียกเป็นคนกรองสิทธิ์มาก่อน (เปิดดูโปรเจกต์ได้ · เห็นบันทึกภายในได้)
+   * ฟังก์ชันนี้ตัดสินแค่ "ใครซ้ำ ใครคือคนเขียนเอง" ซึ่งเป็นตรรกะบริสุทธิ์ ·
+   * ถ้าเอาการตรวจสิทธิ์มาไว้ที่นี่ด้วย จะทดสอบเคส "เมื่อไรจะไม่ส่ง" ไม่ได้เลย
+   */
+  watcherIds?: readonly bigint[];
 }
 
 export interface Recipient {
   /** null = ระดับทีม ยังไม่ระบุตัวบุคคล */
   userId: bigint | null;
-  reason: 'reporter' | 'assignee' | 'team';
+  reason: 'reporter' | 'assignee' | 'team' | 'watcher';
 }
 
 /**
@@ -29,6 +37,32 @@ export interface Recipient {
  *      — คำถามของผู้แจ้งที่ไม่มีใครเห็น คือความเงียบที่แย่ที่สุดของศูนย์บริการ
  */
 export function commentAudience(c: CommentContext): Recipient[] {
+  return withWatchers(baseAudience(c), c);
+}
+
+/**
+ * เติมผู้เฝ้าดูเข้าไปในรายชื่อ
+ *
+ * **คนที่อยู่ในรายชื่ออยู่แล้วต้องไม่ถูกเติมซ้ำ** — ผู้รับผิดชอบที่กดเฝ้าดูด้วย
+ * ต้องได้แจ้งเตือนใบเดียว ไม่ใช่สองใบ · `dedupeKey` บน unique index เป็นด่าน
+ * สุดท้าย แต่การพึ่งมันแปลว่าเราตั้งใจเขียนของซ้ำแล้วหวังให้ฐานข้อมูลปฏิเสธ
+ * ซึ่งกลบเจตนาและทำให้ `skipDuplicates` ซ่อนบั๊กอื่นไปด้วย
+ */
+function withWatchers(base: Recipient[], c: CommentContext): Recipient[] {
+  const seen = new Set(base.map((r) => (r.userId === null ? 'team' : r.userId.toString())));
+  const out = [...base];
+  for (const id of c.watcherIds ?? []) {
+    // ไม่แจ้งคนที่เขียนเอง แม้เขาจะกดเฝ้าดูไว้ — กฎข้อ 1 ใช้กับผู้เฝ้าดูด้วย
+    if (id === c.authorId) continue;
+    const key = id.toString();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({ userId: id, reason: 'watcher' });
+  }
+  return out;
+}
+
+function baseAudience(c: CommentContext): Recipient[] {
   const out: Recipient[] = [];
   const authoredByReporter = c.authorId === c.reporterId;
 

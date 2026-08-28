@@ -123,3 +123,60 @@ describe('ข้อความแจ้งเตือน', () => {
     expect(commentNotificationText(p).body).toContain('เน็ตห้องบัญชีหลุด');
   });
 });
+
+describe('E · ผู้เฝ้าดู', () => {
+  /*
+    ผู้เฝ้าดูเป็นเหตุผลเดียวที่ตาราง `work_item_watcher` มีอยู่ · ถ้ากดเฝ้าดูแล้ว
+    ไม่ได้รับอะไรเลย ปุ่มนั้นก็เป็นแค่แถวในฐานข้อมูลที่ไม่มีใครอ่าน
+    — รูปแบบเดียวกับกลไกที่ไม่มีอะไรเรียกใช้
+
+    การตรวจสิทธิ์ไม่ได้อยู่ที่นี่โดยตั้งใจ · ผู้เรียกกรองมาก่อนแล้วว่าใครเห็น
+    ความเห็นใบนี้ได้ ฟังก์ชันนี้จึงทดสอบเคส "เมื่อไรจะไม่ส่ง" ได้ครบ
+    โดยไม่ต้องมีฐานข้อมูล
+  */
+  const base = { authorId: 1n, reporterId: 2n, assigneeId: 3n, isInternal: false };
+
+  it('**ผู้เฝ้าดูได้รับด้วย นอกเหนือจากผู้แจ้งและผู้รับผิดชอบ**', () => {
+    const out = commentAudience({ ...base, watcherIds: [9n] });
+    expect(out.map((r) => r.userId)).toContain(9n);
+    expect(out.find((r) => r.userId === 9n)?.reason).toBe('watcher');
+  });
+
+  it('**คนที่อยู่ในรายชื่ออยู่แล้ว ต้องไม่ถูกเติมซ้ำ**', () => {
+    /*
+      ผู้รับผิดชอบที่กดเฝ้าดูด้วย ต้องได้แจ้งเตือนใบเดียว ไม่ใช่สองใบ ·
+      การพึ่ง unique index ให้ปฏิเสธ แปลว่าเราตั้งใจเขียนของซ้ำแล้วหวังให้
+      ฐานข้อมูลจัดการ ซึ่งกลบเจตนาและทำให้ `skipDuplicates` ซ่อนบั๊กอื่นไปด้วย
+    */
+    const out = commentAudience({ ...base, watcherIds: [3n, 2n] });
+    const ids = out.map((r) => r.userId?.toString() ?? 'team');
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it('ผู้เฝ้าดูคนเดียวกันส่งมาซ้ำ ก็ยังได้ใบเดียว', () => {
+    const out = commentAudience({ ...base, watcherIds: [9n, 9n, 9n] });
+    expect(out.filter((r) => r.userId === 9n)).toHaveLength(1);
+  });
+
+  it('**ไม่แจ้งคนเขียนเอง แม้เขาจะกดเฝ้าดูไว้**', () => {
+    // กฎข้อ 1 ใช้กับผู้เฝ้าดูด้วย — ไม่มีใครอยากได้อีเมลบอกว่าตัวเองเพิ่งพิมพ์อะไร
+    const out = commentAudience({ ...base, watcherIds: [1n] });
+    expect(out.some((r) => r.userId === 1n)).toBe(false);
+  });
+
+  it('ความเห็นภายใน: ผู้เฝ้าดูที่ผู้เรียกกรองมาแล้ว ได้รับ', () => {
+    /*
+      ผู้เรียกส่งมาเฉพาะผู้เฝ้าดูที่เห็นบันทึกภายในได้ · ที่นี่จึงต้องส่งให้
+      — ถ้าตัดทิ้งเพราะ `isInternal` ทีมที่กดเฝ้าดูจะไม่มีวันรู้ว่ามีอะไรคุยกัน
+    */
+    const out = commentAudience({ ...base, isInternal: true, watcherIds: [9n] });
+    expect(out.some((r) => r.userId === 9n)).toBe(true);
+    // และผู้แจ้งยังต้องไม่ได้รับเด็ดขาด
+    expect(out.some((r) => r.userId === 2n)).toBe(false);
+  });
+
+  it('ไม่ส่ง watcherIds มาเลย = พฤติกรรมเดิมทุกประการ', () => {
+    // ผู้เรียกเดิมที่ยังไม่ได้แก้ ต้องได้ผลเหมือนก่อนมีฟีเจอร์นี้
+    expect(commentAudience(base)).toEqual(commentAudience({ ...base, watcherIds: [] }));
+  });
+});

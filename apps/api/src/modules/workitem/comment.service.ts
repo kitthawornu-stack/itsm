@@ -19,6 +19,7 @@ import {
 import { tenantScoped } from '../../infrastructure/prisma/tenant-scope';
 import { PermissionDeniedError, assertCan, can } from '../permission';
 import { WorkItemNotFoundError } from './workitem.service';
+import { eligibleWatcherIds } from './watcher.service';
 import {
   commentAudience,
   commentDedupeKey,
@@ -124,11 +125,22 @@ export async function addComment(
      * จะกลายเป็นคำถามที่ไม่มีใครเห็น โดยไม่มี error ให้ใครสังเกต
      * ตัวส่งอีเมลอ่านจากตารางนี้อยู่แล้ว จึงได้ความทนทานมาฟรี
      */
+    /*
+      ผู้เฝ้าดูได้รับด้วย — และนี่คือจุดที่ทำให้ปุ่มเฝ้าดูมีผลจริง
+      ถ้ากดแล้วไม่ได้รับอะไร ตาราง `work_item_watcher` ก็เป็นแค่แถวที่ไม่มีใครอ่าน
+
+      กรองสิทธิ์ **ที่นี่ ตอนจะส่ง** ไม่ใช่ตอนกดเฝ้าดู · สิทธิ์เปลี่ยนได้ระหว่างนั้น
+      และการแจ้งเตือนพกหัวข้อกับเนื้อความไปด้วย จึงรั่วโดยไม่ต้องกดอะไรเลย
+    */
+    const watcherIds = await eligibleWatcherIds(ctx, item.id, item.projectId, {
+      internal: isInternal,
+    });
     const audience = commentAudience({
       authorId,
       reporterId: item.reporterId,
       assigneeId: item.assigneeId,
       isInternal,
+      watcherIds,
     });
     if (audience.length > 0) {
       const text = commentNotificationText({
