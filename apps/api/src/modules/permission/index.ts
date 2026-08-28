@@ -26,3 +26,4 @@ export {
   isStaff,
   wouldLockOutAdmins,
   summarize, type PermissionKey, type PermissionSummary } from './permission-rules';
+export * from './scheme-admin.service';

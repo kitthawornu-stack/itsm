@@ -4,6 +4,7 @@ import type { ReactNode } from 'react';
 import { Table } from '@itsm/ui';
 
 import { PermissionGrid } from '@/components/permission-grid';
+import { SchemeAdmin, type SchemeRow } from '@/components/scheme-admin';
 import { SlaPolicyAdmin } from '@/components/sla-policy-admin';
 import { API_BASE, apiFetch } from '@/lib/api';
 
@@ -63,6 +64,7 @@ interface Detail {
     goals: Array<{ key: string; name: string; targetMs: number; match: unknown }>;
   } | null;
   /** ความพอใจของผู้แจ้ง — นับเฉพาะเรื่องที่มีคำตอบจริง */
+  schemes?: SchemeRow[];
   slaEditable?: { policyId: string; goals: Array<{ id: string; isCatchAll: boolean }> } | null;
   calendars?: Array<{
     id: string;
@@ -247,7 +249,15 @@ export default async function ProjectDetailPage({
 
       {/* ---------- SLA ---------- */}
       <div className="cfg-block">
-        <h2 className="cfg-title">ความพอใจของผู้แจ้ง</h2>
+        {/* สร้างและสลับชุดสิทธิ์ได้จากที่นี่แล้ว — ก่อนหน้านี้ต้องเขียน SQL */}
+        <SchemeAdmin
+          apiBase={API}
+          projectKey={d.project.key}
+          currentSchemeId={d.permissions.schemeId}
+          schemes={d.schemes ?? []}
+        />
+
+        <h2 className="cfg-title detail-section-gap">ความพอใจของผู้แจ้ง</h2>
         {d.satisfaction === undefined || d.satisfaction.responses === 0 ? (
           <p className="admin-empty">
             {/*

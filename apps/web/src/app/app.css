@@ -1622,3 +1622,13 @@
   gap: var(--space-2);
   max-width: 16rem;
 }
+
+/* ---------- ตั้งค่าชุดสิทธิ์ ---------- */
+
+.scheme-admin {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  align-items: flex-start;
+  margin-top: var(--space-3);
+}

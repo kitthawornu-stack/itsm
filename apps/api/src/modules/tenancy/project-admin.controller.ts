@@ -13,12 +13,21 @@ import { Ctx } from '../../infrastructure/http/session.guard';
 import { tenantScoped } from '../../infrastructure/prisma/tenant-scope';
 import {
   ALL_PERMISSION_KEYS,
+  DuplicateSchemeNameError,
   LastAdminGrantError,
+  SchemeInUseError,
+  SchemeNameRequiredError,
+  SchemeNotFoundError,
   UnknownGroupError,
+  WouldHideProjectError,
   assertTenantAdmin,
+  createScheme,
   describeGrants,
+  listSchemes,
+  removeScheme,
   schemeUsage,
   setGrant,
+  setProjectScheme,
 } from '../permission';
 import { listGroups } from '../identity';
 import {
@@ -74,6 +83,29 @@ async function slaEditable(
       isCatchAll: g.match === null,
     })),
   };
+}
+
+/** error ของชุดสิทธิ์ → รหัส HTTP ที่ตรงความหมาย */
+function schemeError(e: unknown): never {
+  if (e instanceof SchemeNotFoundError) {
+    throw new HttpException({ error: 'not_found', message: e.message }, HttpStatus.NOT_FOUND);
+  }
+  if (e instanceof SchemeInUseError) {
+    // 409 — คำขอถูกต้อง แต่สถานะของข้อมูลตอนนี้ทำให้ทำไม่ได้
+    throw new HttpException({ error: 'in_use', message: e.message }, HttpStatus.CONFLICT);
+  }
+  if (
+    e instanceof SchemeNameRequiredError ||
+    e instanceof DuplicateSchemeNameError ||
+    // การสลับที่จะทำให้โปรเจกต์หายจากทุกคน ไม่ใช่ระบบพัง แต่เป็นคำขอที่รับไม่ได้
+    e instanceof WouldHideProjectError
+  ) {
+    throw new HttpException(
+      { error: 'invalid_input', message: e.message },
+      HttpStatus.UNPROCESSABLE_ENTITY,
+    );
+  }
+  throw e;
 }
 
 /** error ของ SLA → รหัส HTTP ที่ตรงความหมาย */
@@ -205,6 +237,11 @@ export class ProjectAdminController {
           ว่าปฏิทินนั้นยังไม่มีใครยืนยัน ไม่ใช่เลือกไปแล้วค่อยรู้ว่าตัวเลขเชื่อไม่ได้
         */
         calendars: await listCalendars(ctx, [thisYear, thisYear + 1]),
+        /*
+          ชุดสิทธิ์ทั้งหมด พร้อมบอกว่าใบไหนเปิดดูโปรเจกต์ไม่ได้เลย —
+          ผู้ดูแลต้องเห็นก่อนสลับ ไม่ใช่สลับไปแล้วโปรเจกต์หายจากทุกคน
+        */
+        schemes: await listSchemes(ctx),
       };
     } catch (e) {
       if (e instanceof ProjectNotFoundError) {
@@ -368,6 +405,66 @@ export class ProjectAdminController {
       return { ok: true };
     } catch (e) {
       return slaError(e);
+    }
+  }
+
+  @Post('schemes')
+  async addScheme(
+    @Ctx() ctx: TenantContext,
+    @Body() body: { name?: unknown; copyFromId?: unknown },
+  ): Promise<{ id: string; copiedGrants: number }> {
+    await assertTenantAdmin(ctx);
+    const copyFrom =
+      typeof body.copyFromId === 'string' && body.copyFromId !== ''
+        ? BigInt(body.copyFromId)
+        : undefined;
+    try {
+      const r = await createScheme(
+        ctx,
+        typeof body.name === 'string' ? body.name : '',
+        copyFrom,
+      );
+      return { id: r.id.toString(), copiedGrants: r.copiedGrants };
+    } catch (e) {
+      return schemeError(e);
+    }
+  }
+
+  @Post(':key/scheme')
+  async assignScheme(
+    @Ctx() ctx: TenantContext,
+    @Param('key') key: string,
+    @Body() body: { schemeId?: unknown },
+  ): Promise<{ ok: true }> {
+    await assertTenantAdmin(ctx);
+    const project = await projectByKey(ctx, key);
+    const schemeId =
+      typeof body.schemeId === 'string' && body.schemeId !== '' ? BigInt(body.schemeId) : null;
+    if (schemeId === null) {
+      throw new HttpException(
+        { error: 'invalid_input', message: 'ต้องเลือกชุดสิทธิ์' },
+        HttpStatus.UNPROCESSABLE_ENTITY,
+      );
+    }
+    try {
+      await setProjectScheme(ctx, project.id, schemeId);
+      return { ok: true };
+    } catch (e) {
+      return schemeError(e);
+    }
+  }
+
+  @Post('schemes/:schemeId/remove')
+  async dropScheme(
+    @Ctx() ctx: TenantContext,
+    @Param('schemeId') schemeId: string,
+  ): Promise<{ ok: true }> {
+    await assertTenantAdmin(ctx);
+    try {
+      await removeScheme(ctx, BigInt(schemeId));
+      return { ok: true };
+    } catch (e) {
+      return schemeError(e);
     }
   }
 }
