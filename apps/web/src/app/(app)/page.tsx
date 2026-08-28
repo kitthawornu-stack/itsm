@@ -60,6 +60,32 @@ type ViewKey = (typeof VIEWS)[number]['key'];
  */
 const BULK_MAX = 50;
 
+/** จำนวนแถวต่อหน้า — ตรงกับเพดานของการแก้ทีละหลายใบ ให้ "เลือกทั้งหน้า" มีความหมายเดียว */
+const PAGE_SIZE = 50;
+
+/**
+ * เพดานความลึกของการแบ่งหน้าฝั่งค้นหา — ต้องตรงกับ `MAX_RESULT_WINDOW` ของ API
+ *
+ * ไม่เสนอหน้าที่กดแล้วได้ error · การให้กดแล้วค่อยบอกว่าไม่ได้
+ * คือการโยนข้อจำกัดของเราไปให้ผู้ใช้ไปเจอเอง
+ */
+const MAX_DEPTH = 10_000;
+
+/**
+ * ลิงก์ของหน้าหนึ่ง — **พาคิวรีและมุมมองไปด้วยเสมอ**
+ *
+ * ลืมพาไปเมื่อไร การกดหน้าถัดไปจะทิ้งสิ่งที่ผู้ใช้พิมพ์ไว้เงียบ ๆ
+ * แล้วเขาจะเห็นคิวคนละชุดโดยไม่รู้ว่าทำไม
+ */
+function pageHref(view: ViewKey, query: string, offset: number): string {
+  const p = new URLSearchParams();
+  if (view !== '') p.set('mine', view);
+  if (query !== '') p.set('hql', query);
+  if (offset > 0) p.set('offset', String(offset));
+  const qs = p.toString();
+  return qs === '' ? '/' : `/?${qs}`;
+}
+
 /**
  * **เมื่อผู้ใช้เขียนคิวรีเอง ตัวกรองปริยายที่มองไม่เห็นต้องหลุดออกไป**
  *
@@ -73,11 +99,14 @@ const BULK_MAX = 50;
 async function fetchQueue(
   mine: ViewKey,
   hql: string,
+  offset: number,
 ): Promise<
-  { rows: ApiRow[]; total: number; hqlError?: string; bulkEditable?: string[] } | { error: string }
+  | { rows: ApiRow[]; total: number; hqlError?: string; bulkEditable?: string[]; offset?: number }
+  | { error: string }
 > {
   try {
-    const params = new URLSearchParams({ limit: '50' });
+    const params = new URLSearchParams({ limit: String(PAGE_SIZE) });
+    if (offset > 0) params.set('offset', String(offset));
     if (hql === '') {
       params.set('project', 'SD');
       params.set('open', 'true');
@@ -111,6 +140,7 @@ async function fetchQueue(
       total: number;
       hqlError?: string;
       bulkEditable?: string[];
+      offset?: number;
     };
   } catch {
     return { error: `เชื่อมต่อ API ที่ ${API} ไม่ได้ — รัน \`pnpm --filter @itsm/api dev\` ก่อน` };
@@ -120,13 +150,16 @@ async function fetchQueue(
 export default async function QueuePage({
   searchParams,
 }: {
-  searchParams: Promise<{ mine?: string; hql?: string }>;
+  searchParams: Promise<{ mine?: string; hql?: string; offset?: string }>;
 }): Promise<ReactNode> {
-  const { mine, hql } = await searchParams;
+  const { mine, hql, offset } = await searchParams;
   // ค่าที่ไม่รู้จักตกกลับเป็น "ทั้งหมด" — ตัวกรองที่เดาเองทำให้เห็นรายการผิด
   const view: ViewKey = mine === 'assigned' || mine === 'reported' ? mine : '';
   const query = (hql ?? '').trim();
-  const data = await fetchQueue(view, query);
+  // ค่าที่พังตกกลับเป็นหน้าแรก — ลิงก์เก่าไม่ควรทำให้หน้าจอพัง
+  const skip = Math.max(0, Math.floor(Number(offset ?? 0)) || 0);
+  const data = await fetchQueue(view, query, skip);
+
 
   if ('error' in data) {
     return (
@@ -139,29 +172,49 @@ export default async function QueuePage({
     );
   }
 
+  /*
+    จำนวนที่ **เข้าถึงได้จริง** — เส้นทางคิวรีติดเพดานความลึกของดัชนี
+    ต่างจากยอดรวม ซึ่งบอกความจริงว่ามีทั้งหมดเท่าไร
+  */
+  const reachable = query === '' ? data.total : Math.min(data.total, MAX_DEPTH);
+  const lastPage = Math.max(1, Math.ceil(reachable / PAGE_SIZE));
+  /*
+    เลยหน้าสุดท้ายไปแล้ว (ลิงก์เก่า หรือพิมพ์ URL เอง) — ต่างจาก "ไม่มีอะไรตรงเงื่อนไข"
+    โดยสิ้นเชิง · ข้อความว่า "ไม่พบงานที่ตรงกับคิวรีนี้" ตอนที่มีอยู่ 7,023 รายการ
+    คือคำตอบที่ผิด และผู้ใช้จะสรุปว่าคิวรีของตัวเองใช้ไม่ได้
+  */
+  const pastEnd = data.rows.length === 0 && data.total > 0 && skip >= data.total;
+
   return (
     <>
       <PageHeader
         title="คิวงาน · IT Service Desk"
         lead={
-          query === '' ? (
-            <>
-              งานที่เปิดอยู่ทั้งหมด {data.total.toLocaleString('th-TH')} รายการ · แสดง{' '}
-              {data.rows.length} รายการแรก เรียงตามการอัปเดตล่าสุด
-            </>
-          ) : (
-            <>
-              {/*
-                **ไม่บอกยอดรวมตอนค้นด้วยคิวรี** — เพราะเราไม่รู้ยอดรวมจริง
-                เส้นทาง HQL คัดจากดัชนีมาไม่เกิน 50 คีย์ก่อน แล้วค่อยนับใน MySQL
-                ยอดที่ได้จึงเท่ากับจำนวนที่แสดงเสมอ · เขียนว่า "ทั้งหมด 50 รายการ"
-                คือการรายงานเพดานเป็นคำตอบ ซึ่งอ่านเหมือนข้อเท็จจริง
-              */}
-              แสดง {data.rows.length.toLocaleString('th-TH')} รายการ (สูงสุด 50 ต่อครั้ง) ·{' '}
-              <b>คิวรีแทนตัวกรองปริยายทั้งหมด</b> — ไม่ได้จำกัดเฉพาะโปรเจกต์ IT Service Desk
-              และไม่ได้ตัดงานที่ปิดแล้วออก
-            </>
-          )
+          <>
+            {/*
+              ยอดรวมเป็นยอดจริงทั้งสองเส้นทางแล้ว — เส้นทาง HQL เคยรายงานเพดาน
+              ของตัวเอง (50) เป็นยอดรวม เพราะนับจากคีย์ที่คัดมาได้
+              ตอนนี้ดัชนีคืนยอดจริงมาให้ (`track_total_hits`)
+            */}
+            {query === '' ? 'งานที่เปิดอยู่ทั้งหมด ' : 'ผลจากคิวรีทั้งหมด '}
+            {data.total.toLocaleString('th-TH')} รายการ
+            {data.rows.length === 0 ? null : (
+              <>
+                {' '}
+                · แสดงรายการที่ {(skip + 1).toLocaleString('th-TH')}–
+                {(skip + data.rows.length).toLocaleString('th-TH')}
+              </>
+            )}
+            {query === '' ? (
+              <> เรียงตามการอัปเดตล่าสุด</>
+            ) : (
+              <>
+                {' '}
+                · <b>คิวรีแทนตัวกรองปริยายทั้งหมด</b> — ไม่ได้จำกัดเฉพาะโปรเจกต์ IT Service Desk
+                และไม่ได้ตัดงานที่ปิดแล้วออก
+              </>
+            )}
+          </>
         }
       />
 
@@ -206,9 +259,11 @@ export default async function QueuePage({
         <EmptyState
           title={
             data.hqlError !== undefined
-              ? 'คิวรียังใช้ไม่ได้'
-              : query !== ''
-                ? 'ไม่มีงานที่ตรงกับคิวรีนี้'
+              ? 'แสดงผลชุดนี้ไม่ได้'
+              : pastEnd
+                ? 'เลยหน้าสุดท้ายไปแล้ว'
+                : query !== ''
+                  ? 'ไม่มีงานที่ตรงกับคิวรีนี้'
                 : view === 'assigned'
                   ? 'ยังไม่มีงานที่มอบหมายให้คุณ'
                   : view === 'reported'
@@ -216,10 +271,16 @@ export default async function QueuePage({
                     : 'ยังไม่มีงานในคิวนี้'
           }
           body={
+            /*
+              ใช้คำของเซิร์ฟเวอร์ ไม่ใช่สมมติว่าเป็นคิวรีผิดเสมอ — เพดานความลึก
+              ของการแบ่งหน้าก็มาทางนี้ และคิวรีนั้นถูกทุกตัวอักษร
+            */
             data.hqlError !== undefined
-              ? 'แก้คิวรีตามข้อความข้างช่องกรอกแล้วลองใหม่'
-              : query !== ''
-                ? 'ลองผ่อนเงื่อนไขลง หรือกด "ล้าง" เพื่อกลับไปดูคิวปกติ'
+              ? data.hqlError
+              : pastEnd
+                ? `มีทั้งหมด ${data.total.toLocaleString('th-TH')} รายการ — กด "ก่อนหน้า" เพื่อกลับไปดู`
+                : query !== ''
+                  ? 'ลองผ่อนเงื่อนไขลง หรือกด "ล้าง" เพื่อกลับไปดูคิวปกติ'
                 : view === 'reported'
                   ? 'เมื่อแจ้งปัญหาเข้ามา เรื่องของคุณจะอยู่ที่นี่'
                   : 'เมื่อมีผู้แจ้งปัญหาเข้ามา งานจะปรากฏที่นี่โดยอัตโนมัติ'
@@ -237,6 +298,39 @@ export default async function QueuePage({
           bulkEditable={data.bulkEditable ?? []}
           max={BULK_MAX}
         />
+      )}
+
+      {/*
+        แบ่งหน้าเป็นลิงก์ธรรมดา ไม่ใช่ปุ่ม JavaScript — หน้าที่กำลังดูอยู่คือ
+        สถานะของหน้า ต้องบุ๊กมาร์กได้และกดย้อนกลับได้ แบบเดียวกับคิวรีและมุมมอง
+      */}
+      {reachable <= PAGE_SIZE && !pastEnd ? null : (
+        <nav className="pager" aria-label="แบ่งหน้า">
+          <a
+            href={pageHref(
+              view,
+              query,
+              // เลยหน้าสุดท้ายไปแล้วให้กลับมาหน้าสุดท้ายจริง ไม่ใช่ถอยทีละหน้าจากตำแหน่งที่ไม่มีอยู่
+              pastEnd ? (lastPage - 1) * PAGE_SIZE : Math.max(0, skip - PAGE_SIZE),
+            )}
+            aria-disabled={skip === 0 ? 'true' : undefined}
+            data-disabled={skip === 0 ? 'true' : undefined}
+          >
+            ← ก่อนหน้า
+          </a>
+          <span>
+            {/* หน้าที่กำลังดูต้องไม่เกินหน้าสุดท้าย — "หน้า 200 จาก 141" คือคำตอบที่ผิด */}
+            หน้า {Math.min(Math.floor(skip / PAGE_SIZE) + 1, lastPage).toLocaleString('th-TH')} จาก{' '}
+            {lastPage.toLocaleString('th-TH')}
+          </span>
+          <a
+            href={pageHref(view, query, skip + PAGE_SIZE)}
+            aria-disabled={skip + PAGE_SIZE >= reachable ? 'true' : undefined}
+            data-disabled={skip + PAGE_SIZE >= reachable ? 'true' : undefined}
+          >
+            ถัดไป →
+          </a>
+        </nav>
       )}
     </>
   );

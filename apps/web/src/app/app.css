@@ -1333,3 +1333,42 @@
 .cat-escape p {
   margin: var(--space-1) 0 0;
 }
+
+/* ---------- แบ่งหน้า ---------- */
+
+.pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-4);
+  margin-top: var(--space-4);
+  font-size: 12.5px;
+  line-height: var(--line-height-body);
+  color: var(--text-muted);
+}
+
+.pager a {
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--accent-service);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.pager a:hover {
+  border-color: var(--accent-service);
+  background: var(--surface-2);
+}
+
+/* ขอบที่ไปต่อไม่ได้ — ยังอยู่บนหน้าจอเพื่อไม่ให้ปุ่มขยับ แต่กดแล้วไม่ไปไหน */
+.pager a[data-disabled='true'] {
+  color: var(--text-faint);
+  border-color: var(--border);
+  pointer-events: none;
+}
+
+.pager a:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}

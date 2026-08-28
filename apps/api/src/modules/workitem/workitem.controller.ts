@@ -45,7 +45,13 @@ import {
   saveFieldValues,
 } from '../field';
 import { CatalogItemNotFoundError, catalogItemForReport } from '../catalog';
-import { SearchIndexNotReadyError, searchByHql, searchWorkItems } from '../search-index';
+import {
+  MAX_RESULT_WINDOW,
+  SearchDepthExceededError,
+  SearchIndexNotReadyError,
+  searchByHql,
+  searchWorkItems,
+} from '../search-index';
 import { slaForWorkItems, type SlaSnapshot } from '../sla';
 import {
   TransitionNotAllowedError,
@@ -153,15 +159,23 @@ export class WorkItemController {
     @Query('limit') limit?: string,
     @Query('mine') mine?: string,
     @Query('hql') hql?: string,
+    @Query('offset') offset?: string,
   ): Promise<{
     rows: WorkItemListRow[];
     total: number;
     hqlError?: string;
     /** คีย์โปรเจกต์ที่ผู้ใช้คนนี้แก้ทีละหลายใบได้ — ใช้ตัดสินว่าจะโชว์ช่องติ๊กไหม */
     bulkEditable?: string[];
+    /** ตำแหน่งเริ่มของหน้านี้ — หน้าจอใช้คำนวณว่ากำลังดูช่วงไหนของทั้งหมด */
+    offset?: number;
   }> {
     const db = tenantScoped(ctx);
     const take = Math.min(Number(limit ?? 50) || 50, 200);
+    /*
+      ตำแหน่งเริ่มของหน้า — ค่าติดลบหรือค่าที่ไม่ใช่ตัวเลขตกเป็น 0
+      ไม่ใช่โยน error · ลิงก์ที่พังไม่ควรทำให้หน้าจอพัง แค่กลับไปหน้าแรก
+    */
+    const skip = Math.max(0, Math.floor(Number(offset ?? 0)) || 0);
 
     /**
      * กรองด้วยโปรเจกต์ที่ผู้ใช้เปิดดูได้ **ที่ระดับคิวรี**
@@ -196,10 +210,20 @@ export class WorkItemController {
      *
      * ขอบเขตโปรเจกต์ส่งเข้าไปเสมอ — `compile` เป็นคนใส่ลง filter ไม่ใช่ที่นี่
      */
+    /**
+     * ยอดรวมของเส้นทาง HQL มาจาก **ดัชนี** ไม่ใช่จากจำนวนคีย์ที่คัดมาได้
+     *
+     * เดิมนับจาก `keyFilter` ซึ่งยาวไม่เกิน `take` เสมอ ยอดที่ได้จึงเท่ากับ
+     * จำนวนที่แสดงทุกครั้ง — เป็นการรายงานเพดานของตัวเองเป็นข้อเท็จจริง
+     * เกี่ยวกับข้อมูล · หน้าจอเลยต้องเขียนเลี่ยงว่า "แสดง N รายการ (สูงสุด 50)"
+     * ตอนนี้ตอบได้จริงว่าทั้งหมดมีเท่าไร และแบ่งหน้าได้
+     */
+    let hqlTotal: number | null = null;
     if (hql !== undefined && hql.trim().length > 0) {
       try {
-        const hits = await searchByHql(ctx, hql, scopedProjectIds, take);
-        keyFilter = hits.map((h) => h.itemKey);
+        const page = await searchByHql(ctx, hql, scopedProjectIds, take, skip);
+        hqlTotal = page.total;
+        keyFilter = page.hits.map((h) => h.itemKey);
       } catch (e) {
         if (e instanceof SearchIndexNotReadyError) {
           throw new HttpException(
@@ -207,12 +231,21 @@ export class WorkItemController {
             HttpStatus.SERVICE_UNAVAILABLE,
           );
         }
+        /*
+          เพดานความลึกไม่ใช่ความผิดของคิวรี — คิวรีถูกทุกตัวอักษร แค่ขอหน้าที่ลึกเกิน
+          คืนยอดรวมเท่าเพดานเพื่อให้หน้าจอยังบอกได้ว่าดูได้ถึงไหน
+        */
+        if (e instanceof SearchDepthExceededError) {
+          return { rows: [], total: MAX_RESULT_WINDOW, hqlError: e.message, offset: skip };
+        }
         if (e instanceof Error && e.name.startsWith('Hql')) {
           return { rows: [], total: 0, hqlError: e.message };
         }
         throw e;
       }
-      if (keyFilter.length === 0) return { rows: [], total: 0 };
+      // หน้าที่เลยผลลัพธ์ไปแล้ว ต้องคืนยอดรวมจริงมาด้วย ไม่ใช่ 0
+      // ไม่งั้นการกดหน้าถัดไปเกินขอบจะทำให้หน้าจอบอกว่า "ไม่พบอะไรเลย"
+      if (keyFilter.length === 0) return { rows: [], total: hqlTotal, offset: skip };
     } else if (q !== undefined && q.trim().length > 0) {
       try {
         const hits = await searchWorkItems(ctx, q, {
@@ -263,6 +296,11 @@ export class WorkItemController {
       db.workItem.findMany({
         where,
         take,
+        /*
+          เส้นทาง HQL เลื่อนหน้าที่ **ดัชนี** ไปแล้ว (`from`) — ถ้าเลื่อนซ้ำที่นี่
+          จะข้ามผลลัพธ์ไปสองเท่า · เส้นทางปกติเลื่อนที่ MySQL
+        */
+        ...(hqlTotal === null ? { skip } : {}),
         orderBy: { updatedAt: 'desc' },
         include: {
           status: { select: { name: true, category: true, pausesSla: true } },
@@ -299,7 +337,9 @@ export class WorkItemController {
     );
 
     return {
-      total,
+      // ยอดรวมของเส้นทาง HQL มาจากดัชนี ส่วนเส้นทางปกติมาจาก MySQL
+      total: hqlTotal ?? total,
+      offset: skip,
       bulkEditable,
       rows: rows.map((w) => ({
         id: w.id.toString(),

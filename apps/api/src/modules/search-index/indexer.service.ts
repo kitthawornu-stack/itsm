@@ -24,6 +24,25 @@ import { OpenSearchError, openSearch } from './opensearch-client';
  * เพราะผลว่างจะทำให้ผู้ใช้เชื่อว่า "ไม่มีข้อมูล" ทั้งที่จริงคือระบบค้นหายังไม่พร้อม
  * ต้องแยกออกมาให้ชั้นบนแสดงข้อความที่ถูกต้องและให้ทีมงานเห็นใน alert
  */
+/**
+ * เพดานความลึกของการแบ่งหน้าใน OpenSearch
+ *
+ * `index.max_result_window` เป็น 10,000 โดยปริยาย · ขอ `from + size` เกินนี้
+ * ได้ error ที่อ่านไม่ออก และ **หน้าจอเคยแปลมันเป็น "คิวรียังใช้ไม่ได้"**
+ * ซึ่งโยนความผิดไปให้คิวรีที่เขียนถูกทุกตัวอักษร
+ */
+export const MAX_RESULT_WINDOW = 10_000;
+
+export class SearchDepthExceededError extends Error {
+  constructor(readonly limit: number) {
+    super(
+      `ดูผลได้ลึกสุด ${limit.toLocaleString('th-TH')} รายการ — ` +
+        'ใช้เงื่อนไขให้แคบลงเพื่อเข้าถึงรายการที่เหลือ',
+    );
+    this.name = 'SearchDepthExceededError';
+  }
+}
+
 export class SearchIndexNotReadyError extends Error {
   constructor(readonly index: string) {
     super(
@@ -180,6 +199,18 @@ export interface SearchHit {
   score: number;
 }
 
+/**
+ * ผลค้นหาหนึ่งหน้า พร้อม **ยอดรวมจริงของทั้งคิวรี**
+ *
+ * ยอดรวมไม่ใช่จำนวนที่คืนมาในหน้านี้ · หน้าจอที่รายงานเพดานเป็นยอดรวม
+ * ("แสดง 50 รายการ" → "ทั้งหมด 50 รายการ") คือการรายงานข้อจำกัดของตัวเอง
+ * เป็นข้อเท็จจริงเกี่ยวกับข้อมูล
+ */
+export interface SearchPage {
+  total: number;
+  hits: SearchHit[];
+}
+
 /** ค้นหาข้อความ — tenant และ project อยู่ใน filter context เสมอ */
 export async function searchWorkItems(
   ctx: TenantContext,
@@ -192,14 +223,14 @@ export async function searchWorkItems(
     text,
     ...(opts.projectIds === undefined ? {} : { projectIds: opts.projectIds }),
   });
-  let hits;
+  let page;
   try {
-    hits = await openSearch.search<WorkItemDoc>(index, query, opts.size ?? 20);
+    page = await openSearch.search<WorkItemDoc>(index, query, opts.size ?? 20);
   } catch (e) {
     if (e instanceof OpenSearchError && e.status === 404) throw new SearchIndexNotReadyError(index);
     throw e;
   }
-  return hits.map((h) => ({
+  return page.hits.map((h) => ({
     itemKey: h.source.itemKey,
     summary: h.source.summary,
     statusName: h.source.statusName,
@@ -223,26 +254,36 @@ export async function searchByHql(
   hql: string,
   browsableProjectIds: bigint[],
   size = 50,
-): Promise<SearchHit[]> {
+  from = 0,
+): Promise<SearchPage> {
+  /*
+    กันไว้ก่อนยิง ไม่ใช่ปล่อยให้ OpenSearch โยน error ที่อ่านไม่ออกกลับมา
+    แล้วให้ชั้นบนเดาว่ามันแปลว่าอะไร
+  */
+  if (from + size > MAX_RESULT_WINDOW) throw new SearchDepthExceededError(MAX_RESULT_WINDOW);
+
   const index = workItemIndexName(ctx.tenantId);
   const compiled = compile(hql, {
     tenantId: ctx.tenantId.toString(),
     browsableProjectIds: browsableProjectIds.map((id) => id.toString()),
   });
 
-  let hits;
+  let page;
   try {
     // CompiledQuery เป็นชนิดที่ประกาศฟิลด์ชัดเจน ไม่มี index signature
     // ตัว client รับ Record<string, unknown> — แปลงเป็น object ธรรมดาก่อนส่ง
-    hits = await openSearch.search<WorkItemDoc>(index, { ...compiled }, size);
+    page = await openSearch.search<WorkItemDoc>(index, { ...compiled }, size, from);
   } catch (e) {
     if (e instanceof OpenSearchError && e.status === 404) throw new SearchIndexNotReadyError(index);
     throw e;
   }
-  return hits.map((h) => ({
-    itemKey: h.source.itemKey,
-    summary: h.source.summary,
-    statusName: h.source.statusName,
-    score: h.score,
-  }));
+  return {
+    total: page.total,
+    hits: page.hits.map((h) => ({
+      itemKey: h.source.itemKey,
+      summary: h.source.summary,
+      statusName: h.source.statusName,
+      score: h.score,
+    })),
+  };
 }

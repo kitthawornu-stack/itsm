@@ -146,8 +146,8 @@ describe('ขอบเขตของตัวกรองที่แชร์'
       ของเจ้าของติดไปด้วย ซึ่งเป็นช่องโหว่ที่ไม่มีอะไรบนหน้าจอบอก
     */
     const hql = 'status IS NOT EMPTY';
-    const asOwner = await searchByHql(owner, hql, [sdId, platId], 50);
-    const asOther = await searchByHql(other, hql, [sdId], 50);
+    const asOwner = (await searchByHql(owner, hql, [sdId, platId], 50)).hits;
+    const asOther = (await searchByHql(other, hql, [sdId], 50)).hits;
 
     expect(asOwner.length).toBeGreaterThan(0);
     expect(asOther.length).toBeGreaterThan(0);

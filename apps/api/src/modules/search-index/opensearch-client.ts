@@ -91,16 +91,34 @@ export const openSearch = {
     await request('POST', `/${index}/_refresh`);
   },
 
+  /**
+   * ค้นหา — คืน **ยอดรวมจริง** มาด้วย ไม่ใช่แค่หน้าที่ขอ
+   *
+   * `hits.total.value` ของ OpenSearch หยุดนับที่ 10,000 โดยปริยาย
+   * (`track_total_hits` เป็น false) ซึ่งแปลว่ายอดที่ได้จะเป็น "อย่างน้อย 10,000"
+   * ไม่ใช่ยอดจริง · หน้าจอที่บอกว่า "พบ 10,000 รายการ" ทั้งที่มี 24,000
+   * คือตัวเลขที่อ่านเหมือนข้อเท็จจริงแต่ผิด จึงบังคับ `track_total_hits: true`
+   */
   // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-parameters -- T คือชนิดของ _source ที่ผู้เรียกกำหนด
   async search<T = unknown>(
     index: string,
     query: Record<string, unknown>,
     size = 20,
-  ): Promise<Array<{ id: string; score: number; source: T }>> {
+    from = 0,
+  ): Promise<{ total: number; hits: Array<{ id: string; score: number; source: T }> }> {
     const res = await request<{
-      hits: { hits: Array<{ _id: string; _score: number; _source: T }> };
-    }>('POST', `/${index}/_search?size=${size}`, query);
-    return res.hits.hits.map((h) => ({ id: h._id, score: h._score, source: h._source }));
+      hits: {
+        total: { value: number };
+        hits: Array<{ _id: string; _score: number; _source: T }>;
+      };
+    }>('POST', `/${index}/_search?size=${size}&from=${from}`, {
+      ...query,
+      track_total_hits: true,
+    });
+    return {
+      total: res.hits.total.value,
+      hits: res.hits.hits.map((h) => ({ id: h._id, score: h._score, source: h._source })),
+    };
   },
 
   /** ตรวจว่า analyzer ตัดคำอย่างไร — ใช้ในเทสต์และตอน debug คำค้นที่หาไม่เจอ */

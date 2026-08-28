@@ -19,7 +19,12 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { TenantContext } from '@itsm/types';
 
 import { prismaClient } from '../src/infrastructure/prisma/client';
-import { reindexAll, searchByHql } from '../src/modules/search-index';
+import {
+  MAX_RESULT_WINDOW,
+  SearchDepthExceededError,
+  reindexAll,
+  searchByHql,
+} from '../src/modules/search-index';
 
 let ctx: TenantContext;
 let sdId: bigint;
@@ -46,47 +51,47 @@ describe('HQL บนดัชนีจริง', () => {
       ทั้งที่ดัชนีเก็บ `statusName` · DSL ถูกต้องทุกประการ OpenSearch ไม่ฟ้อง
       และคืนศูนย์ผลลัพธ์ทุกครั้ง ซึ่งอ่านเหมือน "ไม่มีข้อมูลตรงเงื่อนไข"
     */
-    const hits = await searchByHql(ctx, 'status IS NOT EMPTY', [sdId, platId], 5);
+    const hits = (await searchByHql(ctx, 'status IS NOT EMPTY', [sdId, platId], 5)).hits;
     expect(hits.length).toBeGreaterThan(0);
   });
 
   it('กรองด้วยสถานะแล้วได้เฉพาะสถานะนั้น', async () => {
-    const one = await searchByHql(ctx, 'status IS NOT EMPTY', [sdId], 1);
+    const one = (await searchByHql(ctx, 'status IS NOT EMPTY', [sdId], 1)).hits;
     const target = one[0]?.statusName;
     if (target === undefined) return;
-    const hits = await searchByHql(ctx, `status = "${target}"`, [sdId], 20);
+    const hits = (await searchByHql(ctx, `status = "${target}"`, [sdId], 20)).hits;
     expect(hits.length).toBeGreaterThan(0);
     for (const h of hits) expect(h.statusName).toBe(target);
   });
 
   it('**ขอบเขตโปรเจกต์บังคับได้จริง ไม่ใช่แค่ปรากฏใน DSL**', async () => {
     // ถามหางานของ PLAT ทั้งที่มีสิทธิ์เฉพาะ SD — ต้องไม่เห็นอะไรเลย
-    const hits = await searchByHql(ctx, 'project = PLAT', [sdId], 20);
+    const hits = (await searchByHql(ctx, 'project = PLAT', [sdId], 20)).hits;
     expect(hits).toHaveLength(0);
   });
 
   it('**ไม่มีสิทธิ์โปรเจกต์ไหนเลย = ไม่เห็นอะไรเลย** ไม่ใช่เห็นทั้งหมด', async () => {
-    const hits = await searchByHql(ctx, 'status IS NOT EMPTY', [], 20);
+    const hits = (await searchByHql(ctx, 'status IS NOT EMPTY', [], 20)).hits;
     expect(hits).toHaveLength(0);
   });
 
   it('AND แคบกว่าเงื่อนไขเดียวเสมอ', async () => {
-    const one = await searchByHql(ctx, 'status IS NOT EMPTY', [sdId], 1);
+    const one = (await searchByHql(ctx, 'status IS NOT EMPTY', [sdId], 1)).hits;
     const st = one[0]?.statusName;
     if (st === undefined) return;
-    const single = await searchByHql(ctx, `status = "${st}"`, [sdId], 50);
-    const both = await searchByHql(ctx, `status = "${st}" AND summary ~ ไม่มีทางตรงแน่นอน`, [sdId], 50);
+    const single = (await searchByHql(ctx, `status = "${st}"`, [sdId], 50)).hits;
+    const both = (await searchByHql(ctx, `status = "${st}" AND summary ~ ไม่มีทางตรงแน่นอน`, [sdId], 50)).hits;
     expect(both.length).toBeLessThanOrEqual(single.length);
   });
 
   it('ค้นข้อความไทยด้วย ~ เจอจริง', async () => {
-    const sample = await searchByHql(ctx, 'status IS NOT EMPTY', [sdId], 1);
+    const sample = (await searchByHql(ctx, 'status IS NOT EMPTY', [sdId], 1)).hits;
     const summary = sample[0]?.summary;
     if (summary === undefined || summary.length < 8) return;
     // ใช้คำที่อยู่ในหัวข้อจริง ไม่ใช่คำที่แต่งขึ้น — คำที่แต่งขึ้นพิสูจน์ได้แค่ว่า
     // "ไม่เจอ" ซึ่งเป็นผลลัพธ์เดียวกับตอนที่ระบบค้นหาพังทั้งระบบ
     const word = summary.slice(0, 8);
-    const hits = await searchByHql(ctx, `summary ~ "${word}"`, [sdId], 20);
+    const hits = (await searchByHql(ctx, `summary ~ "${word}"`, [sdId], 20)).hits;
     expect(hits.length).toBeGreaterThan(0);
   });
 
@@ -98,8 +103,63 @@ describe('HQL บนดัชนีจริง', () => {
       ยิงสาขาหลักอย่างเดียวแล้วคำนี้หาไม่เจอเลย — ความล้มเหลวแบบเงียบ
       ที่หน้าจอแสดงว่า "ไม่พบข้อมูล" ซึ่งอ่านเหมือนไม่มีเรื่องนี้ในระบบ
     */
-    const all = await searchByHql(ctx, 'summary ~ โฟลเดอร์', [sdId, platId], 20);
+    const all = (await searchByHql(ctx, 'summary ~ โฟลเดอร์', [sdId, platId], 20)).hits;
     expect(all.length).toBeGreaterThan(0);
     expect(all.some((h) => h.summary.includes('โฟลเดอร์'))).toBe(true);
+  });
+});
+
+describe('การแบ่งหน้า', () => {
+  it('**ยอดรวมคือยอดของทั้งคิวรี ไม่ใช่จำนวนที่คืนมาในหน้านี้**', async () => {
+    /*
+      เดิมยอดรวมนับจากจำนวนคีย์ที่คัดมาได้ ซึ่งยาวไม่เกินเพดานเสมอ
+      หน้าจอจึงบอกว่า "ทั้งหมด 50 รายการ" ทุกครั้งที่มีมากกว่า 50
+      — เป็นการรายงานเพดานของตัวเองเป็นข้อเท็จจริงเกี่ยวกับข้อมูล
+    */
+    const page = await searchByHql(ctx, 'status IS NOT EMPTY', [sdId, platId], 5);
+    expect(page.hits).toHaveLength(5);
+    expect(page.total).toBeGreaterThan(5);
+  });
+
+  it('หน้าถัดไปไม่ซ้ำกับหน้าแรก และยอดรวมเท่าเดิม', async () => {
+    const first = await searchByHql(ctx, 'status IS NOT EMPTY', [sdId], 10, 0);
+    const second = await searchByHql(ctx, 'status IS NOT EMPTY', [sdId], 10, 10);
+    expect(second.total).toBe(first.total);
+
+    const a = new Set(first.hits.map((h) => h.itemKey));
+    for (const h of second.hits) expect(a.has(h.itemKey)).toBe(false);
+  });
+
+  it('**ขอลึกเกินเพดานของดัชนี ต้องบอกว่าเป็นเพดาน ไม่ใช่บอกว่าคิวรีผิด**', async () => {
+    /*
+      `index.max_result_window` เป็น 10,000 · ขอเกินนั้น OpenSearch โยน error
+      ที่อ่านไม่ออก และหน้าจอเคยแปลมันเป็น "คิวรียังใช้ไม่ได้" — โยนความผิด
+      ไปให้คิวรีที่เขียนถูกทุกตัวอักษร · เจอตอนกดหน้าที่ `offset=99999` ในเบราว์เซอร์
+    */
+    await expect(
+      searchByHql(ctx, 'status IS NOT EMPTY', [sdId], 50, 99_999),
+    ).rejects.toThrow(SearchDepthExceededError);
+
+    // ขอบพอดีต้องยังผ่าน — เพดานคือ from + size ไม่ใช่ from อย่างเดียว
+    const edge = await searchByHql(ctx, 'status IS NOT EMPTY', [sdId], 50, MAX_RESULT_WINDOW - 50);
+    expect(edge.total).toBeGreaterThan(0);
+  });
+
+  it('**ขอหน้าที่เลยผลลัพธ์ไปแล้ว ได้หน้าว่าง แต่ยอดรวมยังบอกความจริง**', async () => {
+    // ไม่ใช่ total 0 ซึ่งจะทำให้หน้าจอบอกว่า "ไม่พบอะไรเลย" ทั้งที่มีอยู่เต็มไปหมด
+    const all = await searchByHql(ctx, 'status IS NOT EMPTY', [sdId], 1);
+    const past = Math.min(all.total + 50, MAX_RESULT_WINDOW - 10);
+    const beyond = await searchByHql(ctx, 'status IS NOT EMPTY', [sdId], 10, past);
+    expect(beyond.hits).toHaveLength(0);
+    expect(beyond.total).toBe(all.total);
+  });
+
+  it('**ยอดรวมไม่ตันที่ 10,000** — ค่าปริยายของ OpenSearch หยุดนับตรงนั้น', async () => {
+    /*
+      `track_total_hits` เป็น false โดยปริยาย ยอดที่ได้จะเป็น "อย่างน้อย 10,000"
+      ไม่ใช่ยอดจริง · ข้อมูลชุดนี้มีมากกว่า 10,000 ใบพอดี จึงจับได้
+    */
+    const page = await searchByHql(ctx, 'status IS NOT EMPTY', [sdId, platId], 1);
+    expect(page.total).toBeGreaterThan(10_000);
   });
 });

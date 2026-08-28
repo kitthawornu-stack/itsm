@@ -173,7 +173,8 @@ afterAll(async () => {
 });
 
 async function find(query: string): Promise<string[]> {
-  indexed = await openSearch.search(INDEX, buildTextQuery({ tenantId: TENANT, text: query }), 15);
+  const page = await openSearch.search<{ itemKey: string }>(INDEX, buildTextQuery({ tenantId: TENANT, text: query }), 15);
+  indexed = page.hits;
   return indexed.map((h) => h.source.itemKey);
 }
 
