@@ -50,6 +50,19 @@ export class UnknownCatalogTargetError extends Error {
  * ครอบสามกรณีโดยตั้งใจ: ไม่มีอยู่จริง · ปิดอยู่ · อยู่ในโปรเจกต์ที่ผู้ใช้เปิดดูไม่ได้
  * การแยกออกจากกันคือการยืนยันว่าเลขนี้มีอยู่ ซึ่งเป็นการวาดแผนที่ให้คนที่กำลังลอง
  */
+/**
+ * โปรเจกต์กับประเภทงานที่เลือกใช้ร่วมกันไม่ได้
+ *
+ * ต่างจาก `UnknownCatalogTargetError` ตรงที่ทั้งสองอย่างมีอยู่จริง
+ * แต่โปรเจกต์นั้นไม่ได้ผูก workflow ของประเภทงานนั้นไว้ — สร้างงานไม่ได้
+ */
+export class IncompatibleTargetError extends Error {
+  constructor() {
+    super('โปรเจกต์ที่เลือกยังไม่ได้ตั้งค่า workflow สำหรับประเภทงานนี้');
+    this.name = 'IncompatibleTargetError';
+  }
+}
+
 export class CatalogItemNotFoundError extends Error {
   constructor() {
     super('ไม่พบบริการที่เลือก');
@@ -227,6 +240,22 @@ export async function createCatalogItem(
   if (cat === null) throw new UnknownCatalogTargetError('หมวด');
   if (project === null) throw new UnknownCatalogTargetError('โปรเจกต์');
   if (issueType === null) throw new UnknownCatalogTargetError('ประเภทงาน');
+
+  /*
+    **คู่ (โปรเจกต์ × ประเภทงาน) ต้องใช้ได้จริง ไม่ใช่แค่ทั้งสองอย่างมีอยู่**
+
+    รอบแรกตรวจแค่ว่าโปรเจกต์มีจริงและประเภทงานมีจริง · ผลคือหน้าผู้ดูแลสร้าง
+    บริการที่ชี้ไปยัง (SD × Bug) ได้ ทั้งที่ SD ไม่ได้ผูก workflow ของ Bug ไว้
+    บริการนั้นจึงกลายเป็นกับดักที่ **422 ทุกครั้งที่มีคนกด** — เจอตอนลองใช้จริง
+    ในเบราว์เซอร์ ไม่ใช่จากเทสต์ เพราะเทสต์เลือกคู่ที่ถูกอยู่แล้วทุกครั้ง
+
+    นี่คือความผิดพลาดของผู้ดูแล ที่ผู้แจ้งเป็นคนเจอ — ต้องกันตอนตั้งค่า
+  */
+  const scheme = await db.workflowScheme.findFirst({
+    where: { projectId: input.projectId, issueTypeId: input.issueTypeId },
+    select: { workflowId: true },
+  });
+  if (scheme === null) throw new IncompatibleTargetError();
   if (input.priorityId !== undefined) {
     const p = await db.priority.findFirst({ where: { id: input.priorityId }, select: { id: true } });
     if (p === null) throw new UnknownCatalogTargetError('ระดับความสำคัญ');

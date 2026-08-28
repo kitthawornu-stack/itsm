@@ -18,11 +18,13 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { TenantContext } from '@itsm/types';
 
 import { prismaClient } from '../src/infrastructure/prisma/client';
+import { createWorkItem } from '../src/modules/workitem';
 import {
   CatalogItemNotFoundError,
   CategoryInUseError,
   CategoryNameRequiredError,
   DuplicateCatalogNameError,
+  IncompatibleTargetError,
   UnknownCatalogTargetError,
   browseCatalog,
   catalogItemForReport,
@@ -41,12 +43,22 @@ let actorId: bigint;
 let sdId: bigint;
 let platId: bigint;
 let issueTypeId: bigint;
+/**
+ * ชนิดงานที่ **PLAT ผูก workflow ไว้จริง**
+ *
+ * เดิมใช้ `Service Request` กับทั้งสองโปรเจกต์ แล้วเทสต์ผ่านหมด — เพราะยังไม่มี
+ * กลไกตรวจว่าคู่ (โปรเจกต์ × ประเภทงาน) ใช้ร่วมกันได้ · แปลว่าเทสต์สร้าง
+ * บริการที่พังมาตลอด แล้วยืนยันเรื่องขอบเขตบนบริการที่ไม่มีวันใช้งานได้จริง
+ */
+let platIssueTypeId: bigint;
 let priorityId: number;
 let catId: bigint;
 let emptyCatId: bigint;
 let itemId: bigint;
 let platItemId: bigint;
 let platOnlyCatId: bigint;
+let createdItemKey: string | undefined;
+const extraItemKeys: string[] = [];
 
 beforeAll(async () => {
   const tenant = await prismaClient.tenant.findFirstOrThrow({ where: { key: 'default' } });
@@ -62,6 +74,13 @@ beforeAll(async () => {
     await prismaClient.issueType.findFirstOrThrow({ where: { tenantId, name: 'Service Request' } })
   ).id;
   priorityId = (await prismaClient.priority.findFirstOrThrow({ where: { tenantId, rank: 3 } })).id;
+
+  platIssueTypeId = (
+    await prismaClient.workflowScheme.findFirstOrThrow({
+      where: { projectId: platId },
+      select: { issueTypeId: true },
+    })
+  ).issueTypeId;
 }, 120_000);
 
 afterAll(async () => {
@@ -70,6 +89,16 @@ afterAll(async () => {
     `onDelete: Restrict` โดยตั้งใจ (ดูเหตุผลในหมวด D)
     และเก็บกวาดทุกแถวที่เทสต์สร้างได้ **ตอนกลไกถูกลบ** ไม่ใช่เฉพาะที่ตั้งใจสร้าง
   */
+  /*
+    ลบงานที่เทสต์สร้างก่อน — `catalog_item → work_item` เป็น SET NULL
+    จึงไม่ขวางการลบบริการ แต่ถ้าทิ้งไว้ ฐานข้อมูลพัฒนาจะมีเรื่องปลอมค้าง
+    และหน้าคิวจริงจะขึ้นเรื่อง "ทดสอบผูกบริการ" ให้คนเห็น
+  */
+  const keys = [...extraItemKeys, ...(createdItemKey === undefined ? [] : [createdItemKey])];
+  if (keys.length > 0) {
+    await prismaClient.workItemHistory.deleteMany({ where: { workItem: { itemKey: { in: keys } } } });
+    await prismaClient.workItem.deleteMany({ where: { itemKey: { in: keys } } });
+  }
   await prismaClient.catalogItem.deleteMany({ where: { name: { contains: STAMP } } });
   await prismaClient.catalogCategory.deleteMany({ where: { name: { contains: STAMP } } });
   await prismaClient.auditLog.deleteMany({
@@ -131,9 +160,43 @@ describe('A · สร้างหมวดและบริการ', () => {
     ).rejects.toThrow(UnknownCatalogTargetError);
   });
 
+  it('**คู่ (โปรเจกต์ × ประเภทงาน) ที่ใช้ร่วมกันไม่ได้ ถูกปฏิเสธตอนตั้งค่า**', async () => {
+    /*
+      เจอตอนลองใช้จริงในเบราว์เซอร์ ไม่ใช่จากเทสต์ — เทสต์เลือกคู่ที่ถูกอยู่แล้ว
+      ทุกครั้ง กลไกจึงไม่เคยถูกท้าทาย
+
+      หน้าผู้ดูแลสร้างบริการที่ชี้ไปยัง (SD × Bug) ได้ ทั้งที่ SD ไม่ได้ผูก
+      workflow ของ Bug ไว้ · บริการนั้นกลายเป็นกับดักที่ 422 ทุกครั้งที่มีคนกด
+      และคนที่เจอคือผู้แจ้ง ไม่ใช่ผู้ดูแลที่ตั้งค่าผิด
+    */
+    const orphan = await prismaClient.issueType.findFirst({
+      where: {
+        tenantId,
+        workflowSchemes: { none: { projectId: sdId } },
+      },
+      select: { id: true, name: true },
+    });
+    // ถ้าไม่มีชนิดงานที่ SD ไม่ได้ผูกไว้เลย เคสนี้ทดสอบอะไรไม่ได้ — ต้องรู้ ไม่ใช่ผ่านเงียบ ๆ
+    expect(orphan, 'ข้อมูล seed ไม่มีคู่ที่เข้ากันไม่ได้ให้ทดสอบ').not.toBeNull();
+
+    await expect(
+      createCatalogItem(ctx, {
+        categoryId: catId,
+        name: `คู่ที่เข้ากันไม่ได้ ${STAMP}`,
+        projectId: sdId,
+        issueTypeId: (orphan as { id: bigint }).id,
+      }),
+    ).rejects.toThrow(IncompatibleTargetError);
+  });
+
   it('ล้มแล้วต้องไม่เหลือแถวค้าง', async () => {
     expect(
       await prismaClient.catalogItem.count({ where: { name: { contains: `ปลายทางมั่ว ${STAMP}` } } }),
+    ).toBe(0);
+    expect(
+      await prismaClient.catalogItem.count({
+        where: { name: { contains: `คู่ที่เข้ากันไม่ได้ ${STAMP}` } },
+      }),
     ).toBe(0);
   });
 });
@@ -145,7 +208,7 @@ describe('B · ขอบเขตการมองเห็น', () => {
         categoryId: catId,
         name: `ขอ deploy ระบบใหม่ ${STAMP}`,
         projectId: platId,
-        issueTypeId,
+        issueTypeId: platIssueTypeId,
       })
     ).id;
 
@@ -173,7 +236,7 @@ describe('B · ขอบเขตการมองเห็น', () => {
       categoryId: platOnlyCatId,
       name: `ขอเครื่องทดสอบ ${STAMP}`,
       projectId: platId,
-      issueTypeId,
+      issueTypeId: platIssueTypeId,
     });
 
     const groups = await browseCatalog(ctx, [sdId]);
@@ -234,7 +297,67 @@ describe('D · ลบหมวด', () => {
   });
 });
 
-describe('E · ร่องรอย', () => {
+describe('E · ผูกเข้ากับเรื่องที่แจ้ง', () => {
+  it('**แจ้งผ่านบริการแล้ว เรื่องนั้นต้องจำได้ว่ามาจากบริการไหน**', async () => {
+    /*
+      นี่คือเหตุผลทั้งหมดที่คอลัมน์นี้ต้องมาพร้อมกันตั้งแต่วันแรก —
+      ย้อนกลับไปเติมให้เรื่องที่แจ้งไปแล้วไม่ได้
+    */
+    const created = await createWorkItem(ctx, {
+      projectKey: 'SD',
+      issueTypeName: 'Service Request',
+      summary: `ทดสอบผูกบริการ ${STAMP}`,
+      catalogItemId: itemId,
+    });
+    createdItemKey = created.itemKey;
+
+    const row = await prismaClient.workItem.findFirstOrThrow({
+      where: { itemKey: created.itemKey },
+      select: { catalogItemId: true },
+    });
+    expect(row.catalogItemId).toBe(itemId);
+
+    // และประวัติต้องบอกด้วยว่าตอนแจ้งเลือกอะไร — คอลัมน์อาจกลายเป็น null
+    // ในวันที่บริการถูกลบ แต่ประวัติต้องตอบได้อยู่
+    const hist = await prismaClient.workItemHistory.count({
+      where: { workItem: { itemKey: created.itemKey }, field: 'catalogItem' },
+    });
+    expect(hist).toBe(1);
+  });
+
+  it('**ลบบริการแล้ว เรื่องเก่าต้องยังอยู่** — ไม่ใช่หายไปกับบริการ', async () => {
+    const throwaway = await createCatalogItem(ctx, {
+      categoryId: catId,
+      name: `บริการที่จะถูกลบ ${STAMP}`,
+      projectId: sdId,
+      issueTypeId,
+    });
+    const w = await createWorkItem(ctx, {
+      projectKey: 'SD',
+      issueTypeName: 'Service Request',
+      summary: `เรื่องของบริการที่จะถูกลบ ${STAMP}`,
+      catalogItemId: throwaway.id,
+    });
+    extraItemKeys.push(w.itemKey);
+
+    await prismaClient.catalogItem.delete({ where: { id: throwaway.id } });
+
+    const still = await prismaClient.workItem.findFirst({
+      where: { itemKey: w.itemKey },
+      select: { itemKey: true, catalogItemId: true },
+    });
+    // เรื่องยังอยู่ · ความผูกพันหายไปเพราะ ON DELETE SET NULL ซึ่งถูกต้อง
+    expect(still?.itemKey).toBe(w.itemKey);
+    expect(still?.catalogItemId).toBeNull();
+    // แต่ประวัติยังตอบได้ว่าตอนแจ้งเลือกอะไร
+    const hist = await prismaClient.workItemHistory.count({
+      where: { workItem: { itemKey: w.itemKey }, field: 'catalogItem' },
+    });
+    expect(hist).toBe(1);
+  });
+});
+
+describe('F · ร่องรอย', () => {
   it('ทุกการเปลี่ยนแปลงเขียน audit — ไม่มีการแก้ที่ไม่มีใครรู้', async () => {
     const n = await prismaClient.auditLog.count({
       where: { actorId, action: { startsWith: 'catalog.' } },

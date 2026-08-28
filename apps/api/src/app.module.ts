@@ -19,6 +19,10 @@ import { NotificationController } from './modules/notification/notification.cont
 import { ProjectAdminController } from './modules/tenancy/project-admin.controller';
 import { WorkflowAdminController } from './modules/workflow/workflow-admin.controller';
 import { SavedFilterController } from './modules/search-index/saved-filter.controller';
+import {
+  CatalogAdminController,
+  CatalogController,
+} from './modules/catalog/catalog.controller';
 import { WorkItemController } from './modules/workitem/workitem.controller';
 
 /**
@@ -41,6 +45,8 @@ import { WorkItemController } from './modules/workitem/workitem.controller';
     WorkflowAdminController,
     WorkItemController,
     SavedFilterController,
+    CatalogController,
+    CatalogAdminController,
     NotificationController,
   ],
   /**

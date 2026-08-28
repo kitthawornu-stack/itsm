@@ -89,6 +89,13 @@ export interface CreateWorkItemInput {
   description?: string;
   priorityRank?: number;
   assigneeId?: bigint;
+  /**
+   * แจ้งผ่านรายการบริการไหน — ไม่ส่ง = พิมพ์อิสระ
+   *
+   * ผู้เรียกต้องยืนยันมาแล้วว่าผู้ใช้เปิดดูบริการนี้ได้ (`catalogItemForReport`)
+   * ที่นี่แค่บันทึก — **ต้องบันทึกตอนสร้างเท่านั้น** เพราะย้อนกลับไปเติมทีหลังไม่ได้
+   */
+  catalogItemId?: bigint;
 }
 
 export interface CreatedWorkItem {
@@ -184,6 +191,7 @@ export async function createWorkItem(
         priorityId: priority?.id ?? null,
         reporterId,
         assigneeId: input.assigneeId ?? null,
+        catalogItemId: input.catalogItemId ?? null,
         rank: between(last?.rank ?? null, null),
         fieldSnapshot: {},
       },
@@ -197,6 +205,16 @@ export async function createWorkItem(
     ];
     if (input.assigneeId !== undefined) {
       audit.push(change(row.id, 'assignee', null, input.assigneeId));
+    }
+    /*
+      บันทึกในประวัติด้วย ไม่ใช่แค่ในคอลัมน์
+
+      คอลัมน์ตอบได้ว่า "ตอนนี้ผูกกับบริการไหน" · ประวัติตอบได้ว่า
+      "ตอนแจ้งเลือกอะไร" ซึ่งเป็นคนละคำถาม และเป็นคำถามที่รายงานต้องใช้
+      แม้ภายหลังบริการนั้นจะถูกลบจนคอลัมน์กลายเป็น null
+    */
+    if (input.catalogItemId !== undefined) {
+      audit.push(change(row.id, 'catalogItem', null, input.catalogItemId.toString()));
     }
 
     return { result: { id: row.id, itemKey: row.itemKey, statusName: initial.name }, audit };

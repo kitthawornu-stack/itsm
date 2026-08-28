@@ -24,10 +24,12 @@ export default function AppLayout({ children }: { children: ReactNode }): ReactN
           <b className="app-title">Helix</b>
           <nav className="app-nav">
             <a href="/">คิวงาน</a>
+            <a href="/catalog">แจ้งเรื่อง</a>
             <a href="/new">แจ้งปัญหา</a>
             <a href="/admin/projects">โปรเจกต์</a>
             <a href="/admin/workflows">workflow</a>
             <a href="/admin/issue-types">ประเภทงาน</a>
+            <a href="/admin/catalog">บริการ</a>
             <a href="/admin/fields">ฟิลด์</a>
             <a href="/admin/users">ผู้ใช้</a>
             <a href="/admin/resolutions">ผลการแก้ไข</a>

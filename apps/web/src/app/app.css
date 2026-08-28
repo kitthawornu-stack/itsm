@@ -1255,3 +1255,81 @@
   font-family: var(--font-mono);
   color: var(--text);
 }
+
+/* ---------- รายการบริการ ---------- */
+
+.cat-group {
+  margin-bottom: var(--space-6);
+}
+
+.cat-group-title {
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 600;
+  line-height: var(--line-height-heading);
+  color: var(--text);
+  margin: 0 0 var(--space-3);
+}
+
+.cat-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: var(--space-3);
+}
+
+.cat-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  height: 100%;
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: inherit;
+  text-decoration: none;
+}
+
+.cat-card:hover {
+  border-color: var(--accent-service);
+  background: var(--surface-2);
+}
+
+.cat-card:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.cat-card-name {
+  font-size: 13px;
+  line-height: var(--line-height-body);
+  color: var(--text);
+  /* ชื่อบริการเป็นภาษาไทยที่ไม่มีช่องว่างระหว่างคำ */
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.cat-card-desc {
+  font-size: 12px;
+  line-height: var(--line-height-body);
+  color: var(--text-muted);
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.cat-escape {
+  margin-top: var(--space-8);
+  padding: var(--space-4);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-md);
+  font-size: 12.5px;
+  line-height: var(--line-height-body);
+  color: var(--text-muted);
+}
+
+.cat-escape p {
+  margin: var(--space-1) 0 0;
+}

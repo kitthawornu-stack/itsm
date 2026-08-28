@@ -44,6 +44,7 @@ import {
   prepareFieldValues,
   saveFieldValues,
 } from '../field';
+import { CatalogItemNotFoundError, catalogItemForReport } from '../catalog';
 import { SearchIndexNotReadyError, searchByHql, searchWorkItems } from '../search-index';
 import { slaForWorkItems, type SlaSnapshot } from '../sla';
 import {
@@ -424,6 +425,8 @@ export class WorkItemController {
       description?: string;
       priorityRank?: number | string;
       assigneeId?: string;
+      /** แจ้งผ่านรายการบริการไหน — ไม่ส่ง = พิมพ์อิสระ */
+      catalogItemId?: string;
       /** ค่าฟิลด์เพิ่มเติม คีย์คือ `field_definition.key` */
       fields?: Record<string, unknown>;
     },
@@ -445,6 +448,34 @@ export class WorkItemController {
      * และไม่มีอะไรพากลับไปเติม — ผู้ใช้เห็นข้อความผิดพลาดแล้วปิดหน้าไป
      * โดยที่ตั๋วถูกสร้างไปแล้วเรียบร้อย
      */
+    /*
+      **ตรวจบริการที่อ้างมาเองทุกครั้ง ไม่เชื่อว่าหน้าจอส่งมาถูก**
+
+      `catalogItemForReport` ปฏิเสธบริการที่ปิดอยู่หรืออยู่ในโปรเจกต์ที่ผู้ใช้
+      เปิดดูไม่ได้ · ถ้าเชื่อ id ที่ส่งมาดื้อ ๆ ใครก็ผูกเรื่องเข้ากับบริการของ
+      โปรเจกต์ที่ตัวเองเข้าไม่ถึงได้ แล้วรายงานของโปรเจกต์นั้นจะมีเรื่องแปลกปลอม
+      โดยไม่มีใครรู้ว่ามาจากไหน
+    */
+    let catalogItemId: bigint | undefined;
+    if (body.catalogItemId !== undefined && body.catalogItemId !== '') {
+      try {
+        const target = await catalogItemForReport(
+          ctx,
+          BigInt(body.catalogItemId),
+          await browsableProjectIds(ctx),
+        );
+        catalogItemId = target.itemId;
+      } catch (e) {
+        if (e instanceof CatalogItemNotFoundError) {
+          throw new HttpException(
+            { error: 'not_found', message: e.message },
+            HttpStatus.UNPROCESSABLE_ENTITY,
+          );
+        }
+        throw e;
+      }
+    }
+
     const scope = await resolveFormScope(ctx, body.project, body.issueType);
     let fieldValues: Awaited<ReturnType<typeof prepareFieldValues>> = [];
     try {
@@ -480,6 +511,7 @@ export class WorkItemController {
         ...(body.description === undefined ? {} : { description: body.description }),
         ...(body.priorityRank === undefined ? {} : { priorityRank: Number(body.priorityRank) }),
         ...(body.assigneeId === undefined ? {} : { assigneeId: BigInt(body.assigneeId) }),
+        ...(catalogItemId === undefined ? {} : { catalogItemId }),
       });
       /**
        * เขียนค่าฟิลด์หลังสร้างงาน ไม่ใช่ในทรานแซกชันเดียวกัน

@@ -18,6 +18,15 @@ interface IssueTypeOption {
   fields: FormField[];
 }
 
+/** บริการที่ผู้ใช้เลือกมาจากหน้ารายการ — ตั้งค่าเริ่มต้นให้ฟอร์ม */
+export interface PickedService {
+  id: string;
+  name: string;
+  projectKey: string;
+  issueTypeName: string;
+  priorityId: number | null;
+}
+
 export interface Options {
   projects: Array<{ key: string; name: string }>;
   issueTypes: IssueTypeOption[];
@@ -37,10 +46,24 @@ const HUMAN_TYPE: Record<string, string> = {
 
 const SUMMARY_MAX = 500;
 
-export function ReportForm({ apiBase, options }: { apiBase: string; options: Options }): ReactNode {
-  const [project, setProject] = useState(options.projects[0]?.key ?? '');
+export function ReportForm({
+  apiBase,
+  options,
+  picked,
+}: {
+  apiBase: string;
+  options: Options;
+  picked?: PickedService;
+}): ReactNode {
+  /*
+    บริการที่เลือกมากำหนดโปรเจกต์และประเภทงาน — ผู้ใช้จึงไม่ต้องรู้จักสองอย่างนี้เลย
+    ซึ่งเป็นศัพท์ระบบที่คนแจ้งเรื่องไม่ควรต้องเข้าใจตั้งแต่แรก (CLAUDE.md §5)
+  */
+  const [project, setProject] = useState(picked?.projectKey ?? options.projects[0]?.key ?? '');
   const [issueTypes, setIssueTypes] = useState(options.issueTypes);
-  const [issueType, setIssueType] = useState(options.issueTypes[0]?.name ?? '');
+  const [issueType, setIssueType] = useState(
+    picked?.issueTypeName ?? options.issueTypes[0]?.name ?? '',
+  );
   const [summary, setSummary] = useState('');
   const [description, setDescription] = useState('');
   const [priority, setPriority] = useState('');
@@ -100,6 +123,16 @@ export function ReportForm({ apiBase, options }: { apiBase: string; options: Opt
           summary,
           ...(description.trim() === '' ? {} : { description }),
           ...(priority === '' ? {} : { priorityRank: Number(priority) }),
+          /*
+            ส่งบริการที่เลือกไปด้วย **เฉพาะเมื่อโปรเจกต์กับประเภทงานยังตรงกับที่บริการกำหนด**
+            ถ้าผู้ใช้เปลี่ยนสองอย่างนั้นเอง เรื่องก็ไม่ใช่บริการนั้นแล้ว
+            การส่งต่อไปจะทำให้รายงานนับเรื่องที่ไม่เกี่ยวเข้าไปในบริการนั้น
+          */
+          ...(picked === undefined ||
+          picked.projectKey !== project ||
+          picked.issueTypeName !== issueType
+            ? {}
+            : { catalogItemId: picked.id }),
           // ส่งเฉพาะฟิลด์ของประเภทงานที่เลือกอยู่ — ค่าที่ค้างจากประเภทอื่นไม่เกี่ยว
           fields: Object.fromEntries(
             activeFields
