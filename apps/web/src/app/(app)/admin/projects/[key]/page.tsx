@@ -61,10 +61,25 @@ interface Detail {
     }>;
     goals: Array<{ key: string; name: string; targetMs: number; match: unknown }>;
   } | null;
+  /** ความพอใจของผู้แจ้ง — นับเฉพาะเรื่องที่มีคำตอบจริง */
+  satisfaction?: {
+    responses: number;
+    average: number;
+    byRating: Record<string, number>;
+  };
 }
 
 // ที่อยู่ฝั่งเบราว์เซอร์ — ต่างจากที่ server component ใช้ ดู lib/api.ts
 const API = API_BASE;
+
+/** ตรงกับคำบนแบบสอบถาม — ตัวเลขเปล่าแปลว่าอะไรก็ได้แล้วแต่คนอ่าน */
+const RATING_LABEL: Record<number, string> = {
+  1: 'แย่มาก',
+  2: 'ไม่ค่อยดี',
+  3: 'พอใช้',
+  4: 'ดี',
+  5: 'ดีมาก',
+};
 
 const CATEGORY_LABEL: Record<string, string> = {
   TODO: 'ยังไม่เริ่ม',
@@ -225,7 +240,50 @@ export default async function ProjectDetailPage({
 
       {/* ---------- SLA ---------- */}
       <div className="cfg-block">
-        <h2 className="cfg-title">ข้อตกลงบริการ</h2>
+        <h2 className="cfg-title">ความพอใจของผู้แจ้ง</h2>
+        {d.satisfaction === undefined || d.satisfaction.responses === 0 ? (
+          <p className="admin-empty">
+            {/*
+              ยังไม่มีใครตอบ ≠ คะแนน 0 · การขึ้นเลข 0 ตรงนี้จะทำให้คนอ่านสรุปว่า
+              บริการแย่ ทั้งที่แปลว่ายังไม่มีข้อมูล
+            */}
+            ยังไม่มีใครให้คะแนน — ผู้แจ้งจะเห็นแบบสอบถามบนหน้าเรื่องทันทีที่งานปิด
+          </p>
+        ) : (
+          <>
+            <p className="admin-empty">
+              เฉลี่ย <b>{d.satisfaction.average.toFixed(2)}</b> จาก 5 ·{' '}
+              {d.satisfaction.responses.toLocaleString('th-TH')} คำตอบ
+              {/* บอกฐานเสมอ — ค่าเฉลี่ยที่ไม่รู้ว่ามาจากกี่คำตอบ ตีความไม่ได้ */}
+            </p>
+            <Table
+              columns={[
+                'คะแนน',
+                { label: 'จำนวนคำตอบ', align: 'end' },
+                { label: 'สัดส่วน', align: 'end' },
+              ]}
+              rowCount={5}
+            >
+              {[5, 4, 3, 2, 1].map((n) => {
+                const c = d.satisfaction?.byRating[String(n)] ?? 0;
+                const total = d.satisfaction?.responses ?? 0;
+                return (
+                  <tr key={n}>
+                    <td>
+                      {n} · {RATING_LABEL[n]}
+                    </td>
+                    <td data-align="end">{c.toLocaleString('th-TH')}</td>
+                    <td data-align="end">
+                      {total === 0 ? '—' : `${((c / total) * 100).toFixed(0)}%`}
+                    </td>
+                  </tr>
+                );
+              })}
+            </Table>
+          </>
+        )}
+
+        <h2 className="cfg-title detail-section-gap">ข้อตกลงบริการ</h2>
         {d.sla === null ? (
           <p className="admin-empty">
             ยังไม่ได้ตั้ง — เรื่องในโปรเจกต์นี้จะไม่มีนาฬิกาจับเวลา และไม่มีการแจ้งเตือนใกล้ครบกำหนด

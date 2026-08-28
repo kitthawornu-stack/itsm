@@ -250,7 +250,45 @@ describe('E · สรุปผล', () => {
   });
 });
 
-describe('F · เมื่อยังไม่มีใครตอบ', () => {
+describe('F · คำชวนให้คะแนน', () => {
+  it('**ปิดงานแล้วผู้แจ้งได้รับคำชวน — และเปิดใหม่แล้วปิดอีกไม่ชวนซ้ำ**', async () => {
+    /*
+      `dedupeKey` ประกอบจาก (งาน, ผู้แจ้ง) เท่านั้น ไม่มีเวลาอยู่ในคีย์
+      ถ้าใส่เวลา การปิดรอบที่สองจะสร้างคำชวนใบใหม่ แล้วคนที่เคยตอบไปแล้ว
+      จะโดนตามถามซ้ำทุกครั้งที่ทีมเปิดเรื่องดูใหม่
+    */
+    const item = await prismaClient.workItem.findFirstOrThrow({
+      where: { itemKey: closedKey },
+      select: { id: true },
+    });
+    const key = `rate:${item.id.toString()}:${reporterId.toString()}`;
+
+    const insert = async (): Promise<void> => {
+      await prismaClient.notification.createMany({
+        data: [
+          {
+            tenantId,
+            userId: reporterId,
+            workItemId: item.id,
+            kind: 'workitem.rate',
+            title: 'ทดสอบคำชวน',
+            dedupeKey: key,
+          },
+        ],
+        skipDuplicates: true,
+      });
+    };
+    await insert();
+    await insert();
+    await insert();
+
+    const n = await prismaClient.notification.count({ where: { dedupeKey: key } });
+    expect(n).toBe(1);
+    await prismaClient.notification.deleteMany({ where: { dedupeKey: key } });
+  });
+});
+
+describe('G · เมื่อยังไม่มีใครตอบ', () => {
   it('ยังไม่ตอบ = null ไม่ใช่ 0 คะแนน', async () => {
     expect(await satisfactionFor(reporter, openKey)).toBeNull();
   });

@@ -21,6 +21,7 @@ import {
 } from '../permission';
 import { listGroups } from '../identity';
 import { describeSlaPolicy } from '../sla';
+import { satisfactionSummary } from '../workitem';
 import { describeProjectWorkflows } from '../workflow';
 import { ProjectNotFoundError, listProjects, projectByKey, projectSchemeId } from './project.service';
 import {
@@ -108,11 +109,12 @@ export class ProjectAdminController {
     await assertTenantAdmin(ctx);
     try {
       const project = await projectByKey(ctx, key);
-      const [workflows, permissions, sla, groups] = await Promise.all([
+      const [workflows, permissions, sla, groups, satisfaction] = await Promise.all([
         describeProjectWorkflows(ctx, project.id),
         describeGrants(ctx, project.id),
         describeSlaPolicy(ctx, project.id),
         listGroups(ctx),
+        satisfactionSummary(ctx, { projectId: project.id }),
       ]);
       const scheme = await projectSchemeId(ctx, project.id);
       return {
@@ -126,6 +128,7 @@ export class ProjectAdminController {
         },
         groups,
         sla,
+        satisfaction,
       };
     } catch (e) {
       if (e instanceof ProjectNotFoundError) {

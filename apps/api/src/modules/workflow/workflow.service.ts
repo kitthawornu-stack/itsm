@@ -58,6 +58,9 @@ interface LoadedWorkItem {
   statusId: bigint;
   statusName: string;
   assigneeId: bigint | null;
+  /** ผู้แจ้ง — ใช้ชวนให้คะแนนความพอใจตอนปิดงาน */
+  reporterId: bigint;
+  summary: string;
   resolutionId: number | null;
   resolutionName: string | null;
   fieldSnapshot: Record<string, unknown>;
@@ -81,6 +84,8 @@ async function loadWorkItem(ctx: TenantContext, workItemId: bigint): Promise<Loa
     statusId: item.statusId,
     statusName: item.status.name,
     assigneeId: item.assigneeId,
+    reporterId: item.reporterId,
+    summary: item.summary,
     resolutionId: item.resolutionId,
     resolutionName: item.resolution?.name ?? null,
     fieldSnapshot:
@@ -273,6 +278,8 @@ export async function applyTransition(
       ];
 
       const applied: string[] = [];
+      /** ปิดงานรอบนี้หรือไม่ — ตัดสินตอนวน post function แล้วใช้หลังลูป */
+      let askedForRating = false;
       const data: Record<string, unknown> = { statusId: outcome.toStatusId };
 
       /**
@@ -322,6 +329,7 @@ export async function applyTransition(
               // resolvedAt เป็นฐานของ MTTR ทุกรายงาน ถ้าเป็นเวลาท้องถิ่นจะเพี้ยนทั้งระบบ
               data['resolvedAt'] = systemClock.nowUtc();
               audit.push(change(item.id, 'resolvedAt', null, 'set'));
+              askedForRating = true;
             }
             break;
           case 'set-resolution':
@@ -334,6 +342,36 @@ export async function applyTransition(
             break;
         }
         applied.push(fn.ruleType);
+      }
+
+      /*
+        ชวนผู้แจ้งให้คะแนน — **ในทรานแซกชันเดียวกับการปิดงาน**
+
+        ถ้าส่งหลังจากทรานแซกชันจบ เครื่องที่ดับระหว่างนั้นจะปิดงานสำเร็จ
+        แต่ไม่มีใครถูกชวน และไม่มีอะไรจำได้ว่าเคยต้องชวน
+        (กติกาเดียวกับ "จองก่อนทำ ไม่ใช่บันทึกหลังทำ" ของคิวแจ้งเตือน)
+
+        **ไม่ชวนคนที่กดปิดเอง** — ผู้แจ้งที่ปิดเรื่องของตัวเองรู้อยู่แล้ว
+        การส่งข้อความบอกซ้ำคือสิ่งที่ทำให้คนเริ่มไม่อ่านการแจ้งเตือนจากระบบ
+
+        `dedupeKey` ประกอบจาก (งาน, ผู้แจ้ง) เท่านั้น ไม่มีเวลาอยู่ในคีย์ —
+        ปิดแล้วเปิดใหม่แล้วปิดอีก ต้องไม่กลายเป็นการชวนซ้ำสามรอบ
+      */
+      if (askedForRating && item.reporterId !== actorId) {
+        await tx.notification.createMany({
+          data: [
+            {
+              tenantId: ctx.tenantId,
+              userId: item.reporterId,
+              workItemId: item.id,
+              kind: 'workitem.rate',
+              title: `${item.itemKey} เสร็จแล้ว — ให้คะแนนหน่อยได้ไหม`,
+              body: item.summary,
+              dedupeKey: `rate:${item.id.toString()}:${item.reporterId.toString()}`,
+            },
+          ],
+          skipDuplicates: true,
+        });
       }
 
       await tx.workItem.update({ where: { id: item.id }, data: data as never });
