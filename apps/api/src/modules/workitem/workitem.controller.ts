@@ -88,6 +88,13 @@ import {
   type BulkTransitionResult,
 } from './bulk-transition.service';
 import {
+  WatchTargetNotFoundError,
+  isWatching,
+  unwatch,
+  watch,
+  watchersOf,
+} from './watcher.service';
+import {
   DuplicateLinkError,
   LINK_TYPES,
   LinkTargetNotFoundError,
@@ -747,6 +754,9 @@ export class WorkItemController {
         `linksOf` กรองปลายทางที่ผู้ใช้เปิดดูไม่ได้ออกให้แล้ว
       */
       links: await linksOf(ctx, item.id),
+      // ผู้เฝ้าดู — ให้หน้าจอแสดงปุ่มที่ถูกด้าน และบอกว่ามีใครตามเรื่องนี้อยู่บ้าง
+      watching: await isWatching(ctx, item.id),
+      watchers: await watchersOf(ctx, item.id),
       linkTypes: LINK_TYPES.map((t) => ({ value: t, label: LINK_TYPE_LABEL[t] })),
       createdAt: item.createdAt.toISOString(),
       updatedAt: item.updatedAt.toISOString(),
@@ -1249,6 +1259,31 @@ export class WorkItemController {
       return { ...res, max: BULK_MAX };
     } catch (e) {
       throw toBulkHttpError(e);
+    }
+  }
+
+  /**
+   * เฝ้าดู / เลิกเฝ้าดู
+   *
+   * ปุ่มเดียวสองสถานะ — ส่ง `watching` กลับมาเสมอ เพื่อให้หน้าจอไม่ต้องเดา
+   * ว่าตอนนี้อยู่ด้านไหน · กดซ้ำไม่ใช่ความผิดพลาด
+   */
+  @Post(':key/watch')
+  @HttpCode(HttpStatus.OK)
+  async setWatch(
+    @Ctx() ctx: TenantContext,
+    @Param('key') key: string,
+    @Body() body: { watching?: unknown },
+  ): Promise<{ watching: boolean }> {
+    // ไม่ส่งค่ามา = เฝ้าดู · ค่าที่ไม่ใช่ boolean ถือว่าไม่ได้ส่ง
+    const wants = typeof body.watching === 'boolean' ? body.watching : true;
+    try {
+      return wants ? await watch(ctx, key) : await unwatch(ctx, key);
+    } catch (e) {
+      if (e instanceof WatchTargetNotFoundError) {
+        throw new HttpException({ message: e.message }, HttpStatus.NOT_FOUND);
+      }
+      throw e;
     }
   }
 

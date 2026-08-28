@@ -18,6 +18,7 @@ import { RatingForm, type Satisfaction } from '@/components/rating-form';
 import { toSlaBar, type SlaSnapshotView } from '@/lib/sla-label';
 
 import { LinkPanel, type LinkRow } from '@/components/link-panel';
+import { WatchButton } from '@/components/watch-button';
 import { TransitionButtons } from '@/components/transition-buttons';
 import { API_BASE, apiFetch } from '@/lib/api';
 
@@ -54,6 +55,9 @@ interface Detail {
   canRate?: boolean;
   resolutions?: string[];
   links?: LinkRow[];
+  /** ผู้ใช้คนนี้เฝ้าดูเรื่องนี้อยู่ไหม */
+  watching?: boolean;
+  watchers?: Array<{ userId: string; displayName: string }>;
   linkTypes?: Array<{ value: string; label: string }>;
   history: HistoryRow[];
 }
@@ -167,6 +171,12 @@ export default async function WorkItemDetail({
             </div>
           )}
         </div>
+        <WatchButton
+          apiBase={API}
+          itemKey={detail.itemKey}
+          watching={detail.watching ?? false}
+          count={detail.watchers?.length ?? 0}
+        />
         <TransitionButtons
           itemKey={detail.itemKey}
           transitions={detail.transitions}
