@@ -35,6 +35,10 @@ export function CommentThread({
   /** ความเห็นที่กำลังแก้อยู่ — null คือไม่ได้แก้อะไร */
   const [editing, setEditing] = useState<{ id: string; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
+  /** คนที่เรียกถึงได้ในเรื่องนี้ — มาจากเซิร์ฟเวอร์ ไม่ใช่รายชื่อผู้ใช้ทั้งระบบ */
+  const [people, setPeople] = useState<Array<{ id: string; displayName: string }>>([]);
+  /** คนที่ถูกเลือกไว้ในร่างนี้ — ส่งไปพร้อมข้อความ */
+  const [picked, setPicked] = useState<Array<{ id: string; displayName: string }>>([]);
   const [draft, setDraft] = useState('');
   const [internal, setInternal] = useState(false);
   const [sending, setSending] = useState(false);
@@ -60,6 +64,32 @@ export function CommentThread({
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const res = await fetch(`${apiBase}/api/v1/work-items/${itemKey}/mentionable`, {
+          credentials: 'include',
+          cache: 'no-store',
+        });
+        // เรียกถึงใครไม่ได้ ไม่ควรทำให้บทสนทนาใช้ไม่ได้ — แค่ไม่มีเมนู
+        if (res.ok) setPeople(((await res.json()) as { rows: typeof people }).rows);
+      } catch {
+        // เงียบไว้ด้วยเหตุผลเดียวกัน
+      }
+    })();
+  }, [apiBase, itemKey]);
+
+  /**
+   * แทรก `@ชื่อ` เข้าไปในข้อความ
+   *
+   * เซิร์ฟเวอร์ตรวจว่าชื่อ **อยู่ในข้อความจริง** ก่อนยอมรับ · การเลือกจากเมนู
+   * โดยไม่แตะข้อความ จะถูกทิ้งที่ฝั่งเซิร์ฟเวอร์ ไม่ใช่ส่งถึงเงียบ ๆ
+   */
+  function mention(p: { id: string; displayName: string }): void {
+    setDraft((d) => (d === '' ? `@${p.displayName} ` : `${d.trimEnd()} @${p.displayName} `));
+    setPicked((cur) => (cur.some((x) => x.id === p.id) ? cur : [...cur, p]));
+  }
 
   async function saveEdit(): Promise<void> {
     if (editing === null) return;
@@ -122,7 +152,15 @@ export function CommentThread({
       const res = await fetch(`${apiBase}/api/v1/work-items/${itemKey}/comments`, { credentials: 'include',
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ body: draft, isInternal: internal }),
+        /*
+          ส่ง id ของคนที่เลือกไว้ · เซิร์ฟเวอร์ตรวจว่าชื่อยังอยู่ในข้อความจริง
+          — คนที่เลือกแล้วลบชื่อออกจากข้อความ จะไม่ถูกเรียกถึง
+        */
+        body: JSON.stringify({
+          body: draft,
+          isInternal: internal,
+          mentions: picked.map((p) => p.id),
+        }),
       });
       if (!res.ok) {
         const d = (await res.json()) as { message?: string };
@@ -131,6 +169,7 @@ export function CommentThread({
       }
       // ล้างช่องพิมพ์หลังส่งสำเร็จเท่านั้น — ล้างก่อนแล้วส่งพลาด ข้อความที่พิมพ์หายไปเลย
       setDraft('');
+      setPicked([]);
       await load();
     } catch {
       setError('เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ ข้อความยังไม่ถูกส่ง');
@@ -230,6 +269,22 @@ export function CommentThread({
           maxLength={COMMENT_MAX}
           placeholder="พิมพ์ความเห็น หรือถามข้อมูลเพิ่มเติมจากผู้แจ้ง"
         />
+        {people.length === 0 ? null : (
+          <div className="thread-mention" role="group" aria-label="เรียกถึง">
+            <span className="thread-mention-label">เรียกถึง</span>
+            {people.map((p) => (
+              <LinkButton
+                key={p.id}
+                ariaLabel={`เรียกถึง ${p.displayName}`}
+                onClick={() => {
+                  mention(p);
+                }}
+              >
+                {p.displayName}
+              </LinkButton>
+            ))}
+          </div>
+        )}
         {error === null ? null : (
           <p className="thread-error" role="alert">
             {error}
