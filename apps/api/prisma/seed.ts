@@ -246,6 +246,8 @@ async function main(): Promise<void> {
         ฟีเจอร์ที่ยังไม่ได้เขียน — ต่างกันแค่ว่าอันนี้หน้าตั้งค่าแสดงชื่อไว้ด้วย
       */
       { tenantId, schemeId: schemeSd.id, permission: 'LINK_ITEM', groupId: groupIt.id },
+      // ดูรายงาน — ให้ทีมไอที เหตุผลเดียวกับ LINK_ITEM ข้างบน
+      { tenantId, schemeId: schemeSd.id, permission: 'VIEW_REPORT', groupId: groupIt.id },
       // เห็นบันทึกภายใน — ให้เฉพาะทีมไอที ไม่ให้ "พนักงานทั้งหมด"
       { tenantId, schemeId: schemeSd.id, permission: 'VIEW_INTERNAL_COMMENT', groupId: groupIt.id },
       // ADMINISTER_TENANT ผูกกับ scheme หนึ่ง แต่มีผลทั้ง tenant — ดู isTenantAdmin()
@@ -257,6 +259,7 @@ async function main(): Promise<void> {
       { tenantId, schemeId: schemeSw.id, permission: 'TRANSITION_ITEM', groupId: groupDev.id },
       { tenantId, schemeId: schemeSw.id, permission: 'MANAGE_SPRINT', groupId: groupDev.id },
       { tenantId, schemeId: schemeSw.id, permission: 'LINK_ITEM', groupId: groupDev.id },
+      { tenantId, schemeId: schemeSw.id, permission: 'VIEW_REPORT', groupId: groupDev.id },
       { tenantId, schemeId: schemeSw.id, permission: 'VIEW_INTERNAL_COMMENT', groupId: groupDev.id },
     ],
   });

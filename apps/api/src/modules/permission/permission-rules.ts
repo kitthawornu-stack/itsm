@@ -44,7 +44,8 @@ export type PermissionKey = (typeof ALL_PERMISSION_KEYS)[number];
  * ทั้งเจ็ดคีย์นี้มีอยู่ใน enum · แสดงบนหน้าตั้งค่า · และให้กับกลุ่มได้จริง
  * แต่ไม่มี `can()` หรือ `assertCan()` ที่ไหนถามถึงมันเลย
  *
- * `LINK_ITEM` เพิ่งออกจากรายการนี้ — `link.service.ts` บังคับใช้จริงแล้ว
+ * `LINK_ITEM` และ `VIEW_REPORT` เพิ่งออกจากรายการนี้ —
+ * `link.service.ts` และ `report.service.ts` บังคับใช้จริงแล้ว
  *
  * `BULK_EDIT` เคยอยู่ในรายการนี้ และเป็นตัวอย่างที่ชัดที่สุดของปัญหา: seed ให้กับ
  * กลุ่ม IT Support ไว้แล้ว ผู้ดูแลที่เปิดหน้าตั้งค่าจึงอ่านได้ว่า "แก้ไขหลายเรื่อง
@@ -63,7 +64,6 @@ export const UNENFORCED_PERMISSIONS: readonly PermissionKey[] = [
   'DELETE_COMMENT',
   'MANAGE_SPRINT',
   'MANAGE_PROJECT',
-  'VIEW_REPORT',
 ] as const;
 
 /** คีย์นี้มีผลจริงหรือยัง */
