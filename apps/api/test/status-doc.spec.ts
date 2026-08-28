@@ -86,8 +86,17 @@ describe('เอกสารสถานะ · ตัวเลขที่นั
   });
 
   it('**จำนวนคอมโพเนนต์ใน packages/ui**', () => {
+    /*
+      อ่านทุกไฟล์คอมโพเนนต์ ไม่ใช่รายชื่อที่เขียนไว้ตายตัว
+
+      เดิมเขียนว่า `['presentational.tsx', 'interactive.tsx']` · วันที่เพิ่ม
+      `modal.tsx` ตัวสแกนจึงมองไม่เห็นและรายงานจำนวนต่ำกว่าจริง —
+      **ตัวสแกนที่มีรายชื่อไฟล์ตายตัว ก็คือรายการที่ดูแลด้วยมืออีกแบบหนึ่ง**
+      ซึ่งเป็นสิ่งที่ไฟล์นี้มีไว้กันตั้งแต่ต้น
+    */
     const dir = join(REPO, 'packages', 'ui', 'src', 'components');
-    const actual = ['presentational.tsx', 'interactive.tsx']
+    const actual = readdirSync(dir)
+      .filter((f) => f.endsWith('.tsx') && !f.endsWith('.stories.tsx'))
       .map((f) => (readFileSync(join(dir, f), 'utf8').match(/^export function /gm) ?? []).length)
       .reduce((a, b) => a + b, 0);
     expect(actual, 'นับคอมโพเนนต์ไม่ได้ — ตัวสแกนพัง').toBeGreaterThan(5);

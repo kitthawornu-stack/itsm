@@ -749,3 +749,93 @@
   text-align: center;
   padding: var(--space-6) var(--space-3);
 }
+
+/* ---------- Modal ---------- */
+
+.ui-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: var(--space-8) var(--space-4);
+  /* ฉากหลังทึบพอให้อ่านกล่องได้ แต่ยังเห็นว่าหน้าเดิมอยู่ข้างหลัง */
+  background: var(--overlay);
+  overflow-y: auto;
+}
+
+.ui-modal {
+  width: 100%;
+  max-width: 560px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--elevation-3);
+  padding: var(--space-4);
+  line-height: 1.6;
+}
+
+.ui-modal[data-size='wide'] {
+  max-width: 860px;
+}
+
+.ui-modal:focus-visible {
+  /*
+    `--focus-ring` เป็นค่า box-shadow ไม่ใช่สี · เขียนเป็น
+    `outline: 2px solid var(--focus-ring)` แล้วเบราว์เซอร์ทิ้งทั้งประกาศเงียบ ๆ
+    ผลคือไม่มีวงโฟกัสให้เห็นเลย และ stylelint ไม่จับเพราะไวยากรณ์ถูก
+  */
+  box-shadow: var(--focus-ring);
+}
+
+.ui-modal-head {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+
+.ui-modal-title {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 17px;
+  line-height: 1.6;
+  color: var(--text);
+  /* หัวเรื่องไทยยาวกว่าอังกฤษ ต้องตัดบรรทัดได้ ไม่ใช่ดันปุ่มปิดหลุด */
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.ui-modal-x {
+  flex: none;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  font-size: 15px;
+  line-height: 1.6;
+  padding: 0 var(--space-1);
+  cursor: pointer;
+}
+
+.ui-modal-x:hover {
+  color: var(--text);
+  border-color: var(--border);
+}
+
+.ui-modal-x:focus-visible {
+  box-shadow: var(--focus-ring);
+}
+
+.ui-modal-lead {
+  margin: var(--space-1) 0 0;
+  font-size: 12.5px;
+  color: var(--text-muted);
+  line-height: 1.6;
+}
+
+.ui-modal-body {
+  margin-top: var(--space-3);
+}
