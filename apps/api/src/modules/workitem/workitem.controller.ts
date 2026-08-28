@@ -81,6 +81,12 @@ import {
   type BulkEditResult,
 } from './bulk-edit.service';
 import {
+  bulkTransitionOptions,
+  bulkTransitionWorkItems,
+  type BulkTransitionOption,
+  type BulkTransitionResult,
+} from './bulk-transition.service';
+import {
   NotResolvedYetError,
   NotTheReporterError,
   RatingOutOfRangeError,
@@ -153,6 +159,29 @@ function descriptionText(value: unknown): string | null {
   if (value === null || typeof value !== 'object') return null;
   const doc = value as Record<string, unknown>;
   return typeof doc['text'] === 'string' && doc['text'] !== '' ? doc['text'] : null;
+}
+
+
+/**
+ * error ของ **คำขอทั้งชุด** → HTTP
+ *
+ * ใช้ร่วมกันสองปลายทาง เพราะถ้าแยกกันเขียน วันหนึ่งจะมีปลายทางเดียวที่ตอบ 500
+ * ให้กับเรื่องเดียวกัน แล้วหน้าจอจะแสดงข้อความคนละแบบให้ผู้ใช้คนเดียวกัน
+ */
+function toBulkHttpError(e: unknown): unknown {
+  if (e instanceof BulkTooManyItemsError) {
+    return new HttpException(
+      { error: 'too_many_items', message: e.message, max: BULK_MAX },
+      HttpStatus.UNPROCESSABLE_ENTITY,
+    );
+  }
+  if (e instanceof NothingSelectedError) {
+    return new HttpException(
+      { error: 'nothing_selected', message: e.message },
+      HttpStatus.UNPROCESSABLE_ENTITY,
+    );
+  }
+  return e;
 }
 
 @Controller('work-items')
@@ -1119,6 +1148,66 @@ export class WorkItemController {
         );
       }
       throw e;
+    }
+  }
+
+  /**
+   * ปุ่มที่กดได้กับงานทั้งชุด
+   *
+   * แยกจาก `POST bulk/transition` เพราะหน้าจอต้องรู้ **ก่อนกด** ว่าปุ่มไหน
+   * ขยับได้กี่ใบและขอกรอกอะไร · ปุ่มที่กดแล้วล้มทุกใบคือปุ่มที่ไม่ควรแสดง
+   *
+   * เป็น POST ทั้งที่อ่านอย่างเดียว เพราะรายการคีย์ยาวถึง 50 ใบ ซึ่งเกิน
+   * ความยาว URL ที่ปลอดภัยเมื่อคีย์เป็นภาษาไทยและถูก percent-encode
+   */
+  @Post('bulk/transitions')
+  @HttpCode(HttpStatus.OK)
+  async bulkTransitionChoices(
+    @Ctx() ctx: TenantContext,
+    @Body() body: { itemKeys?: unknown },
+  ): Promise<{ options: BulkTransitionOption[]; resolutions: string[]; max: number }> {
+    const keys = Array.isArray(body.itemKeys)
+      ? body.itemKeys.filter((k): k is string => typeof k === 'string')
+      : [];
+    try {
+      /*
+        ส่งรายการผลการแก้ไขมาพร้อมกัน — หน้าจอที่ถามว่า "กดปุ่มไหนได้"
+        ต้องได้คำตอบว่า "แล้วต้องกรอกอะไร และค่าที่กรอกได้มีอะไรบ้าง" ในคำตอบเดียว
+        มิฉะนั้นรายการตัวเลือกกับค่าที่เซิร์ฟเวอร์ยอมรับจะเป็นคนละชุดได้
+      */
+      const [options, resolutions] = await Promise.all([
+        bulkTransitionOptions(ctx, keys),
+        listResolutions(ctx),
+      ]);
+      return { options, resolutions, max: BULK_MAX };
+    } catch (e) {
+      throw toBulkHttpError(e);
+    }
+  }
+
+  /**
+   * กดปุ่มเดียวกันกับงานหลายใบ
+   *
+   * `200` แม้บางใบล้ม — เหตุผลเดียวกับ `POST bulk` ข้างบน · ใบที่ตัวตรวจของ
+   * workflow ปฏิเสธไม่ใช่คำขอที่ผิด แต่เป็นผลลัพธ์ที่ผู้ใช้ต้องอ่าน
+   */
+  @Post('bulk/transition')
+  @HttpCode(HttpStatus.OK)
+  async bulkTransition(
+    @Ctx() ctx: TenantContext,
+    @Body() body: { itemKeys?: unknown; transitionName?: unknown; resolutionName?: unknown },
+  ): Promise<BulkTransitionResult & { max: number }> {
+    const keys = Array.isArray(body.itemKeys)
+      ? body.itemKeys.filter((k): k is string => typeof k === 'string')
+      : [];
+    // แปลงจากชนิดที่รู้แน่เท่านั้น — ค่าอื่นถือว่าไม่ได้ส่งมา
+    const transitionName = typeof body.transitionName === 'string' ? body.transitionName : '';
+    const resolutionName = typeof body.resolutionName === 'string' ? body.resolutionName : null;
+    try {
+      const res = await bulkTransitionWorkItems(ctx, keys, { transitionName, resolutionName });
+      return { ...res, max: BULK_MAX };
+    } catch (e) {
+      throw toBulkHttpError(e);
     }
   }
 

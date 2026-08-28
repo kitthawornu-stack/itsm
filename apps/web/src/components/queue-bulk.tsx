@@ -32,6 +32,20 @@ interface BulkItemResult {
   reason?: string;
 }
 
+interface TransitionOption {
+  name: string;
+  eligible: number;
+  requiredFields: string[];
+}
+
+interface TransitionResponse {
+  requested: number;
+  changed: number;
+  failed: number;
+  items: Array<{ itemKey: string; outcome: string; from?: string; to?: string; reason?: string }>;
+  max: number;
+}
+
 interface BulkResponse {
   requested: number;
   changed: number;
@@ -78,6 +92,11 @@ export function QueueBulk({
   const [error, setError] = useState<string | null>(null);
   const [people, setPeople] = useState<Array<{ id: string; displayName: string }>>([]);
   const [priorities, setPriorities] = useState<Array<{ rank: number; name: string }>>([]);
+  const [options, setOptions] = useState<TransitionOption[]>([]);
+  const [resolutions, setResolutions] = useState<string[]>([]);
+  const [transition, setTransition] = useState('');
+  const [resolution, setResolution] = useState('');
+  const [moved, setMoved] = useState<TransitionResponse | null>(null);
 
   const selectable = new Set(bulkEditable);
   const eligible = rows.filter((r) => selectable.has(r.projectKey));
@@ -106,8 +125,58 @@ export function QueueBulk({
     })();
   }, [apiBase, firstKey]);
 
+  /*
+    ถามเซิร์ฟเวอร์ทุกครั้งที่การเลือกเปลี่ยน ว่าชุดนี้กดปุ่มไหนได้บ้าง
+
+    ไม่คำนวณเองจากสถานะของแถวบนหน้าจอ — เงื่อนไขของ transition มีทั้ง
+    "ต้องเป็นผู้รับผิดชอบ" และ "ต้องอยู่ในกลุ่มไหน" ซึ่งหน้าจอไม่รู้
+    การเดาจะทำให้เสนอปุ่มที่กดแล้วล้มทุกใบ
+  */
+  const pickedKey = [...picked].sort().join(',');
+  useEffect(() => {
+    if (pickedKey === '') {
+      setOptions([]);
+      setTransition('');
+      return;
+    }
+    /*
+      ยกเลิกคำขอเก่าจริง ๆ ไม่ใช่แค่เมินคำตอบที่กลับมาช้า
+
+      ผู้ใช้ติ๊กเลือกทีละใบ ทุกครั้งคือหนึ่งคำขอ · ถ้าปล่อยให้คำขอเก่าตอบทีหลัง
+      รายการปุ่มจะเป็นของชุดที่เลือกไว้เมื่อกี้ ไม่ใช่ชุดปัจจุบัน
+    */
+    const ac = new AbortController();
+    void (async () => {
+      try {
+        const res = await fetch(`${apiBase}/api/v1/work-items/bulk/transitions`, {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ itemKeys: pickedKey.split(',') }),
+          signal: ac.signal,
+        });
+        if (!res.ok) {
+          setOptions([]);
+          return;
+        }
+        const data = (await res.json()) as { options: TransitionOption[]; resolutions: string[] };
+        setOptions(data.options);
+        setResolutions(data.resolutions);
+        // ปุ่มที่เลือกไว้อาจไม่มีอยู่ในชุดใหม่ — ล้างทิ้ง ไม่ใช่ปล่อยค้าง
+        setTransition((cur) => (data.options.some((o) => o.name === cur) ? cur : ''));
+      } catch {
+        // คำขอที่ถูกยกเลิกก็มาที่นี่ — ไม่ใช่ความผิดพลาดที่ต้องบอกผู้ใช้
+        if (!ac.signal.aborted) setOptions([]);
+      }
+    })();
+    return () => {
+      ac.abort();
+    };
+  }, [apiBase, pickedKey]);
+
   const toggle = useCallback((key: string): void => {
     setResult(null);
+    setMoved(null);
     setPicked((prev) => {
       const next = new Set(prev);
       if (next.has(key)) next.delete(key);
@@ -118,6 +187,7 @@ export function QueueBulk({
 
   function toggleAll(): void {
     setResult(null);
+    setMoved(null);
     setPicked((prev) =>
       prev.size === eligible.length ? new Set() : new Set(eligible.slice(0, max).map((r) => r.itemKey)),
     );
@@ -154,6 +224,43 @@ export function QueueBulk({
       setPriority('');
       // ดึงคิวใหม่จากเซิร์ฟเวอร์ ไม่ใช่แก้แถวในหน้าจอเอง — หน้าจอที่เดาผลลัพธ์
       // จะไม่ตรงกับฐานข้อมูลทันทีที่มีใบไหนล้ม
+      router.refresh();
+    } catch {
+      setError('เชื่อมต่อเซิร์ฟเวอร์ไม่ได้');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const chosenOption = options.find((o) => o.name === transition);
+  const needsResolution = chosenOption?.requiredFields.includes('resolution') ?? false;
+
+  async function move(): Promise<void> {
+    if (chosenOption === undefined) return;
+    setBusy(true);
+    setError(null);
+    setResult(null);
+    setMoved(null);
+    try {
+      const res = await fetch(`${apiBase}/api/v1/work-items/bulk/transition`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          itemKeys: [...picked],
+          transitionName: transition,
+          ...(needsResolution && resolution !== '' ? { resolutionName: resolution } : {}),
+        }),
+      });
+      const data = (await res.json()) as TransitionResponse & { message?: string };
+      if (!res.ok) {
+        setError(data.message ?? `เปลี่ยนสถานะไม่สำเร็จ (HTTP ${String(res.status)})`);
+        return;
+      }
+      setMoved(data);
+      setPicked(new Set());
+      setTransition('');
+      setResolution('');
       router.refresh();
     } catch {
       setError('เชื่อมต่อเซิร์ฟเวอร์ไม่ได้');
@@ -209,6 +316,68 @@ export function QueueBulk({
           <Button variant="primary" disabled={busy || nothingChosen} onClick={() => void apply()}>
             {busy ? 'กำลังแก้…' : 'แก้ทั้งหมด'}
           </Button>
+
+          {/*
+            เปลี่ยนสถานะแยกจากการแก้ค่า เพราะมันเดินผ่าน workflow จริง —
+            มีเงื่อนไข ตัวตรวจ และ post function · การรวมปุ่มเดียวจะทำให้
+            ผู้ใช้เชื่อว่าทั้งสองอย่างทำงานเหมือนกัน ซึ่งไม่จริง
+
+            รายการนี้มาจากเซิร์ฟเวอร์ และมีแต่ปุ่มที่มีใบกดได้จริง —
+            ปุ่มที่กดแล้วล้มทุกใบคือปุ่มที่ไม่ควรอยู่ตรงนี้
+          */}
+          {options.length === 0 ? null : (
+            <>
+              <label className="bulk-field">
+                เปลี่ยนสถานะ
+                <select
+                  value={transition}
+                  onChange={(e) => {
+                    setTransition(e.target.value);
+                    setResolution('');
+                  }}
+                >
+                  <option value="">— เลือกปุ่ม —</option>
+                  {options.map((o) => (
+                    <option key={o.name} value={o.name}>
+                      {/* บอกจำนวนใบที่กดได้ตรงนี้ ไม่ใช่ให้รู้ตอนอ่านผล */}
+                      {o.name}
+                      {o.eligible === picked.size
+                        ? ''
+                        : ` (ได้ ${o.eligible.toLocaleString('th-TH')} จาก ${picked.size.toLocaleString('th-TH')})`}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              {/* ถามฟิลด์ที่ปุ่มนี้ขอ **ก่อนกด** แทนที่จะให้กดแล้วล้มทุกใบ */}
+              {!needsResolution ? null : (
+                <label className="bulk-field">
+                  ผลการแก้ไข
+                  <select
+                    value={resolution}
+                    onChange={(e) => {
+                      setResolution(e.target.value);
+                    }}
+                  >
+                    <option value="">— เลือก —</option>
+                    {resolutions.map((r) => (
+                      <option key={r} value={r}>
+                        {r}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+
+              <Button
+                variant="primary"
+                disabled={busy || transition === '' || (needsResolution && resolution === '')}
+                onClick={() => void move()}
+              >
+                {busy ? 'กำลังเปลี่ยน…' : 'เปลี่ยนสถานะ'}
+              </Button>
+            </>
+          )}
           <LinkButton
             onClick={() => {
               setPicked(new Set());
@@ -246,6 +415,50 @@ export function QueueBulk({
                     <code>{i.itemKey}</code> — {i.reason ?? OUTCOME_LABEL[i.outcome]}
                   </li>
                 ))}
+            </ul>
+          )}
+        </div>
+      )}
+
+      {moved === null ? null : (
+        <div className="bulk-result" role="status">
+          <b>
+            เปลี่ยนสถานะแล้ว {moved.changed.toLocaleString('th-TH')} เรื่อง
+            {moved.failed === 0 ? null : ` · ทำไม่ได้ ${moved.failed.toLocaleString('th-TH')} เรื่อง`}
+          </b>
+          {/*
+            ใบที่ทำไม่ได้ต้องบอกเหตุผลรายใบ · เลือก 20 แล้วขยับ 17
+            ต้องรู้ว่าอีก 3 ใบไหนและเพราะอะไร ไม่ใช่ให้ไปไล่หาเอง
+          */}
+          {moved.failed === 0 ? null : (
+            /*
+              รวมใบที่ล้มด้วยเหตุผลเดียวกันไว้บรรทัดเดียว
+
+              รอบแรกแสดงทีละใบ · เลือก 50 ใบแล้วล้ม 28 ใบได้กำแพง 28 บรรทัด
+              ที่ต่างกันแค่คีย์ ซึ่งไม่มีใครอ่าน — ผลคือข้อมูลที่ระบบตอบได้
+              กลายเป็นสิ่งที่ผู้ใช้มองข้าม เท่ากับไม่ได้บอก
+            */
+            <ul className="bulk-failed">
+              {[
+                ...moved.items
+                  .filter((i) => i.outcome !== 'changed')
+                  .reduce((acc, i) => {
+                    const why = i.reason ?? 'ไม่พบเรื่องนี้';
+                    acc.set(why, [...(acc.get(why) ?? []), i.itemKey]);
+                    return acc;
+                  }, new Map<string, string[]>()),
+              ].map(([why, itemKeys]) => (
+                <li key={why}>
+                  <b>{itemKeys.length.toLocaleString('th-TH')} เรื่อง</b> — {why}
+                  <div className="bulk-keys">
+                    {itemKeys.map((k) => (
+                      <a key={k} href={`/browse/${k}`}>
+                        {k}
+                      </a>
+                    ))}
+                  </div>
+                </li>
+              ))}
             </ul>
           )}
         </div>

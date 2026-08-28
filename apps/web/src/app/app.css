@@ -1256,6 +1256,35 @@
   color: var(--text);
 }
 
+.bulk-failed li + li {
+  margin-top: var(--space-2);
+}
+
+/*
+  คีย์ของใบที่ล้มด้วยเหตุผลเดียวกัน — เป็นลิงก์ทุกตัว เพราะสิ่งที่ผู้ใช้
+  จะทำต่อคือเปิดดูว่าทำไมใบนั้นไปไม่ได้ ไม่ใช่แค่รู้ว่ามีกี่ใบ
+*/
+.bulk-keys {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-2);
+  margin-top: var(--space-1);
+}
+
+.bulk-keys a {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--text);
+  text-decoration: none;
+  border-bottom: 1px solid var(--border);
+}
+
+.bulk-keys a:hover,
+.bulk-keys a:focus-visible {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
 /* ---------- รายการบริการ ---------- */
 
 .cat-group {
