@@ -709,6 +709,11 @@ model WorkItemComment {
   createdAt  DateTime  @default(now()) @map("created_at") @db.DateTime(3)
   updatedAt  DateTime  @updatedAt @map("updated_at") @db.DateTime(3)
   deletedAt  DateTime? @map("deleted_at") @db.DateTime(3) // soft delete — audit ต้องยังตอบได้ว่าเคยมี
+  /// เวลาที่ถูกแก้ไข — null คือยังไม่เคยแก้
+  ///
+  /// แยกจาก updatedAt ซึ่ง Prisma ตั้งให้ทุกครั้งที่แถวถูกเขียน รวมทั้งตอนลบ
+  /// ถ้าใช้ updatedAt เป็นตัวบอกว่า "แก้แล้ว" ความเห็นที่ถูกลบจะแสดงว่าเคยถูกแก้ด้วย
+  editedAt   DateTime? @map("edited_at") @db.DateTime(3)
 
   workItem WorkItem @relation(fields: [workItemId], references: [id], onDelete: Cascade)
   author   User     @relation(fields: [authorId], references: [id], onDelete: Restrict)

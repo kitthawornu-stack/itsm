@@ -53,6 +53,11 @@ export interface CommentView {
   isInternal: boolean;
   author: string;
   createdAt: string;
+  /** เวลาที่ถูกแก้ — null คือยังไม่เคยแก้ · บทสนทนาที่แก้เงียบ ๆ ใช้เป็นหลักฐานไม่ได้ */
+  editedAt?: string | null;
+  /** ผู้ใช้คนนี้ทำอะไรกับความเห็นใบนี้ได้ — ให้หน้าจอซ่อนปุ่มที่กดแล้วได้ 403 */
+  canEdit?: boolean;
+  canDelete?: boolean;
 }
 
 export interface AddCommentInput {
@@ -229,11 +234,20 @@ export async function listComments(ctx: TenantContext, itemKey: string): Promise
     include: { author: { select: { displayName: true } } },
   });
 
+  /*
+    ถามสิทธิ์ลบครั้งเดียวสำหรับทั้งหน้า ไม่ใช่ทีละความเห็น — ค่าเดียวกันทุกแถว
+    เพราะ `DELETE_COMMENT` ผูกกับโปรเจกต์ ไม่ได้ผูกกับความเห็น
+  */
+  const mayDeleteAny = await can(ctx, item.projectId, 'DELETE_COMMENT');
   return rows.map((r) => ({
     id: r.id.toString(),
     body: textOf(r.body),
     isInternal: r.isInternal,
     author: r.author.displayName,
     createdAt: r.createdAt.toISOString(),
+    editedAt: r.editedAt?.toISOString() ?? null,
+    // แก้ได้เฉพาะของตัวเอง — ไม่มีสิทธิ์ไหนเปิดทางให้แก้ข้อความของคนอื่น
+    canEdit: ctx.actorId !== null && r.authorId === ctx.actorId,
+    canDelete: (ctx.actorId !== null && r.authorId === ctx.actorId) || mayDeleteAny,
   }));
 }
