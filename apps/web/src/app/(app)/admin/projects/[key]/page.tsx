@@ -4,6 +4,7 @@ import type { ReactNode } from 'react';
 import { Table } from '@itsm/ui';
 
 import { PermissionGrid } from '@/components/permission-grid';
+import { SlaPolicyAdmin } from '@/components/sla-policy-admin';
 import { API_BASE, apiFetch } from '@/lib/api';
 
 export const dynamic = 'force-dynamic';
@@ -62,6 +63,12 @@ interface Detail {
     goals: Array<{ key: string; name: string; targetMs: number; match: unknown }>;
   } | null;
   /** ความพอใจของผู้แจ้ง — นับเฉพาะเรื่องที่มีคำตอบจริง */
+  slaEditable?: { policyId: string; goals: Array<{ id: string; isCatchAll: boolean }> } | null;
+  calendars?: Array<{
+    id: string;
+    name: string;
+    years: Array<{ year: number; required: boolean; verified: boolean }>;
+  }>;
   satisfaction?: {
     responses: number;
     average: number;
@@ -285,9 +292,19 @@ export default async function ProjectDetailPage({
 
         <h2 className="cfg-title detail-section-gap">ข้อตกลงบริการ</h2>
         {d.sla === null ? (
-          <p className="admin-empty">
-            ยังไม่ได้ตั้ง — เรื่องในโปรเจกต์นี้จะไม่มีนาฬิกาจับเวลา และไม่มีการแจ้งเตือนใกล้ครบกำหนด
-          </p>
+          <>
+            <p className="admin-empty">
+              ยังไม่ได้ตั้ง — เรื่องในโปรเจกต์นี้จะไม่มีนาฬิกาจับเวลา และไม่มีการแจ้งเตือนใกล้ครบกำหนด
+            </p>
+            {/* ตั้งได้จากที่นี่แล้ว — ก่อนหน้านี้ต้องเขียน SQL เท่านั้น */}
+            <SlaPolicyAdmin
+              apiBase={API}
+              projectKey={d.project.key}
+              policyId={null}
+              goals={[]}
+              calendars={d.calendars ?? []}
+            />
+          </>
         ) : (
           <>
             <p className="page-sub">
@@ -319,6 +336,13 @@ export default async function ProjectDetailPage({
                 </tr>
               ))}
             </Table>
+            <SlaPolicyAdmin
+              apiBase={API}
+              projectKey={d.project.key}
+              policyId={d.slaEditable?.policyId ?? null}
+              goals={d.slaEditable?.goals ?? []}
+              calendars={d.calendars ?? []}
+            />
           </>
         )}
       </div>

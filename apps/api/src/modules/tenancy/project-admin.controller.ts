@@ -7,9 +7,10 @@
  * เซอร์วิสแยกวันหนึ่ง ต้องแก้แค่บรรทัดที่เรียก ไม่ใช่ทุก SQL ที่เคย JOIN มัน
  */
 import { Body, Controller, Get, HttpException, HttpStatus, Param, Post } from '@nestjs/common';
-import type { TenantContext } from '@itsm/types';
+import { systemClock, type TenantContext } from '@itsm/types';
 
 import { Ctx } from '../../infrastructure/http/session.guard';
+import { tenantScoped } from '../../infrastructure/prisma/tenant-scope';
 import {
   ALL_PERMISSION_KEYS,
   LastAdminGrantError,
@@ -20,7 +21,21 @@ import {
   setGrant,
 } from '../permission';
 import { listGroups } from '../identity';
-import { describeSlaPolicy } from '../sla';
+import {
+  CatchAllMustBeLastError,
+  GoalInUseError,
+  GoalNotFoundError,
+  InvalidTargetError,
+  PolicyAlreadyExistsError,
+  PolicyNotFoundError,
+  addSlaGoal,
+  createSlaPolicy,
+  describeSlaPolicy,
+  listCalendars,
+  moveSlaGoal,
+  removeSlaGoal,
+  updateSlaGoalTarget,
+} from '../sla';
 import { satisfactionSummary } from '../workitem';
 import { describeProjectWorkflows } from '../workflow';
 import { ProjectNotFoundError, listProjects, projectByKey, projectSchemeId } from './project.service';
@@ -34,6 +49,54 @@ import {
   projectCreationOptions,
   type ProjectTypeName,
 } from './project-create.service';
+
+
+/**
+ * id ที่หน้าจอแก้ SLA ต้องใช้
+ *
+ * แยกจาก `describeSlaPolicy` ซึ่งออกแบบไว้ให้คนอ่าน · การยัด id เข้าไปที่นั่น
+ * จะทำให้ทุกที่ที่แสดงผลต้องพก id ไปด้วยโดยไม่ได้ใช้
+ */
+async function slaEditable(
+  ctx: TenantContext,
+  projectId: bigint,
+): Promise<{ policyId: string; goals: Array<{ id: string; isCatchAll: boolean }> } | null> {
+  const db = tenantScoped(ctx);
+  const policy = await db.slaPolicy.findFirst({
+    where: { projectId },
+    include: { goals: { orderBy: { position: 'asc' }, select: { id: true, match: true } } },
+  });
+  if (policy === null) return null;
+  return {
+    policyId: policy.id.toString(),
+    goals: policy.goals.map((g: { id: bigint; match: unknown }) => ({
+      id: g.id.toString(),
+      isCatchAll: g.match === null,
+    })),
+  };
+}
+
+/** error ของ SLA → รหัส HTTP ที่ตรงความหมาย */
+function slaError(e: unknown): never {
+  if (e instanceof PolicyNotFoundError || e instanceof GoalNotFoundError) {
+    throw new HttpException({ error: 'not_found', message: e.message }, HttpStatus.NOT_FOUND);
+  }
+  if (e instanceof GoalInUseError) {
+    // 409 — คำขอถูกต้อง แต่สถานะของข้อมูลตอนนี้ทำให้ทำไม่ได้
+    throw new HttpException({ error: 'in_use', message: e.message }, HttpStatus.CONFLICT);
+  }
+  if (
+    e instanceof PolicyAlreadyExistsError ||
+    e instanceof InvalidTargetError ||
+    e instanceof CatchAllMustBeLastError
+  ) {
+    throw new HttpException(
+      { error: 'invalid_input', message: e.message },
+      HttpStatus.UNPROCESSABLE_ENTITY,
+    );
+  }
+  throw e;
+}
 
 @Controller('admin/projects')
 export class ProjectAdminController {
@@ -109,6 +172,8 @@ export class ProjectAdminController {
     await assertTenantAdmin(ctx);
     try {
       const project = await projectByKey(ctx, key);
+      // clock.nowUtc() ไม่ใช่ new Date() — INVARIANT 6 (lint จับให้แล้วรอบนี้)
+      const thisYear = systemClock.nowUtc().getUTCFullYear();
       const [workflows, permissions, sla, groups, satisfaction] = await Promise.all([
         describeProjectWorkflows(ctx, project.id),
         describeGrants(ctx, project.id),
@@ -129,6 +194,17 @@ export class ProjectAdminController {
         groups,
         sla,
         satisfaction,
+        /*
+          ส่ง id ของนโยบายและเป้า พร้อมรายการปฏิทิน มาให้หน้าจอด้วย
+          `describeSlaPolicy` ออกแบบไว้ให้คนอ่าน ไม่มี id — หน้าจอที่ต้องแก้
+          ต้องมี id จริง ไม่ใช่เดาจากชื่อ ซึ่งซ้ำกันได้
+        */
+        slaEditable: await slaEditable(ctx, project.id),
+        /*
+          ปฏิทินพร้อมสถานะการยืนยันของปีนี้และปีหน้า — ผู้ดูแลต้องเห็นก่อนเลือก
+          ว่าปฏิทินนั้นยังไม่มีใครยืนยัน ไม่ใช่เลือกไปแล้วค่อยรู้ว่าตัวเลขเชื่อไม่ได้
+        */
+        calendars: await listCalendars(ctx, [thisYear, thisYear + 1]),
       };
     } catch (e) {
       if (e instanceof ProjectNotFoundError) {
@@ -186,6 +262,112 @@ export class ProjectAdminController {
         throw new HttpException({ error: 'not_found', message: e.message }, HttpStatus.NOT_FOUND);
       }
       throw e;
+    }
+  }
+
+  @Post(':key/sla')
+  async createPolicy(
+    @Ctx() ctx: TenantContext,
+    @Param('key') key: string,
+    @Body() body: { name?: unknown; calendarId?: unknown },
+  ): Promise<{ id: string }> {
+    await assertTenantAdmin(ctx);
+    const project = await projectByKey(ctx, key);
+    const calendarId =
+      typeof body.calendarId === 'string' && body.calendarId !== '' ? BigInt(body.calendarId) : null;
+    if (calendarId === null) {
+      throw new HttpException(
+        { error: 'invalid_input', message: 'ต้องเลือกปฏิทินเวลาทำการ' },
+        HttpStatus.UNPROCESSABLE_ENTITY,
+      );
+    }
+    try {
+      const r = await createSlaPolicy(
+        ctx,
+        project.id,
+        typeof body.name === 'string' ? body.name : '',
+        calendarId,
+      );
+      return { id: r.id.toString() };
+    } catch (e) {
+      return slaError(e);
+    }
+  }
+
+  @Post(':key/sla/goals')
+  async addGoal(
+    @Ctx() ctx: TenantContext,
+    @Body()
+    body: {
+      policyId?: unknown;
+      key?: unknown;
+      name?: unknown;
+      targetMinutes?: unknown;
+      priorityRanks?: unknown;
+    },
+  ): Promise<{ id: string }> {
+    await assertTenantAdmin(ctx);
+    const policyId =
+      typeof body.policyId === 'string' && body.policyId !== '' ? BigInt(body.policyId) : null;
+    if (policyId === null) {
+      throw new HttpException(
+        { error: 'invalid_input', message: 'ไม่พบนโยบาย' },
+        HttpStatus.UNPROCESSABLE_ENTITY,
+      );
+    }
+    const ranks = Array.isArray(body.priorityRanks)
+      ? body.priorityRanks.map((r) => Number(r)).filter((r) => Number.isInteger(r))
+      : [];
+    try {
+      const r = await addSlaGoal(ctx, policyId, {
+        key: typeof body.key === 'string' && body.key !== '' ? body.key : 'time-to-resolve',
+        name: typeof body.name === 'string' ? body.name : '',
+        targetMinutes: Number(body.targetMinutes),
+        priorityRanks: ranks,
+      });
+      return { id: r.id.toString() };
+    } catch (e) {
+      return slaError(e);
+    }
+  }
+
+  @Post(':key/sla/goals/:goalId/target')
+  async setGoalTarget(
+    @Ctx() ctx: TenantContext,
+    @Param('goalId') goalId: string,
+    @Body() body: { targetMinutes?: unknown },
+  ): Promise<{ affectedOpenItems: number }> {
+    await assertTenantAdmin(ctx);
+    try {
+      return await updateSlaGoalTarget(ctx, BigInt(goalId), Number(body.targetMinutes));
+    } catch (e) {
+      return slaError(e);
+    }
+  }
+
+  @Post(':key/sla/goals/:goalId/move')
+  async moveGoal(
+    @Ctx() ctx: TenantContext,
+    @Param('goalId') goalId: string,
+    @Body() body: { direction?: unknown },
+  ): Promise<{ ok: true }> {
+    await assertTenantAdmin(ctx);
+    try {
+      await moveSlaGoal(ctx, BigInt(goalId), body.direction === 'up' ? 'up' : 'down');
+      return { ok: true };
+    } catch (e) {
+      return slaError(e);
+    }
+  }
+
+  @Post(':key/sla/goals/:goalId/remove')
+  async dropGoal(@Ctx() ctx: TenantContext, @Param('goalId') goalId: string): Promise<{ ok: true }> {
+    await assertTenantAdmin(ctx);
+    try {
+      await removeSlaGoal(ctx, BigInt(goalId));
+      return { ok: true };
+    } catch (e) {
+      return slaError(e);
     }
   }
 }
