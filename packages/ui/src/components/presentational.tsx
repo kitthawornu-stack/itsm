@@ -456,3 +456,51 @@ export function SubmitButton({ children, variant = 'primary' }: SubmitButtonProp
     </button>
   );
 }
+
+// ============================================================
+
+export interface FormInputProps {
+  /** ชื่อฟิลด์ที่จะถูกส่งไปกับฟอร์ม — ฟอร์ม HTML จริงต้องมี */
+  name: string;
+  type?: 'text' | 'search' | 'date' | 'datetime-local' | 'number';
+  defaultValue?: string;
+  placeholder?: string;
+  id?: string;
+  ariaLabel?: string;
+  required?: boolean;
+}
+
+/**
+ * ช่องกรอกของฟอร์ม HTML จริง — ไม่มี state ไม่มี event handler
+ *
+ * `Input` เป็น controlled component ที่อยู่ในไฟล์ client · หน้าที่ตั้งใจให้
+ * **ทำงานได้โดยไม่ต้องมี JavaScript** (`<form method="get">`) ใช้ไม่ได้
+ * เพราะไม่มี state ให้ควบคุม และการลาก client bundle มาทั้งก้อนเพื่อสิ่งที่
+ * เบราว์เซอร์ทำได้อยู่แล้วก็ไม่คุ้ม
+ *
+ * ตัวนี้จึงเป็น uncontrolled — ค่าเริ่มต้นมาจาก `defaultValue` แล้วเบราว์เซอร์
+ * ดูแลต่อเอง · ก่อนมีตัวนี้ หน้าคลังความรู้เขียน `<input>` เปล่าที่ไม่มีสไตล์เลย
+ * และหน้าปฏิทินเขียน `<input className="ui-input">` ซึ่งยืมชื่อคลาสภายในมาแปะ
+ */
+export function FormInput({
+  name,
+  type = 'text',
+  defaultValue,
+  placeholder,
+  id,
+  ariaLabel,
+  required = false,
+}: FormInputProps): ReactNode {
+  return (
+    <input
+      className="ui-input"
+      id={id}
+      name={name}
+      type={type}
+      defaultValue={defaultValue}
+      placeholder={placeholder}
+      required={required}
+      {...(ariaLabel === undefined ? {} : { 'aria-label': ariaLabel })}
+    />
+  );
+}

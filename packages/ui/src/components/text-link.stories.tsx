@@ -15,7 +15,7 @@
  */
 import type { Meta, StoryObj } from '@storybook/react';
 
-import { LinkButton, SubmitButton, TextLink } from '../index';
+import { FormInput, LinkButton, SubmitButton, TextLink } from '../index';
 
 const meta = {
   title: 'System/TextLink',
@@ -72,7 +72,7 @@ export const BesideLinkButton: Story = {
 };
 
 export const Submit: Story = {
-  name: 'SubmitButton · ปุ่มหลักของฟอร์มที่ไม่ต้องใช้ JavaScript',
+  name: 'SubmitButton · ฟอร์มที่ทำงานได้โดยไม่ต้องมี JavaScript',
   render: () => (
     <form
       method="get"
@@ -84,10 +84,55 @@ export const Submit: Story = {
     >
       <label style={{ display: 'grid', gap: '0.25rem' }}>
         ค้นหา
-        <input name="q" className="ui-input" placeholder="เช่น รีเซ็ตรหัสผ่าน" />
+        <FormInput name="q" type="search" placeholder="เช่น รีเซ็ตรหัสผ่าน" />
       </label>
       <SubmitButton>ค้น</SubmitButton>
       <TextLink href="#">+ เขียนบทความใหม่</TextLink>
+    </form>
+  ),
+};
+
+export const FormInputDate: Story = {
+  name: 'FormInput · ช่วงวันที่ในฟอร์ม GET',
+  render: () => (
+    <form
+      method="get"
+      action="#"
+      style={{ display: 'flex', gap: '0.75rem', alignItems: 'flex-end' }}
+      onSubmit={(e) => {
+        e.preventDefault();
+      }}
+    >
+      <label style={{ display: 'grid', gap: '0.25rem' }}>
+        ตั้งแต่
+        <FormInput name="from" type="date" defaultValue="2026-09-01" />
+      </label>
+      <label style={{ display: 'grid', gap: '0.25rem' }}>
+        ถึง
+        <FormInput name="to" type="date" defaultValue="2026-09-30" />
+      </label>
+      <SubmitButton variant="secondary">ดูช่วงนี้</SubmitButton>
+    </form>
+  ),
+};
+
+export const FormInputNamed: Story = {
+  name: 'FormInput · ช่องที่ป้ายมองไม่เห็น ต้องมีชื่อให้ screen reader',
+  render: () => (
+    <form
+      method="get"
+      action="#"
+      style={{ display: 'flex', gap: '0.5rem' }}
+      onSubmit={(e) => {
+        e.preventDefault();
+      }}
+    >
+      {/*
+        แถบค้นหาที่ไม่มีป้ายเห็นได้ ต้องมี `ariaLabel` — และต้องเป็น prop
+        ชื่อนี้ ไม่ใช่ `aria-label` ซึ่ง TypeScript ไม่ตรวจให้บนคอมโพเนนต์ของเรา
+      */}
+      <FormInput name="q" type="search" ariaLabel="ค้นหาบทความ" placeholder="ค้นหา" />
+      <SubmitButton>ค้น</SubmitButton>
     </form>
   ),
 };
