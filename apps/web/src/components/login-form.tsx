@@ -59,16 +59,14 @@ export function LoginForm({ apiBase, next }: { apiBase: string; next: string }):
 
       <Field label="รหัสผ่าน" htmlFor="lg-password" required>
         {/* ต้องเป็น input จริงชนิด password — ตัวจัดการรหัสผ่านของเบราว์เซอร์
-            และการปิดบังตัวอักษรมาจาก type นี้เท่านั้น */}
-        <input
+            และการปิดบังตัวอักษรมาจาก type นี้เท่านั้น · `Input` รับ `type` แล้ว
+            จึงไม่ต้องเขียน `<input>` เองอีก */}
+        <Input
           id="lg-password"
-          className="ui-input"
           type="password"
           value={password}
           autoComplete="current-password"
-          onChange={(e) => {
-            setPassword(e.target.value);
-          }}
+          onChange={setPassword}
         />
       </Field>
 

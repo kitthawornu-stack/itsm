@@ -97,6 +97,16 @@ export interface InputProps {
    * ทั้งที่ typecheck และ lint ผ่านทั้งคู่ (CLAUDE.md §8)
    */
   ariaLabel?: string;
+  /**
+   * ชนิดของช่องกรอก
+   *
+   * `password` **ต้องมาจากตรงนี้เท่านั้น** — การปิดบังตัวอักษรและตัวจัดการ
+   * รหัสผ่านของเบราว์เซอร์มาจากแอตทริบิวต์นี้ · ก่อนหน้านี้หน้าล็อกอินเขียน
+   * `<input className="ui-input" type="password">` เองเพราะคอมโพเนนต์ไม่รับ
+   * ซึ่งแปลว่ามีสองที่ที่ต้องแก้ทุกครั้งที่สไตล์ของช่องกรอกเปลี่ยน
+   */
+  type?: 'text' | 'password' | 'email';
+  autoComplete?: string;
 }
 
 export function Input({
@@ -108,6 +118,8 @@ export function Input({
   maxLength,
   id,
   ariaLabel,
+  type = 'text',
+  autoComplete,
 }: InputProps): ReactNode {
   const errorId = id === undefined ? undefined : `${id}-error`;
   return (
@@ -115,9 +127,11 @@ export function Input({
       <input
         className="ui-input"
         id={id}
+        type={type}
         value={value}
         placeholder={placeholder}
         maxLength={maxLength}
+        autoComplete={autoComplete}
         aria-invalid={invalid}
         aria-describedby={invalid ? errorId : undefined}
         {...(ariaLabel === undefined ? {} : { 'aria-label': ariaLabel })}

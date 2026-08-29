@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 
-import { Alert, PageHeader, Timestamp } from '@itsm/ui';
+import { Alert, PageHeader, TextLink, Timestamp } from '@itsm/ui';
 
 import { ArticleEditor } from '@/components/article-editor';
 import { API_BASE, apiFetch } from '@/lib/api';
@@ -73,12 +73,8 @@ export default async function ArticlePage({
         <>
           <p className="article-body">{doc.body}</p>
           <p className="thread-actions">
-            <a className="ui-linkbtn" href={`/knowledge/${doc.id}?edit=1`}>
-              แก้ไขบทความนี้
-            </a>
-            <a className="ui-linkbtn" href="/knowledge">
-              กลับไปค้นหา
-            </a>
+            <TextLink href={`/knowledge/${doc.id}?edit=1`}>แก้ไขบทความนี้</TextLink>
+            <TextLink href="/knowledge">กลับไปค้นหา</TextLink>
           </p>
         </>
       )}

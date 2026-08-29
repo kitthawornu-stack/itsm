@@ -312,6 +312,16 @@ export interface TableColumn {
   align?: 'start' | 'end';
   /** ความกว้างตายตัว เช่น '84px' — ไม่ใส่คือแบ่งตามเนื้อหา */
   width?: string;
+  /**
+   * หัวคอลัมน์ที่มีไว้ให้สกรีนรีดเดอร์เท่านั้น (เช่นคอลัมน์ปุ่ม)
+   *
+   * ต้องมีตัวเลือกนี้ **เพราะถ้าไม่มี คนจะหาทางเอง** — หน้าจอแอดมินห้าที่
+   * เคยส่งสตริง `'<span className="ui-sr-only">การกระทำ</span>'` เข้ามา
+   * React จึง escape แล้วพิมพ์แท็กออกมาเป็นข้อความบนหัวตารางจริง ๆ
+   * typecheck ผ่าน (เป็น string ถูกต้อง) lint ผ่าน เทสต์เขียว —
+   * เห็นได้ทางเดียวคือเปิดหน้าจอดู
+   */
+  srOnly?: boolean;
 }
 
 export interface TableProps {
@@ -360,7 +370,7 @@ export function Table({ columns, rowCount, empty, children, label }: TableProps)
                 style={c.width === undefined ? undefined : { width: c.width }}
                 scope="col"
               >
-                {c.label}
+                {c.srOnly === true ? <span className="ui-sr-only">{c.label}</span> : c.label}
               </th>
             ))}
           </tr>
@@ -378,5 +388,71 @@ export function Table({ columns, rowCount, empty, children, label }: TableProps)
         </tbody>
       </table>
     </div>
+  );
+}
+
+// ============================================================
+
+export interface TextLinkProps {
+  children: ReactNode;
+  href: string;
+  /** สีตามบทบาท — เหมือน `LinkButton` เพื่อให้สองอย่างนี้อยู่ข้างกันแล้วกลมกลืน */
+  tone?: 'default' | 'danger';
+  /**
+   * ชื่อสำหรับ screen reader เมื่อข้อความที่เห็นไม่พอแยกแยะ
+   *
+   * **ต้องเป็น prop ชื่อนี้ ไม่ใช่ `aria-label`** — TypeScript ปล่อยแอตทริบิวต์
+   * ที่มีขีดกลางผ่านไปโดยไม่ตรวจว่าคอมโพเนนต์รับหรือเปล่า
+   */
+  ariaLabel?: string;
+}
+
+/**
+ * ลิงก์ที่หน้าตาเป็นปุ่ม
+ *
+ * **เป็น `<a>` เสมอ ไม่ใช่ `<button>`** — ตรงข้ามกับ `LinkButton` โดยตั้งใจ ·
+ * ของที่พาไปหน้าอื่นต้องเป็นลิงก์ ผู้ใช้จึงเปิดแท็บใหม่และคัดลอกที่อยู่ได้
+ * ตามที่เบราว์เซอร์สัญญาไว้ · ของที่กดแล้วเปลี่ยนข้อมูลต้องเป็น `LinkButton`
+ *
+ * อยู่ในไฟล์นี้เพราะ **ไม่มี event handler** จึงเรนเดอร์ใน Server Component ได้
+ * — หน้าที่ทำงานได้โดยไม่ต้องมี JavaScript ใช้ตัวนี้
+ */
+export function TextLink({
+  children,
+  href,
+  tone = 'default',
+  ariaLabel,
+}: TextLinkProps): ReactNode {
+  return (
+    <a
+      className="ui-linkbtn"
+      data-tone={tone}
+      href={href}
+      {...(ariaLabel === undefined ? {} : { 'aria-label': ariaLabel })}
+    >
+      {children}
+    </a>
+  );
+}
+
+// ============================================================
+
+export interface SubmitButtonProps {
+  children: ReactNode;
+  variant?: 'primary' | 'secondary';
+}
+
+/**
+ * ปุ่มส่งฟอร์มที่ไม่มี event handler
+ *
+ * มีไว้สำหรับฟอร์ม HTML จริง (`<form method="get">`) ที่ตั้งใจให้ทำงานได้
+ * **โดยไม่ต้องมี JavaScript** · `Button` อยู่ในไฟล์ client จึงลาก JS ตามมา
+ * ทั้งก้อนเพื่อสิ่งที่เบราว์เซอร์ทำได้อยู่แล้ว
+ */
+export function SubmitButton({ children, variant = 'primary' }: SubmitButtonProps): ReactNode {
+  return (
+    <button type="submit" className="ui-btn" data-size="md" data-variant={variant}>
+      {children}
+    </button>
   );
 }

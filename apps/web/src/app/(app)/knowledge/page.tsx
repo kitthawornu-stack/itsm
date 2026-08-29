@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 
-import { Alert, EmptyState, PageHeader } from '@itsm/ui';
+import { Alert, EmptyState, PageHeader, SubmitButton, TextLink } from '@itsm/ui';
 
 import { apiFetch } from '@/lib/api';
 
@@ -53,12 +53,8 @@ export default async function KnowledgePage({
           ค้นหา
           <input name="q" defaultValue={q} placeholder="เช่น รีเซ็ตรหัสผ่าน" />
         </label>
-        <button type="submit" className="ui-btn" data-variant="primary">
-          ค้น
-        </button>
-        <a className="ui-linkbtn" href="/knowledge/new">
-          + เขียนบทความใหม่
-        </a>
+        <SubmitButton>ค้น</SubmitButton>
+        <TextLink href="/knowledge/new">+ เขียนบทความใหม่</TextLink>
       </form>
 
       {error === null ? null : <Alert tone="error">{error}</Alert>}
