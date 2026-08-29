@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
-import { Button, Field, Input, Table } from '@itsm/ui';
+import { Button, Field, Input, LinkButton, Table } from '@itsm/ui';
 
 interface Row {
   id: number;
@@ -119,7 +119,7 @@ export function ResolutionAdmin({ apiBase }: { apiBase: string }): ReactNode {
         </p>
       ) : (
         <Table
-          columns={['ชื่อ', 'ใช้อยู่', 'สถานะ', '<span className="ui-sr-only">การกระทำ</span>']}
+          columns={['ชื่อ', 'ใช้อยู่', 'สถานะ', { label: 'การกระทำ', srOnly: true }]}
           rowCount={rows.length}
         >
           {rows.map((r) => (
@@ -146,15 +146,14 @@ export function ResolutionAdmin({ apiBase }: { apiBase: string }): ReactNode {
                     <Button variant="primary" type="submit" disabled={busy}>
                       บันทึก
                     </Button>
-                    <button
-                      type="button"
-                      className="admin-linkish"
+                    <LinkButton
+                      ariaLabel={`ยกเลิกการเปลี่ยนชื่อ ${r.name}`}
                       onClick={() => {
                         setEditing(null);
                       }}
                     >
                       ยกเลิก
-                    </button>
+                    </LinkButton>
                   </form>
                 ) : (
                   r.name
@@ -168,19 +167,21 @@ export function ResolutionAdmin({ apiBase }: { apiBase: string }): ReactNode {
               <td className="admin-actions">
                 {editing === r.id ? null : (
                   <>
-                    <button
-                      type="button"
-                      className="admin-linkish"
+                    {/*
+                      ทุกแถวมีปุ่มข้อความเดียวกัน — คนที่ไล่ด้วยคีย์บอร์ดจะได้ยิน
+                      "เปลี่ยนชื่อ เปลี่ยนชื่อ เปลี่ยนชื่อ" โดยไม่รู้ว่าอันไหนของอะไร
+                    */}
+                    <LinkButton
+                      ariaLabel={`เปลี่ยนชื่อ ${r.name}`}
                       onClick={() => {
                         setDraft(r.name);
                         setEditing(r.id);
                       }}
                     >
                       เปลี่ยนชื่อ
-                    </button>
-                    <button
-                      type="button"
-                      className="admin-linkish"
+                    </LinkButton>
+                    <LinkButton
+                      ariaLabel={r.isActive ? `เลิกใช้ ${r.name}` : `เปิดใช้ ${r.name} อีกครั้ง`}
                       disabled={busy}
                       onClick={() => {
                         void send(
@@ -191,7 +192,7 @@ export function ResolutionAdmin({ apiBase }: { apiBase: string }): ReactNode {
                       }}
                     >
                       {r.isActive ? 'เลิกใช้' : 'เปิดใช้อีกครั้ง'}
-                    </button>
+                    </LinkButton>
                   </>
                 )}
               </td>

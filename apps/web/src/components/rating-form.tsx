@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { useState, type ReactNode } from 'react';
-import { Alert, Button, Input } from '@itsm/ui';
+import { Alert, Button, Input, LinkButton } from '@itsm/ui';
 
 export interface Satisfaction {
   rating: number;
@@ -82,15 +82,13 @@ export function RatingForm({
           คุณให้ <b>{LABELS[rating] ?? rating}</b>
           {comment.trim() === '' ? null : <> · “{comment}”</>}
         </p>
-        <button
-          type="button"
-          className="admin-linkish"
+        <LinkButton
           onClick={() => {
             setEditing(true);
           }}
         >
           แก้คำตอบ
-        </button>
+        </LinkButton>
       </section>
     );
   }

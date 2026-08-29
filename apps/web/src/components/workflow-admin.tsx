@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
-import { Button, Field, Input, Select, Table } from '@itsm/ui';
+import { Button, Field, Input, LinkButton, Select, Table } from '@itsm/ui';
 
 interface WorkflowRow {
   id: string;
@@ -73,9 +73,9 @@ const CATEGORY_LABEL: Record<string, string> = {
 /**
  * แก้ workflow
  *
- * ⚠️ **ยังตั้งกฎของปุ่มไม่ได้** (ใครเห็นปุ่ม · ต้องกรอกอะไร · ทำอะไรต่อ)
- * หน้าจอจึงบอกจำนวนกฎที่มีอยู่ ไม่ใช่ซ่อนไว้ — การลบปุ่มลบกฎไปด้วย
- * และผู้ดูแลต้องรู้ว่ากำลังลบอะไรไปพร้อมกัน
+ * **ตั้งกฎของปุ่มได้แล้ว** (ใครเห็นปุ่ม · ต้องกรอกอะไร · ทำอะไรต่อ) —
+ * หน้าจอแสดงกฎทุกข้อ ไม่ใช่แค่จำนวน เพราะจำนวนบอกว่ามีอะไรอยู่ แต่ไม่บอกว่า
+ * มันทำอะไร ซึ่งเป็นสิ่งเดียวที่ผู้ดูแลต้องรู้ก่อนแก้ · การลบปุ่มลบกฎไปด้วย
  */
 
 /**
@@ -91,10 +91,13 @@ function RuleAdder({
   catalog,
   busy,
   onAdd,
+  transitionName,
 }: {
   catalog: CatalogEntry[];
   busy: boolean;
   onAdd: (body: Record<string, unknown>) => void;
+  /** ชื่อปุ่มที่กฎนี้จะไปอยู่ — ใช้ตั้งชื่อให้ screen reader แยกแถวออกจากกัน */
+  transitionName: string;
 }): ReactNode {
   const [open, setOpen] = useState(false);
   const [pick, setPick] = useState('');
@@ -107,16 +110,17 @@ function RuleAdder({
 
   if (!open) {
     return (
-      <button
-        type="button"
-        className="admin-linkish rule-add"
-        disabled={busy || catalog.length === 0}
-        onClick={() => {
-          setOpen(true);
-        }}
-      >
-        + เพิ่มกฎ
-      </button>
+      <span className="rule-add">
+        <LinkButton
+          ariaLabel={`เพิ่มกฎให้ปุ่ม ${transitionName}`}
+          disabled={busy || catalog.length === 0}
+          onClick={() => {
+            setOpen(true);
+          }}
+        >
+          + เพิ่มกฎ
+        </LinkButton>
+      </span>
     );
   }
 
@@ -180,15 +184,14 @@ function RuleAdder({
         >
           เพิ่ม
         </Button>
-        <button
-          type="button"
-          className="admin-linkish"
+        <LinkButton
+          ariaLabel={`ยกเลิกการเพิ่มกฎให้ปุ่ม ${transitionName}`}
           onClick={() => {
             setOpen(false);
           }}
         >
           ยกเลิก
-        </button>
+        </LinkButton>
       </div>
     </div>
   );
@@ -353,7 +356,7 @@ export function WorkflowAdmin({ apiBase }: { apiBase: string }): ReactNode {
               'หมวด',
               'เรื่องที่ค้างอยู่',
               'หมายเหตุ',
-              '<span className="ui-sr-only">การกระทำ</span>',
+              { label: 'การกระทำ', srOnly: true },
             ]}
             rowCount={detail.statuses.length}
           >
@@ -370,9 +373,14 @@ export function WorkflowAdmin({ apiBase }: { apiBase: string }): ReactNode {
                 <td className="admin-actions">
                   {s.isInitial ? null : (
                     <>
-                      <button
-                        type="button"
-                        className="admin-linkish"
+                      {/*
+                        ทุกบรรทัดมีปุ่มข้อความเดียวกัน — ต้องมีชื่อแยกให้ screen reader
+                        มิฉะนั้นคนที่ไล่ด้วยคีย์บอร์ดได้ยิน "ลบ ลบ ลบ" โดยไม่รู้ว่าอันไหน
+                        ของอะไร · และต้องเป็น prop `ariaLabel` ไม่ใช่ `aria-label`
+                        เพราะ TypeScript ไม่ตรวจแอตทริบิวต์ที่มีขีดกลาง
+                      */}
+                      <LinkButton
+                        ariaLabel={`ตั้ง ${s.name} เป็นสถานะเริ่มต้น`}
                         disabled={busy}
                         onClick={() => {
                           void send(
@@ -383,10 +391,10 @@ export function WorkflowAdmin({ apiBase }: { apiBase: string }): ReactNode {
                         }}
                       >
                         ตั้งเป็นสถานะเริ่มต้น
-                      </button>
-                      <button
-                        type="button"
-                        className="admin-linkish"
+                      </LinkButton>
+                      <LinkButton
+                        ariaLabel={`ลบสถานะ ${s.name}`}
+                        tone="danger"
                         disabled={busy}
                         onClick={() => {
                           void send(
@@ -397,7 +405,7 @@ export function WorkflowAdmin({ apiBase }: { apiBase: string }): ReactNode {
                         }}
                       >
                         ลบ
-                      </button>
+                      </LinkButton>
                     </>
                   )}
                 </td>
@@ -446,7 +454,7 @@ export function WorkflowAdmin({ apiBase }: { apiBase: string }): ReactNode {
 
           <h2 className="cfg-title">ปุ่มเปลี่ยนสถานะ</h2>
           <Table
-            columns={['ปุ่ม', 'จาก → ไป', 'กฎ', '<span className="ui-sr-only">การกระทำ</span>']}
+            columns={['ปุ่ม', 'จาก → ไป', 'กฎ', { label: 'การกระทำ', srOnly: true }]}
             rowCount={detail.transitions.length}
           >
             {detail.transitions.map((t) => (
@@ -471,20 +479,22 @@ export function WorkflowAdmin({ apiBase }: { apiBase: string }): ReactNode {
                         <li key={r.id}>
                           <span className="cfg-implied">{KIND_LABEL[r.kind] ?? r.kind}: </span>
                           {r.label}
-                          <button
-                            type="button"
-                            className="admin-linkish rule-del"
-                            disabled={busy}
-                            onClick={() => {
-                              void send(
-                                `/${detail.id}/transitions/${t.id}/rules/${r.id}/remove`,
-                                {},
-                                `ลบกฎ "${r.label}" แล้ว`,
-                              );
-                            }}
-                          >
-                            ลบกฎ
-                          </button>
+                          <span className="rule-del">
+                            <LinkButton
+                              ariaLabel={`ลบกฎ ${r.label} ของปุ่ม ${t.name}`}
+                              tone="danger"
+                              disabled={busy}
+                              onClick={() => {
+                                void send(
+                                  `/${detail.id}/transitions/${t.id}/rules/${r.id}/remove`,
+                                  {},
+                                  `ลบกฎ "${r.label}" แล้ว`,
+                                );
+                              }}
+                            >
+                              ลบกฎ
+                            </LinkButton>
+                          </span>
                         </li>
                       ))}
                     </ul>
@@ -497,6 +507,7 @@ export function WorkflowAdmin({ apiBase }: { apiBase: string }): ReactNode {
                   <RuleAdder
                     catalog={detail.ruleCatalog ?? []}
                     busy={busy}
+                    transitionName={t.name}
                     onAdd={(body) => {
                       void send(
                         `/${detail.id}/transitions/${t.id}/rules`,
@@ -507,9 +518,13 @@ export function WorkflowAdmin({ apiBase }: { apiBase: string }): ReactNode {
                   />
                 </td>
                 <td className="admin-actions">
-                  <button
-                    type="button"
-                    className="admin-linkish"
+                  <LinkButton
+                    ariaLabel={
+                      t.ruleCount === 0
+                        ? `ลบปุ่ม ${t.name}`
+                        : `ลบปุ่ม ${t.name} พร้อมกฎ ${String(t.ruleCount)} ข้อ`
+                    }
+                    tone="danger"
                     disabled={busy}
                     onClick={() => {
                       void send(
@@ -522,7 +537,7 @@ export function WorkflowAdmin({ apiBase }: { apiBase: string }): ReactNode {
                     }}
                   >
                     ลบ
-                  </button>
+                  </LinkButton>
                 </td>
               </tr>
             ))}
@@ -575,9 +590,14 @@ export function WorkflowAdmin({ apiBase }: { apiBase: string }): ReactNode {
             </Button>
           </form>
 
+          {/*
+            ข้อความนี้เคยเขียนว่า "ยังตั้งกฎจากหน้าจอไม่ได้ ต้องตั้งในฐานข้อมูล"
+            ค้างอยู่ต่อไปอีกหลายรอบ **หลังจากที่ปุ่ม "+ เพิ่มกฎ" อยู่เหนือมันแล้ว**
+            — หน้าจอบอกผู้ใช้ว่าทำไม่ได้ ทั้งที่ปุ่มทำอยู่ตรงนั้น
+          */}
           <p className="admin-empty">
-            ยังตั้งกฎของปุ่มจากหน้าจอไม่ได้ — ใครเห็นปุ่ม ต้องกรอกอะไรก่อนกด และให้ทำอะไรต่อ
-            ยังต้องตั้งในฐานข้อมูล
+            กฎของแต่ละปุ่มตั้งได้ที่คอลัมน์ &quot;กฎ&quot; ในตารางด้านบน — ใครเห็นปุ่ม
+            ต้องกรอกอะไรก่อนกด และให้ทำอะไรต่อหลังกด
           </p>
         </>
       )}

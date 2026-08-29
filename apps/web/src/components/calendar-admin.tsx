@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
-import { Button, Field, Select, Textarea } from '@itsm/ui';
+import { Button, Field, LinkButton, Select, Textarea } from '@itsm/ui';
 
 interface YearStatus {
   year: number;
@@ -220,9 +220,7 @@ export function CalendarAdmin({ apiBase }: { apiBase: string }): ReactNode {
               บันทึกรายการ
             </Button>
             {status.suggestion === null ? null : (
-              <button
-                type="button"
-                className="admin-linkish"
+              <LinkButton
                 onClick={() => {
                   setText(toText(status.suggestion ?? []));
                   setNotice(
@@ -231,7 +229,7 @@ export function CalendarAdmin({ apiBase }: { apiBase: string }): ReactNode {
                 }}
               >
                 เติมร่างจากวันหยุดตายตัว
-              </button>
+              </LinkButton>
             )}
           </div>
 

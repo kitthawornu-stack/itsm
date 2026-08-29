@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
-import { Button, Field, Input, Select } from '@itsm/ui';
+import { Button, Field, Input, LinkButton, Select } from '@itsm/ui';
 
 interface Options {
   schemes: Array<{ id: string; name: string; usedBy: string[] }>;
@@ -220,16 +220,14 @@ export function ProjectCreate({ apiBase }: { apiBase: string }): ReactNode {
             <Button variant="primary" type="submit" disabled={busy || !ready}>
               {busy ? 'กำลังสร้าง…' : 'สร้างโปรเจกต์'}
             </Button>
-            <button
-              type="button"
-              className="admin-linkish"
+            <LinkButton
               onClick={() => {
                 setOpen(false);
                 setError(null);
               }}
             >
               ยกเลิก
-            </button>
+            </LinkButton>
           </div>
         </>
       )}

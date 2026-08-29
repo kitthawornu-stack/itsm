@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
-import { Button, Field, Input, Select, Table } from '@itsm/ui';
+import { Button, Field, Input, LinkButton, Select, Table } from '@itsm/ui';
 
 interface TypeRow {
   id: string;
@@ -135,7 +135,7 @@ export function IssueTypeAdmin({ apiBase }: { apiBase: string }): ReactNode {
           'ชื่อ',
           'งานที่เป็นประเภทนี้',
           'ใช้ในโปรเจกต์',
-          '<span className="ui-sr-only">การกระทำ</span>',
+          { label: 'การกระทำ', srOnly: true },
         ]}
         rowCount={rows.length}
       >
@@ -151,16 +151,16 @@ export function IssueTypeAdmin({ apiBase }: { apiBase: string }): ReactNode {
               {t.usedBy.length === 0 ? 'ยังไม่ได้ผูกกับโปรเจกต์ไหน' : t.usedBy.join(' · ')}
             </td>
             <td className="admin-actions">
-              <button
-                type="button"
-                className="admin-linkish"
+              <LinkButton
+                ariaLabel={`ลบประเภทงาน ${t.name}`}
+                tone="danger"
                 disabled={busy}
                 onClick={() => {
                   void send(`/${t.id}/remove`, {}, `ลบ "${t.name}" แล้ว`);
                 }}
               >
                 ลบ
-              </button>
+              </LinkButton>
             </td>
           </tr>
         ))}
@@ -223,9 +223,7 @@ export function IssueTypeAdmin({ apiBase }: { apiBase: string }): ReactNode {
       </form>
 
       <div className="admin-btn-row">
-        <button
-          type="button"
-          className="admin-linkish"
+        <LinkButton
           disabled={busy || bindType === '' || bindProject === ''}
           onClick={() => {
             const t = rows.find((r) => r.id === bindType);
@@ -237,7 +235,7 @@ export function IssueTypeAdmin({ apiBase }: { apiBase: string }): ReactNode {
           }}
         >
           ถอนประเภทงานที่เลือกออกจากโปรเจกต์ที่เลือก
-        </button>
+        </LinkButton>
       </div>
 
       <p className="admin-empty">

@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
-import { Button, Field, Input, Select, Table } from '@itsm/ui';
+import { Button, Field, Input, LinkButton, Select, Table } from '@itsm/ui';
 
 interface FieldRow {
   id: string;
@@ -239,7 +239,7 @@ export function FieldAdmin({ apiBase }: { apiBase: string }): ReactNode {
           'ตัวเลือก',
           'ค่าที่กรอกไว้',
           'ใช้อยู่',
-          '<span className="ui-sr-only">การกระทำ</span>',
+          { label: 'การกระทำ', srOnly: true },
         ]}
         rowCount={rows.length}
       >
@@ -256,16 +256,16 @@ export function FieldAdmin({ apiBase }: { apiBase: string }): ReactNode {
             </td>
             <td className="admin-actions">
               {f.isSystem ? null : (
-                <button
-                  type="button"
-                  className="admin-linkish"
+                <LinkButton
+                  ariaLabel={`ลบฟิลด์ ${f.name}`}
+                  tone="danger"
                   disabled={busy}
                   onClick={() => {
                     void send(`/${f.id}/remove`, {}, `ลบฟิลด์ "${f.name}" แล้ว`);
                   }}
                 >
                   ลบ
-                </button>
+                </LinkButton>
               )}
             </td>
           </tr>
@@ -344,9 +344,7 @@ export function FieldAdmin({ apiBase }: { apiBase: string }): ReactNode {
             <Button variant="primary" type="submit" disabled={busy || cfgField === ''}>
               ตั้งใช้
             </Button>
-            <button
-              type="button"
-              className="admin-linkish"
+            <LinkButton
               disabled={busy || cfgField === ''}
               onClick={() => {
                 const f = rows.find((r) => r.id === cfgField);
@@ -358,7 +356,7 @@ export function FieldAdmin({ apiBase }: { apiBase: string }): ReactNode {
               }}
             >
               เลิกถามฟิลด์นี้
-            </button>
+            </LinkButton>
           </form>
 
           <p className="admin-empty">
