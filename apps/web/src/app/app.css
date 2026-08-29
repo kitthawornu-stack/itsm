@@ -1506,6 +1506,102 @@
   line-height: var(--line-height-body);
 }
 
+/* ---------- หน้าต่างเวลาดำเนินการเปลี่ยนแปลง ---------- */
+
+.cw {
+  margin-top: var(--space-6);
+}
+
+.cw-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.cw-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-6);
+  margin: var(--space-3) 0 0;
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+  font-size: 12.5px;
+  line-height: var(--line-height-body);
+}
+
+.cw-summary div {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.cw-summary dt {
+  color: var(--text-muted);
+}
+
+.cw-summary dd {
+  margin: 0;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.cw-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  align-items: flex-start;
+  margin-top: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+  font-size: 12.5px;
+  line-height: var(--line-height-body);
+}
+
+.cw-form .ui-field {
+  width: 100%;
+  max-width: 30rem;
+}
+
+/* เส้นข้างสีเตือน — แต่ข้อความก็บอกอยู่แล้ว ไม่ได้พึ่งสีอย่างเดียว */
+.cw-conflicts {
+  margin-top: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border-inline-start: 3px solid var(--status-warning);
+  background: var(--surface);
+  font-size: 12.5px;
+  line-height: var(--line-height-body);
+}
+
+.cw-conflict-title {
+  margin: 0 0 var(--space-1);
+  font-weight: 600;
+}
+
+.cw-conflicts ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.cw-conflicts li {
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.cw-when {
+  display: block;
+  color: var(--text-muted);
+}
+
 /* ---------- การอนุมัติ ---------- */
 
 .apv {

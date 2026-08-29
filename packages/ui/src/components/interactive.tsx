@@ -105,7 +105,13 @@ export interface InputProps {
    * `<input className="ui-input" type="password">` เองเพราะคอมโพเนนต์ไม่รับ
    * ซึ่งแปลว่ามีสองที่ที่ต้องแก้ทุกครั้งที่สไตล์ของช่องกรอกเปลี่ยน
    */
-  type?: 'text' | 'password' | 'email';
+  type?: 'text' | 'password' | 'email' | 'datetime-local';
+  /**
+   * บังคับกรอก — ส่งต่อให้เบราว์เซอร์ตรวจเอง
+   *
+   * ฟอร์มที่ตรวจเองด้วย JavaScript อย่างเดียว จะปล่อยผ่านเมื่อ JS ยังไม่โหลด
+   */
+  required?: boolean;
   autoComplete?: string;
 }
 
@@ -120,6 +126,7 @@ export function Input({
   ariaLabel,
   type = 'text',
   autoComplete,
+  required = false,
 }: InputProps): ReactNode {
   const errorId = id === undefined ? undefined : `${id}-error`;
   return (
@@ -132,6 +139,7 @@ export function Input({
         placeholder={placeholder}
         maxLength={maxLength}
         autoComplete={autoComplete}
+        required={required}
         aria-invalid={invalid}
         aria-describedby={invalid ? errorId : undefined}
         {...(ariaLabel === undefined ? {} : { 'aria-label': ariaLabel })}

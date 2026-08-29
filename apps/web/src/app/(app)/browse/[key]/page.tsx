@@ -14,6 +14,7 @@ import { AssignControl } from '@/components/assign-control';
 import { EditItem } from '@/components/edit-item';
 import { CommentThread } from '@/components/comment-thread';
 import { ApprovalPanel } from '@/components/approval-panel';
+import { ChangeWindowPanel } from '@/components/change-window-panel';
 import { RatingForm, type Satisfaction } from '@/components/rating-form';
 import { toSlaBar, type SlaSnapshotView } from '@/lib/sla-label';
 
@@ -263,6 +264,14 @@ export default async function WorkItemDetail({
             ถ้าอยู่ล่างสุดจะไม่มีใครเห็นว่ากำลังรออะไรอยู่
           */}
           <ApprovalPanel apiBase={API} itemKey={detail.itemKey} />
+
+          {/*
+            หน้าต่างเวลาอยู่ใต้การอนุมัติ เพราะลำดับจริงคืออนุมัติก่อนแล้วค่อย
+            นัดเวลา · แผงนี้ขึ้นกับทุกเรื่อง ไม่ใช่เฉพาะประเภท "การเปลี่ยนแปลง"
+            — ประเภทงานตั้งได้เองจากหน้าจอ การผูกกับชื่อประเภทจะพังทันทีที่มีคน
+            ตั้งชื่ออื่น (เหตุผลเดียวกับที่ Single Work Item Model มีอยู่)
+          */}
+          <ChangeWindowPanel apiBase={API} itemKey={detail.itemKey} />
 
           <h2 className="detail-section-title detail-section-gap">บทสนทนา</h2>
           <CommentThread apiBase={API} itemKey={detail.itemKey} />
