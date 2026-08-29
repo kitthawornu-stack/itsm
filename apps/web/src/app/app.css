@@ -2199,6 +2199,45 @@
   cursor: default;
 }
 
+/* ---------- ลากการ์ด ---------- */
+
+.board-card[draggable='true'] {
+  cursor: grab;
+}
+
+.board-card[draggable='true']:active {
+  cursor: grabbing;
+}
+
+/*
+  เส้นบอกตำแหน่งที่จะปล่อย — วาดด้วย `outline` ของ `<li>` ไม่ใช่ `border`
+  ของการ์ด เพราะ border ทำให้การ์ดขยับหนึ่งพิกเซลตอนเมาส์ผ่าน แล้วรายการ
+  ทั้งคอลัมน์กระตุกตามทุกครั้งที่ลากผ่าน
+*/
+.board-cards > li[data-drop='true'] {
+  border-top: 2px solid var(--accent-delivery);
+  border-radius: 1px;
+}
+
+/*
+  คอลัมน์ที่จะรับการปล่อย · ใช้พื้นหลังจาง ไม่ใช่กรอบ — กรอบทำให้ความกว้าง
+  ของคอลัมน์เปลี่ยน แล้วคอลัมน์ที่เหลือเลื่อนตามทั้งกระดาน
+*/
+.board-col[data-over='true'] {
+  background: var(--accent-delivery-soft);
+}
+
+/*
+  คนที่ตั้งค่าให้ลดการเคลื่อนไหว ยังต้องเห็นว่าจะปล่อยตรงไหน —
+  จึงไม่ซ่อนตัวบอกตำแหน่ง แค่ตัด transition ทิ้ง
+*/
+@media (prefers-reduced-motion: reduce) {
+  .board-col,
+  .board-cards > li {
+    transition: none;
+  }
+}
+
 .board-card-key {
   font-family: var(--font-mono);
   font-size: 11.5px;

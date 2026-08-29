@@ -4,6 +4,8 @@ import { useRouter } from 'next/navigation';
 import { useRef, useState, type ReactNode } from 'react';
 import { Alert, StatusPill, type PriorityRank, type StatusCategory } from '@itsm/ui';
 
+import { planDrop } from '@/lib/board-drop';
+
 export interface BoardCard {
   itemKey: string;
   summary: string;
@@ -37,6 +39,16 @@ export interface BoardColumn {
  *
  * ผลของทุกการย้ายประกาศผ่าน `aria-live` — คนที่ไม่เห็นหน้าจอต้องรู้ว่า
  * การกดนั้นได้ผลหรือถูกปฏิเสธ ไม่ใช่เดาจากความเงียบ
+ *
+ * ## การลากด้วยเมาส์มาทีหลัง และเรียกทางเดียวกัน
+ *
+ * การลากเรียก `move()` ตัวเดียวกับคีย์บอร์ด ไม่มีเส้นทางของตัวเอง —
+ * สองเส้นทางที่ทำเรื่องเดียวกันคนละแบบ จะเริ่มต่างกันวันหนึ่งโดยไม่มีใครรู้
+ * (เช่น ทางหนึ่งลืมประกาศผ่าน `aria-live` หรือลืมโฟกัสกลับ)
+ *
+ * ใช้ HTML5 drag-and-drop ของเบราว์เซอร์ ไม่เขียนเอง · **บนมือถือใช้ไม่ได้**
+ * ซึ่งยอมรับได้เพราะคีย์บอร์ดกับการกดเข้าไปดูรายละเอียดยังทำงาน — และเป็น
+ * เหตุผลที่การลากต้องไม่ใช่ทางเดียวที่ย้ายการ์ดได้ตั้งแต่แรก
  */
 export function BoardView({
   apiBase,
@@ -51,6 +63,10 @@ export function BoardView({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState('');
+  /** การ์ดที่กำลังลากอยู่ — `null` = ไม่ได้ลาก */
+  const [dragKey, setDragKey] = useState<string | null>(null);
+  /** ตำแหน่งที่จะปล่อย — `key` คือการ์ดที่จะไปแทรกอยู่ข้างบน */
+  const [dropAt, setDropAt] = useState<{ col: number; key: string | null } | null>(null);
   const boxRef = useRef<HTMLDivElement | null>(null);
 
   async function move(
@@ -90,6 +106,23 @@ export function BoardView({
     } finally {
       setBusy(false);
     }
+  }
+
+  /**
+   * ปล่อยการ์ดลงตำแหน่งหนึ่ง
+   *
+   * ตรรกะการหาเพื่อนบ้านอยู่ที่ `planDrop` ซึ่งเป็นฟังก์ชันบริสุทธิ์และมีเทสต์
+   * คุ้ม — ที่นี่เหลือแค่การล้างสถานะกับเรียก `move()` ตัวเดียวกับคีย์บอร์ด
+   */
+  function drop(colIdx: number, beforeKey: string | null): void {
+    const key = dragKey;
+    setDragKey(null);
+    setDropAt(null);
+    if (key === null || busy) return;
+    const plan = planDrop(columns, key, colIdx, beforeKey);
+    // `null` = ปล่อยที่เดิม หรือกระดานถูกวาดใหม่ระหว่างลาก — ไม่ต้องเขียนอะไร
+    if (plan === null) return;
+    void move(key, plan.move, plan.say);
   }
 
   function onKey(e: React.KeyboardEvent<HTMLButtonElement>, colIdx: number, rowIdx: number): void {
@@ -136,8 +169,8 @@ export function BoardView({
   return (
     <>
       <p className="board-help">
-        โฟกัสที่การ์ดแล้วกด <kbd>Alt</kbd> + <kbd>←</kbd> <kbd>→</kbd> เพื่อย้ายคอลัมน์ ·{' '}
-        <kbd>Alt</kbd> + <kbd>↑</kbd> <kbd>↓</kbd> เพื่อเลื่อนลำดับ
+        ลากการ์ดด้วยเมาส์ได้ · หรือโฟกัสที่การ์ดแล้วกด <kbd>Alt</kbd> + <kbd>←</kbd> <kbd>→</kbd>{' '}
+        เพื่อย้ายคอลัมน์ · <kbd>Alt</kbd> + <kbd>↑</kbd> <kbd>↓</kbd> เพื่อเลื่อนลำดับ
       </p>
 
       {error === null ? null : <Alert tone="error">{error}</Alert>}
@@ -149,7 +182,22 @@ export function BoardView({
 
       <div className="board" ref={boxRef}>
         {columns.map((col, ci) => (
-          <section key={col.statusId} className="board-col" aria-label={col.name}>
+          <section
+            key={col.statusId}
+            className="board-col"
+            aria-label={col.name}
+            data-over={dropAt?.col === ci ? 'true' : undefined}
+            onDragOver={(e) => {
+              // ไม่เรียก preventDefault = เบราว์เซอร์ไม่ยอมให้ปล่อย และไม่มีอะไรบอกว่าทำไม
+              if (dragKey === null) return;
+              e.preventDefault();
+              setDropAt({ col: ci, key: null });
+            }}
+            onDrop={(e) => {
+              e.preventDefault();
+              drop(ci, null);
+            }}
+          >
             <h2 className="board-col-head">
               <StatusPill label={col.name} category={col.category as StatusCategory} />
               <span className="board-count">{col.cards.length.toLocaleString('th-TH')}</span>
@@ -160,12 +208,39 @@ export function BoardView({
             ) : (
               <ul className="board-cards">
                 {col.cards.map((card, ri) => (
-                  <li key={card.itemKey}>
+                  <li
+                    key={card.itemKey}
+                    data-drop={dropAt?.col === ci && dropAt.key === card.itemKey ? 'true' : undefined}
+                    onDragOver={(e) => {
+                      if (dragKey === null) return;
+                      e.preventDefault();
+                      // หยุดไม่ให้คอลัมน์เคลมการปล่อยนี้ไปเป็น "ต่อท้าย"
+                      e.stopPropagation();
+                      setDropAt({ col: ci, key: card.itemKey });
+                    }}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      drop(ci, card.itemKey);
+                    }}
+                  >
                     <button
                       type="button"
                       className="board-card"
                       data-key={card.itemKey}
                       disabled={busy}
+                      draggable={!busy}
+                      onDragStart={(e) => {
+                        setDragKey(card.itemKey);
+                        // ต้องใส่ข้อมูลอย่างน้อยหนึ่งอย่าง ไม่งั้น Firefox ไม่เริ่มลาก
+                        e.dataTransfer.setData('text/plain', card.itemKey);
+                        e.dataTransfer.effectAllowed = 'move';
+                      }}
+                      onDragEnd={() => {
+                        // ลากออกไปนอกกระดานแล้วปล่อย — ต้องล้างสถานะ ไม่ใช่ค้างเป็นเงา
+                        setDragKey(null);
+                        setDropAt(null);
+                      }}
                       /*
                         ชื่อสำหรับ screen reader บอกตำแหน่งด้วย — "การ์ดที่ 2
                         จาก 5 ในคอลัมน์ …" · คนที่ย้ายการ์ดโดยไม่เห็นหน้าจอ
