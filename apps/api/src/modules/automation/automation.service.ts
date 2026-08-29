@@ -210,6 +210,7 @@ export async function runAutomation(
   ): Promise<void> {
     await db.automationRun.create({
       data: {
+        createdAt: now,
         tenantId: ctx.tenantId,
         ruleId: r.ruleId,
         ruleName: r.ruleName,
@@ -282,6 +283,15 @@ export async function runAutomation(
     // จองก่อนทำ — เครื่องที่ดับตรงนี้ต้องทิ้งแถว pending ไว้ให้สืบได้
     const row = await db.automationRun.create({
       data: {
+        /*
+          **เขียนเวลาจากนาฬิกาที่ส่งเข้ามา ไม่ปล่อยให้ฐานข้อมูลใส่ `now()` ให้**
+
+          ตัวกวาด `item.idle` ตัดสินว่า "กฎนี้เคยทำกับเรื่องนี้ไปแล้วหรือยัง"
+          ด้วยการเทียบ `automation_run.created_at` กับ `work_item.updated_at` ·
+          ถ้าสองค่านั้นมาจากคนละนาฬิกา การเทียบก็ไม่มีความหมาย และกฎจะยิงซ้ำ
+          ทุกรอบโดยไม่มี error สักบรรทัด — เจอจริงตอนเขียนเทสต์ที่ฉีดเวลาเข้าไป
+        */
+        createdAt: now,
         tenantId: ctx.tenantId,
         ruleId: BigInt(a.ruleId),
         ruleName: a.ruleName,
