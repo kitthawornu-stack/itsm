@@ -54,6 +54,7 @@ import {
   searchByHql,
   searchWorkItems,
 } from '../search-index';
+import { fireAutomation } from '../automation';
 import { slaForWorkItems, type SlaSnapshot } from '../sla';
 import {
   TransitionNotAllowedError,
@@ -703,6 +704,12 @@ export class WorkItemController {
        * `rebuildSnapshot` ถ้าล้ม — ต่างจากการปล่อยตั๋วที่ขาดฟิลด์บังคับ
        */
       await saveFieldValues(ctx, created.id, fieldValues);
+      /*
+        ปลุกกฎ **หลังเขียนฟิลด์เสร็จ** ไม่ใช่ทันทีที่สร้างงาน — กฎที่ดูป้าย
+        หรือฟิลด์กำหนดเอง จะอ่านได้ค่าว่างถ้าปลุกก่อน แล้วมันจะ "ไม่ทำงาน
+        บางครั้ง" โดยไม่มีอะไรฟ้อง
+      */
+      await fireAutomation(ctx, created.itemKey, 'item.created');
       return { id: created.id.toString(), itemKey: created.itemKey, status: created.statusName };
     } catch (e) {
       if (e instanceof SummaryRequiredError) {
@@ -880,7 +887,7 @@ export class WorkItemController {
       throw new HttpException({ message: 'ไม่พบผู้ใช้สำหรับเขียนความเห็น' }, HttpStatus.FORBIDDEN);
     }
     try {
-      return await addComment(ctx, {
+      const added = await addComment(ctx, {
         itemKey: key,
         body: body.body ?? '',
         // มาจาก JSON ดิบ — "true" เป็นสตริงได้ ต้องแปลงเอง ไม่ใช่เชื่อชนิดที่ประกาศ
@@ -893,6 +900,8 @@ export class WorkItemController {
           ? body.mentions.filter((m): m is string => typeof m === 'string')
           : [],
       });
+      await fireAutomation(ctx, key, 'comment.added');
+      return added;
     } catch (e) {
       if (e instanceof EmptyCommentError) {
         throw new HttpException(
@@ -1227,6 +1236,19 @@ export class WorkItemController {
       const status = await db.workflowStatus.findFirst({
         where: { id: result.toStatusId },
         select: { name: true, category: true },
+      });
+      /*
+        ปลุกกฎหลังสถานะเปลี่ยนจริงแล้ว — กฎต้องเห็นสถานะใหม่ ไม่ใช่สถานะเดิม
+
+        ส่งชื่อปุ่มไปด้วย เพราะเงื่อนไข "เมื่อกดปุ่มชื่อนี้" ต่างจาก "เมื่อสถานะ
+        กลายเป็นนี้" — สองปุ่มพาไปสถานะเดียวกันได้ และผู้ดูแลตั้งกฎแยกกัน
+      */
+      const pressed = await db.workflowTransition.findUnique({
+        where: { id: BigInt(transitionId) },
+        select: { name: true },
+      });
+      await fireAutomation(ctx, key, 'item.transitioned', {
+        ...(pressed === null ? {} : { transitionName: pressed.name }),
       });
       return {
         ok: true,
