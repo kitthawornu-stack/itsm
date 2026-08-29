@@ -222,6 +222,19 @@ afterAll(async () => {
   await step('ความเห็น', () =>
     prismaClient.workItemComment.deleteMany({ where: { workItem: { itemKey: { in: keys } } } }),
   );
+  await step('แจ้งเตือน', async () => {
+    /*
+      `Notification` ไม่มี relation ไปยัง `WorkItem` มีแต่คอลัมน์ `workItemId`
+      — ต้องหา id มาก่อน ไม่ใช่กรองผ่านความสัมพันธ์ที่ไม่มีอยู่
+    */
+    const ids = (
+      await prismaClient.workItem.findMany({
+        where: { itemKey: { in: keys } },
+        select: { id: true },
+      })
+    ).map((w) => w.id);
+    await prismaClient.notification.deleteMany({ where: { workItemId: { in: ids } } });
+  });
   await step('ประวัติกฎ', () =>
     prismaClient.automationRun.deleteMany({ where: { traceId: { startsWith: 'auto-' } } }),
   );
@@ -347,6 +360,59 @@ describe('B · ทำงานกับงานจริง', () => {
       where: { workItem: { itemKey: key } },
     });
     expect(comments).toBe(0);
+  }, 60_000);
+});
+
+describe('B2 · แจ้งกลุ่ม', () => {
+  it('**กฎแจ้งกลุ่มที่ตั้งชื่อกลุ่มผิด ต้องบันทึกเป็น failed พร้อมชื่อที่พิมพ์ไป**', async () => {
+    /*
+      ชื่อกลุ่มเป็นข้อความที่ผู้ดูแลพิมพ์เอง จึงพิมพ์ผิดได้ทุกครั้ง ·
+      ถ้าเงียบ กฎจะดูเหมือนทำงานอยู่ตลอดไปโดยไม่มีใครได้รับอะไรเลย
+    */
+    await mkRule({
+      name: 'แจ้งกลุ่มที่ไม่มีอยู่',
+      trigger: 'comment.added',
+      isEnabled: true,
+      conditions: [],
+      actions: [{ kind: 'notify-group', value: `ทีมที่ไม่มีอยู่ ${STAMP}` }],
+    });
+    const key = await mkItem(5, `เรื่องที่กฎแจ้งกลุ่มผิด ${STAMP}`);
+
+    const res = await fireAutomation(ctx, key, 'comment.added');
+    expect(res?.runs.map((r) => r.outcome)).toEqual(['failed']);
+    expect(res?.runs[0]?.reason).toContain('ทีมที่ไม่มีอยู่');
+  }, 60_000);
+
+  it('**แจ้งกลุ่มจริงแล้วคนในกลุ่มได้รับ และไม่ได้รับซ้ำเมื่อกฎทำงานอีกรอบ**', async () => {
+    /*
+      รอบกวาดตามเวลาเรียกซ้ำได้ทุกห้านาที · คีย์กันซ้ำจึงต้องประกอบจาก
+      (กฎ, เรื่อง) เท่านั้น ไม่มีเวลา — ไม่งั้นคนในกลุ่มได้รับซ้ำทั้งวัน
+    */
+    await mkRule({
+      name: 'แจ้งกลุ่มจริง',
+      trigger: 'sla.breached',
+      isEnabled: true,
+      conditions: [],
+      actions: [{ kind: 'notify-group', value: `aut-bot ${STAMP}` }],
+    });
+    const key = await mkItem(6, `เรื่องที่ต้องแจ้งกลุ่ม ${STAMP}`);
+
+    const first = await fireAutomation(ctx, key, 'sla.breached');
+    expect(first?.runs.map((r) => r.outcome)).toEqual(['applied']);
+
+    const itemId = (
+      await prismaClient.workItem.findFirstOrThrow({
+        where: { itemKey: key },
+        select: { id: true },
+      })
+    ).id;
+    const got = await prismaClient.notification.count({ where: { workItemId: itemId } });
+    expect(got).toBeGreaterThan(0);
+
+    // รอบสอง — ไม่มีแถวเพิ่ม และรายงานตรง ๆ ว่าทุกคนได้รับไปแล้ว
+    const second = await fireAutomation(ctx, key, 'sla.breached');
+    expect(second?.runs[0]?.reason).toContain('ได้รับเรื่องนี้ไปแล้ว');
+    expect(await prismaClient.notification.count({ where: { workItemId: itemId } })).toBe(got);
   }, 60_000);
 });
 

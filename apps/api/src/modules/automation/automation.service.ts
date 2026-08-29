@@ -26,6 +26,7 @@
 import { systemClock, type TenantContext, type UtcDate } from '@itsm/types';
 
 import { tenantScoped } from '../../infrastructure/prisma/tenant-scope';
+import { notifyGroup } from '../notification';
 import { applyTransition, availableTransitions } from '../workflow';
 import { addComment, assignWorkItem, bulkEditLabels, labelFields } from '../workitem';
 import {
@@ -179,6 +180,45 @@ async function execute(
       }
       await applyTransition(ctx, item.id, target.id, actorId);
       return null;
+    }
+
+    case 'notify-group': {
+      const db = tenantScoped(ctx);
+      const item = await db.workItem.findFirst({
+        where: { itemKey: e.item.itemKey },
+        select: { id: true, projectId: true, summary: true },
+      });
+      if (item === null) return `ไม่พบเรื่อง ${e.item.itemKey}`;
+      /*
+        **ไม่ดัก `GroupNotFoundError` / `NobodyToNotifyError` ที่นี่**
+
+        เคยเขียน try/catch แปลงเป็นข้อความไว้ แล้วรอบพิสูจน์ว่าเทสต์แดงได้จับว่า
+        ลบทิ้งก็ยังเขียวทั้ง 39 เคส — เพราะตัวดักของ `runAutomation` ข้างล่าง
+        ใช้ `err.message` ตัวเดียวกันอยู่แล้ว · error สองตัวนั้นออกแบบให้ข้อความ
+        อ่านรู้เรื่องตั้งแต่ต้น การห่อซ้ำจึงเป็นชั้นที่ไม่ได้ทำอะไร
+      */
+      {
+        const r = await notifyGroup(ctx, {
+          groupName: a.value,
+          workItemId: item.id,
+          projectId: item.projectId,
+          kind: 'automation.notice',
+          /*
+            หัวข้อบอกว่า **กฎข้อไหนสั่ง** ไม่ใช่แค่ว่ามีอะไรเกิดขึ้น · คนที่ได้รับ
+            การแจ้งเตือนจากระบบอัตโนมัติ ถามคำถามเดียวกับคนที่เจอตั๋วถูกมอบหมายเอง
+          */
+          title: `${e.item.itemKey} — ${a.ruleName}`,
+          body: item.summary,
+          /*
+            คีย์ประกอบจาก (กฎ, เรื่อง) เท่านั้น · ไม่มีเวลา ไม่มีจำนวนวัน —
+            ทั้งสองอย่างเปลี่ยนทุกรอบกวาด แล้ว unique index ที่มีไว้กันส่งซ้ำ
+            จะไม่กันอะไรเลย และคนในกลุ่มจะได้รับซ้ำทุกห้านาที
+          */
+          dedupeSeed: `automation:${a.ruleId}:${item.id.toString()}`,
+          excludeUserId: e.actorId === null ? null : BigInt(e.actorId),
+        });
+        return r.notified === 0 ? `ทุกคนในกลุ่ม "${a.value}" ได้รับเรื่องนี้ไปแล้ว` : null;
+      }
     }
 
     default:

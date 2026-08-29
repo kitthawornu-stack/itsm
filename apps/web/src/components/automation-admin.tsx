@@ -90,6 +90,7 @@ const ACTION_TH: Record<string, string> = {
   'add-label': 'ติดป้าย',
   comment: 'เขียนความเห็น',
   transition: 'กดปุ่มเปลี่ยนสถานะ',
+  'notify-group': 'แจ้งกลุ่ม (ชื่อกลุ่ม)',
 };
 const OUTCOME_TH: Record<string, string> = {
   applied: 'ทำแล้ว',
