@@ -46,8 +46,15 @@ export interface CreateResult {
   mutedByAdmin: number;
   /** จำนวนที่ผู้ใช้ปิดกระดิ่งเอง */
   mutedByUser: number;
-  /** คนที่ยังได้แถวแต่ไม่ควรได้อีเมล — ส่งต่อให้ชั้นส่งอีเมลตัดสินอีกที */
-  emailMutedUserIds: bigint[];
+  /**
+   * จำนวนแถวที่เขียนไว้แล้วแต่ **ปิดอีเมลไว้**
+   *
+   * เคยคืนเป็นรายชื่อผู้ใช้ให้ผู้เรียกเอาไปทำต่อ · **ไม่มีใครเอาไปทำอะไรเลย**
+   * และคนที่ปิดอีเมลไว้ก็ยังได้รับอีเมลอยู่ · คำตอบย้ายไปอยู่บนแถวเอง
+   * (`notification.emailSuppressed`) เพราะ worker เรียกโค้ดของ api ไม่ได้
+   * ตัวเลขนี้เหลือไว้เพื่อให้ผู้เรียกรายงานได้ ไม่ใช่เพื่อให้ไปทำอะไรต่อ
+   */
+  emailSuppressed: number;
 }
 
 /**
@@ -64,7 +71,7 @@ export async function createNotifications(
   drafts: readonly NotificationDraft[],
 ): Promise<CreateResult> {
   if (drafts.length === 0) {
-    return { created: 0, mutedByAdmin: 0, mutedByUser: 0, emailMutedUserIds: [] };
+    return { created: 0, mutedByAdmin: 0, mutedByUser: 0, emailSuppressed: 0 };
   }
 
   const kinds = [...new Set(drafts.map((d) => d.kind))];
@@ -101,8 +108,7 @@ export async function createNotifications(
     prefsByUser.set(key, list);
   }
 
-  const keep: NotificationDraft[] = [];
-  const emailMuted: bigint[] = [];
+  const keep: (NotificationDraft & { emailSuppressed: boolean })[] = [];
   let mutedByAdmin = 0;
   let mutedByUser = 0;
 
@@ -124,8 +130,7 @@ export async function createNotifications(
       */
       continue;
     }
-    if (!decision.email && d.userId !== null) emailMuted.push(d.userId);
-    keep.push(d);
+    keep.push({ ...d, emailSuppressed: !decision.email });
   }
 
   const created =
@@ -140,6 +145,8 @@ export async function createNotifications(
             title: d.title,
             body: d.body ?? null,
             dedupeKey: d.dedupeKey,
+            // คำตอบเดินทางไปกับแถว — worker อ่านได้โดยไม่ต้องรู้จักนโยบาย
+            emailSuppressed: d.emailSuppressed,
           })),
           // unique index บน (tenantId, dedupeKey) เป็นด่านสุดท้าย
           skipDuplicates: true,
@@ -149,6 +156,6 @@ export async function createNotifications(
     created: created.count,
     mutedByAdmin,
     mutedByUser,
-    emailMutedUserIds: [...new Set(emailMuted)],
+    emailSuppressed: keep.filter((k) => k.emailSuppressed).length,
   };
 }

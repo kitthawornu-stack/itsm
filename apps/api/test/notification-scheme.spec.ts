@@ -45,7 +45,13 @@ async function step(what: string, run: () => Promise<unknown>): Promise<void> {
 /** เรียกจุดรวมในทรานแซกชันของตัวเอง แล้วคืนจำนวนแถวที่เกิดขึ้นจริง */
 async function send(
   over: { kind?: string; userId?: bigint | null; seed?: string } = {},
-): Promise<{ created: number; mutedByAdmin: number; mutedByUser: number; rows: number }> {
+): Promise<{
+  created: number;
+  mutedByAdmin: number;
+  mutedByUser: number;
+  emailSuppressed: number;
+  rows: number;
+}> {
   const seed = over.seed ?? `nsc:${STAMP}:${String(Math.floor(performance.now() * 1000))}`;
   const before = await prismaClient.notification.count({ where: { workItemId } });
   const r = await prismaClient.$transaction(async (tx) =>
@@ -61,7 +67,13 @@ async function send(
     ]),
   );
   const after = await prismaClient.notification.count({ where: { workItemId } });
-  return { created: r.created, mutedByAdmin: r.mutedByAdmin, mutedByUser: r.mutedByUser, rows: after - before };
+  return {
+    created: r.created,
+    mutedByAdmin: r.mutedByAdmin,
+    mutedByUser: r.mutedByUser,
+    emailSuppressed: r.emailSuppressed,
+    rows: after - before,
+  };
 }
 
 beforeAll(async () => {
@@ -241,13 +253,38 @@ describe('C · ค่าของผู้ใช้', () => {
     expect(r.created).toBe(1);
   }, 60_000);
 
-  it('ปิดอีเมลอย่างเดียว ยังได้แถวบนหน้าเว็บ', async () => {
+  it('**ปิดอีเมลอย่างเดียว ยังได้แถว และแถวนั้นถูกทำเครื่องหมายว่าห้ามส่งอีเมล**', async () => {
+    /*
+      เครื่องหมายบนแถวคือสิ่งเดียวที่ worker อ่านได้ · worker เรียกโค้ดของ api
+      ไม่ได้ (คนละ workspace คนละโปรเซส) ถ้าไม่เขียนเครื่องหมายไว้ **คนที่ปิด
+      อีเมลไว้จะยังได้รับอีเมลต่อไป** โดยหน้าจอบอกว่าปิดแล้ว
+    */
     await prismaClient.notificationPreference.deleteMany({ where: { userId: userId ?? 0n } });
     await prismaClient.notificationPreference.create({
       data: { tenantId, userId: userId as bigint, kind: KIND, channel: 'email', isEnabled: false },
     });
-    const r = await send();
+    const seed = `nsc-mail:${STAMP}`;
+    const r = await send({ seed });
     expect(r.created).toBe(1);
+    expect(r.emailSuppressed).toBe(1);
+
+    const row = await prismaClient.notification.findFirstOrThrow({
+      where: { tenantId, dedupeKey: seed },
+      select: { emailSuppressed: true },
+    });
+    expect(row.emailSuppressed).toBe(true);
+  }, 60_000);
+
+  it('ไม่ได้ปิดอีเมล = แถวไม่ถูกทำเครื่องหมาย', async () => {
+    // เคสตรงข้ามต้องมีด้วย — ถ้าเขียน true ทุกแถว เคสข้างบนก็ยังเขียว
+    await prismaClient.notificationPreference.deleteMany({ where: { userId: userId ?? 0n } });
+    const seed = `nsc-mail-ok:${STAMP}`;
+    await send({ seed });
+    const row = await prismaClient.notification.findFirstOrThrow({
+      where: { tenantId, dedupeKey: seed },
+      select: { emailSuppressed: true },
+    });
+    expect(row.emailSuppressed).toBe(false);
   }, 60_000);
 
   it('ค่าของชนิดอื่น ไม่กระทบชนิดนี้', async () => {
