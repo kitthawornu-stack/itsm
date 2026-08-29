@@ -48,6 +48,8 @@ model Tenant {
   satisfactions     Satisfaction[]
   approvals         Approval[]
   catalogCategories CatalogCategory[]
+  automationRules   AutomationRule[]
+  automationRuns    AutomationRun[]
 
   @@map("tenant")
 }
@@ -66,37 +68,36 @@ model User {
   createdAt    DateTime  @default(now()) @map("created_at") @db.DateTime(3)
   updatedAt    DateTime  @updatedAt @map("updated_at") @db.DateTime(3)
 
-  tenant           Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  groupMemberships GroupMember[]
-  reportedItems    WorkItem[]           @relation("WorkItemReporter")
-  assignedItems    WorkItem[]           @relation("WorkItemAssignee")
-  comments         WorkItemComment[]
-  attachments      WorkItemAttachment[]
-  watching         WorkItemWatcher[]
-  historyEntries   WorkItemHistory[]
-  auditLogs        AuditLog[]
-  sessions         Session[]
-  loginAttempts    LoginAttempt[]
-  verifiedCalendarYears SlaCalendarYear[] @relation("CalendarVerifier")
+  tenant                Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  groupMemberships      GroupMember[]
+  reportedItems         WorkItem[]           @relation("WorkItemReporter")
+  assignedItems         WorkItem[]           @relation("WorkItemAssignee")
+  comments              WorkItemComment[]
+  attachments           WorkItemAttachment[]
+  watching              WorkItemWatcher[]
+  historyEntries        WorkItemHistory[]
+  auditLogs             AuditLog[]
+  sessions              Session[]
+  loginAttempts         LoginAttempt[]
+  verifiedCalendarYears SlaCalendarYear[]    @relation("CalendarVerifier")
   savedFilters          SavedFilter[]
   articles              KnowledgeArticle[]
   articleLinks          WorkItemArticle[]
+  satisfactions         Satisfaction[]
+  approvalsRequested    Approval[]           @relation("ApprovalRequester")
+  approvalsDecided      Approval[]           @relation("ApprovalDecider")
+  automationRules       AutomationRule[]
 
   @@unique([tenantId, email])
   @@index([tenantId, isActive])
   @@index([tenantId, externalId])
   @@map("user")
-  satisfactions Satisfaction[]
-  approvalsRequested Approval[] @relation("ApprovalRequester")
-  approvalsDecided   Approval[] @relation("ApprovalDecider")
 }
 
 /**
  * เซสชันฝั่งเซิร์ฟเวอร์ — ADR-003 เลือกสิ่งนี้แทน JWT
- *
  * JWT เพิกถอนไม่ได้ถ้าไม่มีบัญชีดำ ซึ่งเท่ากับมีตารางเซสชันอยู่ดี แต่ซับซ้อนกว่า
  * และตอบไม่ได้ว่า "ตอนนี้ใครล็อกอินอยู่บ้าง" ซึ่งเป็นคำถามที่ผู้ดูแลระบบถามจริง
- *
  * **เก็บเฉพาะแฮชของโทเคน ไม่เก็บตัวโทเคน** — ฐานข้อมูลที่รั่วต้องไม่ทำให้
  * ผู้อ่านสวมรอยเป็นใครได้ทันที เหมือนที่ไม่เก็บรหัสผ่านเป็นข้อความล้วน
  */
@@ -129,10 +130,8 @@ model Session {
 
 /**
  * บันทึกการพยายามล็อกอิน — ใช้จำกัดจำนวนครั้งที่เดารหัสผ่าน
- *
  * เก็บทั้งที่สำเร็จและล้มเหลว เพราะการนับเฉพาะที่ล้มเหลวทำให้ผู้โจมตี
  * ที่เดาถูกหนึ่งครั้งกลางทาง ล้างประวัติของตัวเองได้
- *
  * `identifier` คืออีเมลที่กรอกมา **ไม่ใช่ userId** เพราะต้องนับการเดาบัญชี
  * ที่ไม่มีอยู่จริงด้วย ไม่งั้นการยิงสุ่มอีเมลจะไม่ถูกจำกัดเลย
  */
@@ -159,11 +158,11 @@ model UserGroup {
   createdAt DateTime @default(now()) @map("created_at") @db.DateTime(3)
   updatedAt DateTime @updatedAt @map("updated_at") @db.DateTime(3)
 
-  tenant  Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  members         GroupMember[]
-  grants          PermissionGrant[]
-  notifyProjects  Project[]         @relation("ProjectNotifyGroup")
-  approvals       Approval[]
+  tenant         Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  members        GroupMember[]
+  grants         PermissionGrant[]
+  notifyProjects Project[]         @relation("ProjectNotifyGroup")
+  approvals      Approval[]
 
   @@unique([tenantId, name])
   @@map("user_group")
@@ -302,6 +301,7 @@ model Project {
   catalogItems     CatalogItem[]
   workflowSchemes  WorkflowScheme[]
   fieldConfigs     FieldConfig[]
+  automationRules  AutomationRule[]
 
   @@unique([tenantId, key])
   @@index([tenantId, isArchived])
@@ -357,13 +357,13 @@ model Priority {
   isActive   Boolean  @default(true) @map("is_active")
   createdAt  DateTime @default(now()) @map("created_at") @db.DateTime(3)
 
-  tenant    Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  workItems WorkItem[]
+  tenant       Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  workItems    WorkItem[]
+  catalogItems CatalogItem[]
 
   @@unique([tenantId, name])
   @@index([tenantId, rank])
   @@map("priority")
-  catalogItems CatalogItem[]
 }
 
 model Resolution {
@@ -567,9 +567,9 @@ model WorkItem {
   priorityId   Int?   @map("priority_id")
   resolutionId Int?   @map("resolution_id")
 
-  reporterId BigInt  @map("reporter_id")
-  assigneeId BigInt? @map("assignee_id")
-  parentId   BigInt? @map("parent_id")
+  reporterId    BigInt  @map("reporter_id")
+  assigneeId    BigInt? @map("assignee_id")
+  parentId      BigInt? @map("parent_id")
   /// แจ้งผ่านรายการบริการไหน — null = พิมพ์อิสระ (ยังต้องมีทางนี้เสมอ)
   /// เก็บตั้งแต่วันแรก เพราะย้อนกลับไปเติมให้เรื่องเก่าไม่ได้
   catalogItemId BigInt? @map("catalog_item_id")
@@ -594,30 +594,31 @@ model WorkItem {
   updatedAt  DateTime  @updatedAt @map("updated_at") @db.DateTime(3)
   resolvedAt DateTime? @map("resolved_at") @db.DateTime(3) // ฐานของ MTTR ทุกรายงาน
 
-  tenant     Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  project    Project        @relation(fields: [projectId], references: [id], onDelete: Restrict)
-  issueType  IssueType      @relation(fields: [issueTypeId], references: [id], onDelete: Restrict)
-  status     WorkflowStatus @relation(fields: [statusId], references: [id], onDelete: Restrict)
-  priority   Priority?      @relation(fields: [priorityId], references: [id], onDelete: SetNull)
-  catalogItem CatalogItem?  @relation(fields: [catalogItemId], references: [id], onDelete: SetNull)
+  tenant       Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  project      Project        @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  issueType    IssueType      @relation(fields: [issueTypeId], references: [id], onDelete: Restrict)
+  status       WorkflowStatus @relation(fields: [statusId], references: [id], onDelete: Restrict)
+  priority     Priority?      @relation(fields: [priorityId], references: [id], onDelete: SetNull)
+  catalogItem  CatalogItem?   @relation(fields: [catalogItemId], references: [id], onDelete: SetNull)
   satisfaction Satisfaction?
   approvals    Approval[]
-  resolution Resolution?    @relation(fields: [resolutionId], references: [id], onDelete: SetNull)
-  reporter   User           @relation("WorkItemReporter", fields: [reporterId], references: [id], onDelete: Restrict)
-  assignee   User?          @relation("WorkItemAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
-  parent     WorkItem?      @relation("WorkItemHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
-  children   WorkItem[]     @relation("WorkItemHierarchy")
+  resolution   Resolution?    @relation(fields: [resolutionId], references: [id], onDelete: SetNull)
+  reporter     User           @relation("WorkItemReporter", fields: [reporterId], references: [id], onDelete: Restrict)
+  assignee     User?          @relation("WorkItemAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  parent       WorkItem?      @relation("WorkItemHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
+  children     WorkItem[]     @relation("WorkItemHierarchy")
 
-  slaClocks   WorkItemSla[]
-  fieldValues WorkItemFieldValue[]
-  comments    WorkItemComment[]
-  attachments WorkItemAttachment[]
-  watchers    WorkItemWatcher[]
-  history     WorkItemHistory[]
-  keyAliases  WorkItemKeyAlias[]
-  linksOut    WorkItemLink[]       @relation("LinkSource")
-  linksIn     WorkItemLink[]       @relation("LinkTarget")
-  articles    WorkItemArticle[]
+  slaClocks      WorkItemSla[]
+  fieldValues    WorkItemFieldValue[]
+  comments       WorkItemComment[]
+  attachments    WorkItemAttachment[]
+  watchers       WorkItemWatcher[]
+  history        WorkItemHistory[]
+  keyAliases     WorkItemKeyAlias[]
+  linksOut       WorkItemLink[]       @relation("LinkSource")
+  linksIn        WorkItemLink[]       @relation("LinkTarget")
+  articles       WorkItemArticle[]
+  automationRuns AutomationRun[]
 
   @@unique([tenantId, itemKey])
   @@index([tenantId, projectId, statusId])
@@ -932,21 +933,21 @@ model WorkItemSla {
   workItemId BigInt @map("work_item_id")
   goalId     BigInt @map("goal_id")
 
-  state      String    @db.VarChar(16)
-  elapsedMs  Int       @map("elapsed_ms")
-  targetMs   Int       @map("target_ms")
+  state           String    @db.VarChar(16)
+  elapsedMs       Int       @map("elapsed_ms")
+  targetMs        Int       @map("target_ms")
   /// กำหนดที่จะหลุดในอนาคต — null เมื่อนาฬิกาพัก จบ หรือหลุดไปแล้ว
-  breachAt   DateTime? @map("breach_at") @db.DateTime(3)
+  breachAt        DateTime? @map("breach_at") @db.DateTime(3)
   /// เวลาที่หลุดไปแล้วจริง — null เมื่อยังไม่หลุด
   /// ต้องเก็บแยกจาก breachAt เพราะ breachAt เป็น null ทันทีที่หลุด
   /// ถ้าไม่มีค่านี้จะกู้การแจ้งเตือนที่ตกหล่นไม่ได้ และรายงานตอบไม่ได้ว่าช้าเท่าไร
-  breachedAt DateTime? @map("breached_at") @db.DateTime(3)
-  isBreached Boolean   @default(false) @map("is_breached")
+  breachedAt      DateTime? @map("breached_at") @db.DateTime(3)
+  isBreached      Boolean   @default(false) @map("is_breached")
   /// ปฏิทินของปีที่นาฬิกาเรือนนี้กำลังนับ ได้รับการยืนยันแล้วหรือยัง
   ///
   /// เก็บติดมากับค่า denormalise เพราะ worker อ่านตารางนี้ตรง ๆ และเรียกโค้ด
   /// ของ api ไม่ได้ · ค่าเริ่มต้นเป็น false เพราะ "ยังไม่รู้" ต้องแปลว่าเชื่อไม่ได้
-  calendarTrusted Boolean @default(false) @map("calendar_trusted")
+  calendarTrusted Boolean   @default(false) @map("calendar_trusted")
 
   createdAt DateTime @default(now()) @map("created_at") @db.DateTime(3)
   updatedAt DateTime @updatedAt @map("updated_at") @db.DateTime(3)
@@ -1014,11 +1015,9 @@ model Notification {
 
 /**
  * การส่งออกช่องทางหนึ่ง ๆ ของการแจ้งเตือนหนึ่งใบ
- *
  * แยกตารางเพราะการแจ้งเตือนหนึ่งใบไปได้หลายช่องทาง และแต่ละช่องทาง
  * สำเร็จหรือล้มเหลวคนละเวลา ถ้าเก็บสถานะไว้ในแถวเดียวกับ notification
  * การที่อีเมลล้มจะทำให้ไม่รู้ว่า LINE ส่งไปแล้วหรือยัง
- *
  * **แถวนี้ถูกสร้างก่อนส่งเสมอ** — ถ้าสร้างหลังส่ง เครื่องดับกลางทาง
  * จะทำให้ส่งซ้ำทุกรอบโดยไม่มีอะไรจำได้ว่าเคยพยายามแล้ว
  * unique index บน (notificationId, channel) เป็นด่านสุดท้ายกันส่งซ้ำ
@@ -1029,9 +1028,9 @@ model NotificationDelivery {
   notificationId BigInt @map("notification_id")
 
   /// "email" · "line" · "webhook"
-  channel String @db.VarChar(16)
+  channel String  @db.VarChar(16)
   /// "pending" | "sent" | "failed" | "skipped"
-  state   String @db.VarChar(16)
+  state   String  @db.VarChar(16)
   /// ปลายทางที่ส่งไปจริง — เก็บไว้เพราะอีเมลของผู้ใช้เปลี่ยนได้ภายหลัง
   /// ถ้าไม่เก็บ จะตอบไม่ได้ว่าตอนนั้นส่งไปที่ไหน
   target  String? @db.VarChar(320)
@@ -1086,10 +1085,10 @@ model CatalogItem {
   description String? @db.Text
 
   /// เรื่องที่แจ้งผ่านรายการนี้ จะไปลงที่โปรเจกต์และประเภทงานนี้
-  projectId   BigInt  @map("project_id")
-  issueTypeId BigInt  @map("issue_type_id")
+  projectId   BigInt @map("project_id")
+  issueTypeId BigInt @map("issue_type_id")
   /// ความสำคัญตั้งต้น — null = ให้ระบบตัดสินตามปกติ
-  priorityId  Int?    @map("priority_id")
+  priorityId  Int?   @map("priority_id")
 
   sortOrder Int      @default(100) @map("sort_order")
   isActive  Boolean  @default(true) @map("is_active")
@@ -1116,10 +1115,10 @@ model CatalogItem {
 // ============================================================
 
 model Satisfaction {
-  id         BigInt @id @default(autoincrement())
-  tenantId   BigInt @map("tenant_id")
+  id           BigInt @id @default(autoincrement())
+  tenantId     BigInt @map("tenant_id")
   /// หนึ่งเรื่องหนึ่งคำตอบ — ไม่ใช่ประวัติการให้คะแนน
-  workItemId BigInt @unique @map("work_item_id")
+  workItemId   BigInt @unique @map("work_item_id")
   /// คนที่ตอบ · เก็บไว้เพื่อยืนยันว่าเป็นผู้แจ้งจริง ไม่ใช่คนทำงานให้คะแนนตัวเอง
   respondentId BigInt @map("respondent_id")
 
@@ -1129,7 +1128,6 @@ model Satisfaction {
 
   /**
    * เวลาที่เรื่องถูกปิด **ตอนที่ให้คะแนน**
-   *
    * ไม่ใช่ค่าที่อ่านจาก work_item ตอนทำรายงาน — เรื่องที่ถูกเปิดใหม่ภายหลัง
    * จะมี resolvedAt เป็น null หรือเป็นเวลาใหม่ แล้วคะแนนเก่าจะลอยไม่มีที่อ้างอิง
    */
@@ -1167,16 +1165,16 @@ model Approval {
   workItemId BigInt @map("work_item_id")
 
   /// กลุ่มที่อนุมัติได้ — ให้ผ่านกลุ่มเท่านั้น เพื่อตอบได้ว่า "อนุมัติได้เพราะอยู่กลุ่มไหน"
-  approverGroupId BigInt @map("approver_group_id")
-  requestedById   BigInt @map("requested_by_id")
+  approverGroupId BigInt  @map("approver_group_id")
+  requestedById   BigInt  @map("requested_by_id")
   /// เหตุผลที่ขอ — ผู้อนุมัติต้องรู้ว่ากำลังอนุมัติอะไร ไม่ใช่เห็นแค่เลขที่เรื่อง
-  reason String? @db.Text
+  reason          String? @db.Text
 
-  status     ApprovalStatus @default(PENDING)
-  decidedById BigInt?       @map("decided_by_id")
-  decidedAt   DateTime?     @map("decided_at") @db.DateTime(3)
+  status       ApprovalStatus @default(PENDING)
+  decidedById  BigInt?        @map("decided_by_id")
+  decidedAt    DateTime?      @map("decided_at") @db.DateTime(3)
   /// เหตุผลที่ปฏิเสธ — การปฏิเสธที่ไม่บอกเหตุผลคือทางตันของผู้ขอ
-  decisionNote String?      @map("decision_note") @db.Text
+  decisionNote String?        @map("decision_note") @db.Text
 
   createdAt DateTime @default(now()) @map("created_at") @db.DateTime(3)
   updatedAt DateTime @updatedAt @map("updated_at") @db.DateTime(3)
@@ -1194,10 +1192,8 @@ model Approval {
 
 /**
  * บทความคลังความรู้
- *
  * ขอบเขตตั้งแต่ต้น: **ผูกกับตั๋วเท่านั้น ไม่ใช่ระบบเอกสารทั่วไป**
  * (docs/jira-parity-checklist.md — Confluence-class wiki ถูกตัดออกโดยตั้งใจ)
- *
  * คุณค่าที่แท้จริงคือคำตอบที่ทีมตอบซ้ำทุกสัปดาห์ ย้ายมาอยู่ที่เดียว
  * แล้วแนบเข้าตั๋วได้ — ไม่ใช่การมีที่เก็บเอกสารอีกที่หนึ่ง
  */
@@ -1221,8 +1217,8 @@ model KnowledgeArticle {
   /// soft delete — ตั๋วที่เคยแนบบทความนี้ต้องยังตอบได้ว่าเคยแนบอะไร
   deletedAt DateTime? @map("deleted_at") @db.DateTime(3)
 
-  tenant Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  author User               @relation(fields: [authorId], references: [id], onDelete: Restrict)
+  tenant Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  author User              @relation(fields: [authorId], references: [id], onDelete: Restrict)
   links  WorkItemArticle[]
 
   @@index([tenantId, isPublished, updatedAt])
@@ -1231,7 +1227,6 @@ model KnowledgeArticle {
 
 /**
  * บทความที่แนบกับตั๋ว
- *
  * `helpful` บันทึกว่าบทความนี้ช่วยแก้เรื่องนั้นได้จริงไหม — เป็นข้อมูลเดียว
  * ที่บอกได้ว่าบทความไหนคุ้มค่าที่จะดูแลต่อ และบทความไหนเขียนไว้แล้วไม่มีใครใช้
  */
@@ -1251,4 +1246,83 @@ model WorkItemArticle {
   @@id([workItemId, articleId])
   @@index([tenantId, articleId])
   @@map("work_item_article")
+}
+
+// ============================================================
+// Automation
+// ============================================================
+
+/// กฎอัตโนมัติ — Trigger → Condition → Action
+///
+/// `conditions` และ `actions` เก็บเป็น JSON เพราะจำนวนข้อไม่คงที่และไม่มี
+/// คิวรีไหนต้องค้นเข้าไปข้างใน — ตัวกรองเดียวที่ใช้จริงคือ trigger กับ isEnabled
+/// ซึ่งเป็นคอลัมน์แยก · เอนจินตรวจรูปร่างของ JSON ก่อนใช้ทุกครั้ง
+model AutomationRule {
+  id        BigInt  @id @default(autoincrement())
+  tenantId  BigInt  @map("tenant_id")
+  /// null = ทุกโปรเจกต์ในองค์กร · ระบุ = เฉพาะโปรเจกต์นั้น
+  projectId BigInt? @map("project_id")
+  name      String  @db.VarChar(128)
+  /// ค่าตรงกับ TriggerKind ใน automation-engine.ts — เทสต์เทียบสองฝั่งให้
+  trigger   String  @db.VarChar(32)
+  /// **ปิดไว้เป็นค่าปริยาย** — กฎที่เพิ่งสร้างยังไม่มีใครอ่านทวน
+  /// การเปิดเองทันทีแปลว่ากฎที่พิมพ์ผิดเริ่มแตะตั๋วจริงก่อนที่ใครจะเห็น
+  isEnabled Boolean @default(false) @map("is_enabled")
+  /// ลำดับที่กฎทำงาน — ผู้ดูแลจัดเอง เพราะกฎที่มอบหมายต้องมาก่อนกฎที่แจ้งเตือน
+  sortOrder Int     @default(0) @map("sort_order")
+
+  conditions  Json
+  actions     Json
+  createdById BigInt?  @map("created_by_id")
+  createdAt   DateTime @default(now()) @map("created_at") @db.DateTime(3)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.DateTime(3)
+
+  tenant    Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  project   Project?        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdBy User?           @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  runs      AutomationRun[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId, trigger, isEnabled, sortOrder])
+  @@map("automation_rule")
+}
+
+/// สิ่งที่กฎทำจริง — หนึ่งแถวต่อหนึ่งการกระทำ
+///
+/// **บันทึกก่อนลงมือ ไม่ใช่หลังรู้ผล** (กติกาเดียวกับ notification_delivery)
+/// เครื่องที่ดับกลางทางต้องทิ้งร่องรอยว่าเคยตั้งใจทำอะไร ไม่ใช่เงียบไป
+///
+/// เก็บ `ruleName` ซ้ำไว้ด้วยเหตุผลเดียวกับ `audit_log.actorName` — ลบกฎแล้ว
+/// ประวัติต้องยังตอบได้ว่า "กฎชื่ออะไรสั่ง" ไม่ใช่กลายเป็นช่องว่าง
+///
+/// **สิ่งที่ *ไม่* ทำ ก็ต้องบันทึก** — แถว skipped/failed คือคำตอบเดียวของคำถาม
+/// "ทำไมกฎไม่ทำงาน" ซึ่งเป็นคำถามที่ผู้ดูแลถามบ่อยกว่าคำถามตรงข้าม
+model AutomationRun {
+  id         BigInt  @id @default(autoincrement())
+  tenantId   BigInt  @map("tenant_id")
+  ruleId     BigInt? @map("rule_id")
+  ruleName   String  @map("rule_name") @db.VarChar(128)
+  workItemId BigInt? @map("work_item_id")
+  trigger    String  @db.VarChar(32)
+
+  actionKind  String  @map("action_kind") @db.VarChar(32)
+  actionValue String  @map("action_value") @db.Text
+  /// pending | applied | skipped | failed — `pending` คือแถวที่จองไว้ก่อนลงมือ
+  outcome     String  @db.VarChar(16)
+  /// เหตุผลที่ข้ามหรือที่ล้ม — ว่างได้เฉพาะเมื่อ applied
+  reason      String? @db.Text
+  /// ตรงกับ work_item_history.trace_id ของรอบนั้น — join กลับไปดูผลจริงได้
+  traceId     String  @map("trace_id") @db.VarChar(64)
+  depth       Int     @default(0)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.DateTime(3)
+
+  tenant   Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  rule     AutomationRule? @relation(fields: [ruleId], references: [id], onDelete: SetNull)
+  workItem WorkItem?       @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, workItemId, createdAt])
+  @@index([tenantId, ruleId, createdAt])
+  @@index([tenantId, traceId])
+  @@map("automation_run")
 }
