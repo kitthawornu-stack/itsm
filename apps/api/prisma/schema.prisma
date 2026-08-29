@@ -54,6 +54,7 @@ model Tenant {
   inboundMails      InboundMail[]
   notificationRules NotificationRule[]
   notificationPrefs NotificationPreference[]
+  notifications     Notification[]
 
   @@map("tenant")
 }
@@ -92,6 +93,7 @@ model User {
   approvalsDecided        Approval[]               @relation("ApprovalDecider")
   automationRules         AutomationRule[]
   notificationPreferences NotificationPreference[]
+  notifications           Notification[]
   workLogs                WorkLog[]
 
   @@unique([tenantId, email])
@@ -641,6 +643,7 @@ model WorkItem {
   automationRuns AutomationRun[]
   workLogs       WorkLog[]
   inboundMails   InboundMail[]
+  notifications  Notification[]
 
   @@unique([tenantId, itemKey])
   @@index([tenantId, projectId, statusId])
@@ -1034,6 +1037,16 @@ model Notification {
   createdAt       DateTime  @default(now()) @map("created_at") @db.DateTime(3)
 
   deliveries NotificationDelivery[]
+  /*
+    **ต้องมี foreign key ทั้งสามทาง** — เดิมตารางนี้ไม่มี FK เลยสักตัว
+    ลบผู้ใช้หรือลบงานแล้วแถวแจ้งเตือนค้างอยู่เงียบ ๆ โดยไม่มี error สักบรรทัด
+    วัดจริงในฐานข้อมูลพัฒนา: 170 แถวชี้ไปหาผู้ใช้ที่ถูกลบไปแล้ว สะสมจากเทสต์
+    ที่สร้างผู้ใช้แล้วลบ · ไม่มีใครเห็นเพราะทุกคิวรีกรองด้วย userId ของคนที่
+    ล็อกอินอยู่ แถวกำพร้าจึงไม่โผล่ที่ไหนเลย
+  */
+  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user     User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workItem WorkItem? @relation(fields: [workItemId], references: [id], onDelete: Cascade)
 
   @@unique([tenantId, dedupeKey])
   @@index([tenantId, userId, readAt])
