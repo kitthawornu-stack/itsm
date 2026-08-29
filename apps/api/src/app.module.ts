@@ -21,6 +21,7 @@ import { AutomationController } from './modules/automation/automation.controller
 import { NotificationSettingsController } from './modules/notification/notification-settings.controller';
 import { AutomationScheduler } from './modules/automation/automation.scheduler';
 import { IndexWatchScheduler } from './modules/search-index/index-watch.scheduler';
+import { EmailIntakeScheduler } from './modules/integration/intake.scheduler';
 import { WorkflowAdminController } from './modules/workflow/workflow-admin.controller';
 import { SavedFilterController } from './modules/search-index/saved-filter.controller';
 import {
@@ -81,6 +82,11 @@ import { WorkItemController } from './modules/workitem/workitem.controller';
       ไม่มีระบบเฝ้าระวังภายนอกที่คอยถาม — ดูเหตุผลเต็มที่หัวไฟล์
     */
     IndexWatchScheduler,
+    /*
+      อ่านกล่องเมลตามรอบ · ปิดเป็นค่าปริยาย และเขียน log เสมอว่าเปิดหรือปิด
+      เพราะอีเมลขาเข้าที่ปิดเงียบ ๆ แปลว่าคำขอของคนหายไปทุกฉบับ
+    */
+    EmailIntakeScheduler,
     { provide: APP_GUARD, useClass: SessionGuard },
     // 403 ที่เดียวสำหรับทั้งแอป — handler ใหม่ไม่ต้องจำที่จะดักเอง
     { provide: APP_FILTER, useClass: PermissionDeniedFilter },
