@@ -20,6 +20,7 @@ import { ProjectAdminController } from './modules/tenancy/project-admin.controll
 import { AutomationController } from './modules/automation/automation.controller';
 import { NotificationSettingsController } from './modules/notification/notification-settings.controller';
 import { AutomationScheduler } from './modules/automation/automation.scheduler';
+import { IndexWatchScheduler } from './modules/search-index/index-watch.scheduler';
 import { WorkflowAdminController } from './modules/workflow/workflow-admin.controller';
 import { SavedFilterController } from './modules/search-index/saved-filter.controller';
 import {
@@ -75,6 +76,11 @@ import { WorkItemController } from './modules/workitem/workitem.controller';
       — ดูเหตุผลเต็มที่หัวไฟล์ automation.scheduler.ts
     */
     AutomationScheduler,
+    /*
+      เฝ้าระวังดัชนีค้นหา · `/health` ตอบถูกก็ต่อเมื่อมีคนถาม และชุดที่ส่งมอบ
+      ไม่มีระบบเฝ้าระวังภายนอกที่คอยถาม — ดูเหตุผลเต็มที่หัวไฟล์
+    */
+    IndexWatchScheduler,
     { provide: APP_GUARD, useClass: SessionGuard },
     // 403 ที่เดียวสำหรับทั้งแอป — handler ใหม่ไม่ต้องจำที่จะดักเอง
     { provide: APP_FILTER, useClass: PermissionDeniedFilter },
