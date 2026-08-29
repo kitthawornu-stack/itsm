@@ -50,6 +50,7 @@ model Tenant {
   catalogCategories CatalogCategory[]
   automationRules   AutomationRule[]
   automationRuns    AutomationRun[]
+  workLogs          WorkLog[]
   notificationRules NotificationRule[]
   notificationPrefs NotificationPreference[]
 
@@ -90,6 +91,7 @@ model User {
   approvalsDecided        Approval[]               @relation("ApprovalDecider")
   automationRules         AutomationRule[]
   notificationPreferences NotificationPreference[]
+  workLogs                WorkLog[]
 
   @@unique([tenantId, email])
   @@index([tenantId, isActive])
@@ -598,6 +600,19 @@ model WorkItem {
   updatedAt  DateTime  @updatedAt @map("updated_at") @db.DateTime(3)
   resolvedAt DateTime? @map("resolved_at") @db.DateTime(3) // ฐานของ MTTR ทุกรายงาน
 
+  /// เวลาที่ประมาณไว้ตอนแรก (นาที) — `null` = ไม่มีใครประมาณ ต่างจาก 0
+  originalEstimateMinutes Int? @map("original_estimate_minutes")
+  /// เวลาที่เหลือ (นาที) — **ไม่ใช่ original ลบ spent**
+  ///
+  /// งานที่ประมาณไว้ 4 ชั่วโมงแล้วใช้ไป 5 ชั่วโมง อาจยังเหลืออีก 2 ชั่วโมงจริง
+  /// การคำนวณด้วยการลบจะได้ค่าติดลบ ซึ่งตอบคำถามที่ไม่มีใครถามและทำให้
+  /// ยอดรวมของทั้งโปรเจกต์ผิด (บทเรียนเดียวกับ breachAt กับ breachedAt)
+  remainingMinutes        Int? @map("remaining_minutes")
+  /// ยอดรวมของ work_log — เก็บซ้ำเพื่อไม่ต้อง SUM ทุกครั้งที่เรนเดอร์ลิสต์
+  ///
+  /// แหล่งความจริงคือ `work_log` · ค่านี้คำนวณใหม่ได้เสมอจากที่นั่น
+  spentMinutes            Int  @default(0) @map("spent_minutes")
+
   tenant       Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   project      Project        @relation(fields: [projectId], references: [id], onDelete: Restrict)
   issueType    IssueType      @relation(fields: [issueTypeId], references: [id], onDelete: Restrict)
@@ -623,6 +638,7 @@ model WorkItem {
   linksIn        WorkItemLink[]       @relation("LinkTarget")
   articles       WorkItemArticle[]
   automationRuns AutomationRun[]
+  workLogs       WorkLog[]
 
   @@unique([tenantId, itemKey])
   @@index([tenantId, projectId, statusId])
@@ -1388,4 +1404,38 @@ model NotificationPreference {
   @@unique([userId, kind, channel])
   @@index([tenantId, userId])
   @@map("notification_preference")
+}
+
+// ============================================================
+// บันทึกเวลาทำงาน
+// ============================================================
+
+/// เวลาที่คนหนึ่งใช้ไปกับงานหนึ่ง ครั้งหนึ่ง
+///
+/// **`startedAt` คือเวลาที่ทำงาน ไม่ใช่เวลาที่บันทึก** — คนบันทึกงานของวันศุกร์
+/// ในเช้าวันจันทร์เป็นเรื่องปกติ · รายงานที่ใช้ `createdAt` จะทำให้ทุกสัปดาห์
+/// ผิดโดยไม่มีอะไรฟ้อง และผิดไปทางที่ดูสมเหตุสมผลด้วย
+model WorkLog {
+  id         BigInt @id @default(autoincrement())
+  tenantId   BigInt @map("tenant_id")
+  workItemId BigInt @map("work_item_id")
+  /// คนที่ทำงาน — ไม่ใช่คนที่กดบันทึก (วันหน้าอาจให้หัวหน้าบันทึกแทนได้)
+  userId     BigInt @map("user_id")
+
+  spentMinutes Int      @map("spent_minutes")
+  /// เวลาที่ **ลงมือทำ** — ดูหัว model
+  startedAt    DateTime @map("started_at") @db.DateTime(3)
+  note         String?  @db.Text
+
+  createdAt DateTime @default(now()) @map("created_at") @db.DateTime(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.DateTime(3)
+
+  tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  workItem WorkItem @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  /// รายงาน "ใครใช้เวลาไปกับอะไรช่วงไหน" อ่านด้วยดัชนีนี้
+  @@index([tenantId, userId, startedAt])
+  @@index([tenantId, workItemId, startedAt])
+  @@map("work_log")
 }

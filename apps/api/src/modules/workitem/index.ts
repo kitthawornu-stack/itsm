@@ -17,3 +17,5 @@ export * from './satisfaction.service';
 export * from './mention';
 export * from './hierarchy.service';
 export * from './bulk-label.service';
+export * from './duration';
+export * from './worklog.service';
