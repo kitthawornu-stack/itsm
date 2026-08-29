@@ -81,7 +81,7 @@ export interface Condition {
 }
 
 export interface Action {
-  kind: 'assign' | 'add-label' | 'comment' | 'transition' | 'notify-group';
+  kind: 'assign' | 'add-label' | 'comment' | 'transition';
   value: string;
 }
 
@@ -210,10 +210,15 @@ export const CONDITION_FIELDS: readonly Condition['field'][] = [
   'unassigned',
 ];
 
+/*
+  ไม่มี `notify-group` ในรายการนี้ **โดยตั้งใจ** — โมดูล notification ยังไม่
+  export อะไรให้เรียก · ชนิดที่หน้าจอให้เลือกได้แต่ไม่มีโค้ดเส้นไหนทำ คือกับดัก
+  เดียวกับสิทธิ์ที่ให้แล้วไม่มีผล (CLAUDE.md §8): ผู้ดูแลจะเชื่อว่าตั้งค่าเรียบร้อย
+  แล้วจากสิ่งที่หน้าจอบอก · เพิ่มกลับเมื่อมีตัวทำจริง แล้วเทสต์เทียบสองฝั่งจะบังคับเอง
+*/
 export const ACTION_KINDS: readonly Action['kind'][] = [
   'assign',
   'add-label',
   'comment',
   'transition',
-  'notify-group',
 ];

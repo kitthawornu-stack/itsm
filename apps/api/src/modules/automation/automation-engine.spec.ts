@@ -16,6 +16,9 @@
  *   4. **กฎที่ปิดอยู่ต้องไม่ทำงาน** แม้เงื่อนไขจะตรงทุกข้อ
  *   5. **รายการชนิดที่หน้าจอเลือกได้ ต้องตรงกับที่เอนจินรู้จัก**
  */
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -217,5 +220,41 @@ describe('E · รายการที่หน้าจอเลือกไ�
   it('รายการ trigger และ action ไม่มีค่าซ้ำ', () => {
     expect(new Set(TRIGGERS).size).toBe(TRIGGERS.length);
     expect(new Set(ACTION_KINDS).size).toBe(ACTION_KINDS.length);
+  });
+});
+
+describe('F · ชนิดที่ประกาศ ต้องมีตัวลงมือทำจริง', () => {
+  /*
+    "สิทธิ์ที่ให้แล้วไม่มีผล อันตรายกว่าสิทธิ์ที่ยังไม่ได้ให้" (CLAUDE.md §8) —
+    ข้อเดียวกันกับการกระทำอัตโนมัติ · ชนิดที่หน้าจอให้เลือกได้แต่ไม่มีโค้ดเส้นไหนทำ
+    ทำให้ผู้ดูแลเชื่อว่าตั้งกฎเรียบร้อยแล้ว และกฎนั้นจะเงียบตลอดไปโดยไม่มี error
+
+    จึงต้องเทียบกับ **ซอร์สจริง** ไม่ใช่กับรายการที่เขียนมือไว้อีกใบ
+  */
+  const source = readFileSync(join(__dirname, 'automation.service.ts'), 'utf8');
+
+  it('ตัวสแกนหาเจอจริง — พิสูจน์ก่อนใช้', () => {
+    /*
+      เซ็ตว่างเท่ากับเซ็ตว่าง · ถ้าตัวสแกนพัง ทุกอย่างจะเขียวโดยไม่ตรวจอะไรเลย
+      เคสนี้จึงพิสูจน์ว่ามันอ่านไฟล์เจอและหาสาขา switch เจอ ก่อนเชื่อผลของเคสถัดไป
+    */
+    expect(source.length).toBeGreaterThan(1000);
+    expect(source).toContain("case 'assign':");
+    expect(source).not.toContain("case 'ชนิดที่ไม่มีอยู่จริง':");
+  });
+
+  it('**ทุกชนิดใน ACTION_KINDS มีสาขาที่ทำจริง**', () => {
+    const missing = ACTION_KINDS.filter((k) => !source.includes(`case '${k}':`));
+    expect(missing).toEqual([]);
+  });
+
+  it('**ไม่มีสาขาไหนที่ ACTION_KINDS ไม่รู้จัก** — ของตรงข้าม', () => {
+    /*
+      ทิศทางนี้จับกรณีที่ลบชนิดออกจากรายการแล้วลืมลบตัวทำ · โค้ดที่ไม่มีใคร
+      เรียกถึงจะอยู่ต่อไปเงียบ ๆ แล้ววันหนึ่งมีคนเพิ่มชนิดกลับมาโดยไม่ได้อ่านมัน
+    */
+    const branches = [...source.matchAll(/case '([a-z-]+)':/g)].map((m) => m[1]);
+    const known = new Set<string>(ACTION_KINDS);
+    expect(branches.filter((b) => b !== undefined && !known.has(b))).toEqual([]);
   });
 });
