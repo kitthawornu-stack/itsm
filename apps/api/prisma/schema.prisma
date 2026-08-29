@@ -43,6 +43,7 @@ model Tenant {
   permissionSchemes PermissionScheme[]
   auditLogs         AuditLog[]
   savedFilters      SavedFilter[]
+  knowledgeArticles KnowledgeArticle[]
   catalogItems      CatalogItem[]
   satisfactions     Satisfaction[]
   approvals         Approval[]
@@ -78,6 +79,8 @@ model User {
   loginAttempts    LoginAttempt[]
   verifiedCalendarYears SlaCalendarYear[] @relation("CalendarVerifier")
   savedFilters          SavedFilter[]
+  articles              KnowledgeArticle[]
+  articleLinks          WorkItemArticle[]
 
   @@unique([tenantId, email])
   @@index([tenantId, isActive])
@@ -614,6 +617,7 @@ model WorkItem {
   keyAliases  WorkItemKeyAlias[]
   linksOut    WorkItemLink[]       @relation("LinkSource")
   linksIn     WorkItemLink[]       @relation("LinkTarget")
+  articles    WorkItemArticle[]
 
   @@unique([tenantId, itemKey])
   @@index([tenantId, projectId, statusId])
@@ -1186,4 +1190,65 @@ model Approval {
   @@index([tenantId, workItemId, createdAt])
   @@index([tenantId, status, createdAt])
   @@map("approval")
+}
+
+/**
+ * บทความคลังความรู้
+ *
+ * ขอบเขตตั้งแต่ต้น: **ผูกกับตั๋วเท่านั้น ไม่ใช่ระบบเอกสารทั่วไป**
+ * (docs/jira-parity-checklist.md — Confluence-class wiki ถูกตัดออกโดยตั้งใจ)
+ *
+ * คุณค่าที่แท้จริงคือคำตอบที่ทีมตอบซ้ำทุกสัปดาห์ ย้ายมาอยู่ที่เดียว
+ * แล้วแนบเข้าตั๋วได้ — ไม่ใช่การมีที่เก็บเอกสารอีกที่หนึ่ง
+ */
+model KnowledgeArticle {
+  id       BigInt @id @default(autoincrement())
+  tenantId BigInt @map("tenant_id")
+  title    String @db.VarChar(500)
+  /// structured document แบบเดียวกับ description และ comment
+  body     Json
+  authorId BigInt @map("author_id")
+
+  /// ยังไม่เผยแพร่ = เห็นเฉพาะทีม · เผยแพร่แล้ว = ผู้แจ้งเห็นได้ด้วย
+  ///
+  /// แยกจากการลบ เพราะบทความที่เขียนค้างไว้ครึ่งทางไม่ควรไปโผล่ให้ลูกค้าอ่าน
+  /// และไม่ควรหายไปจากคนเขียนด้วย
+  isPublished Boolean   @default(false) @map("is_published")
+  publishedAt DateTime? @map("published_at") @db.DateTime(3)
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.DateTime(3)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.DateTime(3)
+  /// soft delete — ตั๋วที่เคยแนบบทความนี้ต้องยังตอบได้ว่าเคยแนบอะไร
+  deletedAt DateTime? @map("deleted_at") @db.DateTime(3)
+
+  tenant Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  author User               @relation(fields: [authorId], references: [id], onDelete: Restrict)
+  links  WorkItemArticle[]
+
+  @@index([tenantId, isPublished, updatedAt])
+  @@map("knowledge_article")
+}
+
+/**
+ * บทความที่แนบกับตั๋ว
+ *
+ * `helpful` บันทึกว่าบทความนี้ช่วยแก้เรื่องนั้นได้จริงไหม — เป็นข้อมูลเดียว
+ * ที่บอกได้ว่าบทความไหนคุ้มค่าที่จะดูแลต่อ และบทความไหนเขียนไว้แล้วไม่มีใครใช้
+ */
+model WorkItemArticle {
+  workItemId BigInt   @map("work_item_id")
+  articleId  BigInt   @map("article_id")
+  tenantId   BigInt   @map("tenant_id")
+  addedById  BigInt   @map("added_by_id")
+  /// null = ยังไม่มีใครบอก · ต่างจาก false ที่แปลว่าลองแล้วไม่ช่วย
+  helpful    Boolean? @map("helpful")
+  addedAt    DateTime @default(now()) @map("added_at") @db.DateTime(3)
+
+  workItem WorkItem         @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+  article  KnowledgeArticle @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  addedBy  User             @relation(fields: [addedById], references: [id], onDelete: Restrict)
+
+  @@id([workItemId, articleId])
+  @@index([tenantId, articleId])
+  @@map("work_item_article")
 }
