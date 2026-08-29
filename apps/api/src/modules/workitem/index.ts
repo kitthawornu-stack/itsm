@@ -16,3 +16,4 @@ export * from './comment-edit.service';
 export * from './satisfaction.service';
 export * from './mention';
 export * from './hierarchy.service';
+export * from './bulk-label.service';

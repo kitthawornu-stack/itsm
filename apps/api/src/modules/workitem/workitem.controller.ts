@@ -89,6 +89,12 @@ import {
   type BulkTransitionResult,
 } from './bulk-transition.service';
 import {
+  NotALabelFieldError,
+  bulkEditLabels,
+  labelFields,
+  type BulkLabelResult,
+} from './bulk-label.service';
+import {
   WatchTargetNotFoundError,
   isWatching,
   mentionableUsers,
@@ -1321,6 +1327,61 @@ export class WorkItemController {
       }
       throw e;
     }
+  }
+
+  /**
+   * ติด/ถอดป้ายหลายเรื่องพร้อมกัน
+   *
+   * `add` และ `remove` แยกกันโดยตั้งใจ — ไม่มีทาง "เขียนทับทั้งชุด" จาก
+   * ปลายทางนี้ เพราะการเขียนทับเป็นชุดจะลบป้ายเดิมของทุกใบโดยไม่มีใครตั้งใจ
+   */
+  @Post('bulk/labels')
+  @HttpCode(HttpStatus.OK)
+  async bulkLabels(
+    @Ctx() ctx: TenantContext,
+    @Body() body: { itemKeys?: unknown; fieldId?: unknown; add?: unknown; remove?: unknown },
+  ): Promise<BulkLabelResult & { max: number }> {
+    const keys = Array.isArray(body.itemKeys)
+      ? body.itemKeys.filter((k): k is string => typeof k === 'string')
+      : [];
+    const strings = (v: unknown): string[] =>
+      Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [];
+
+    // รหัสฟิลด์ที่ไม่ใช่ตัวเลขคือคำขอที่พัง ไม่ใช่ฟิลด์ที่ไม่มีสิทธิ์
+    let fieldId: bigint;
+    try {
+      fieldId = BigInt(typeof body.fieldId === 'string' ? body.fieldId : Number(body.fieldId));
+    } catch {
+      throw new HttpException(
+        { error: 'invalid_field', message: 'ไม่พบฟิลด์ป้ายที่เลือก' },
+        HttpStatus.UNPROCESSABLE_ENTITY,
+      );
+    }
+
+    try {
+      const res = await bulkEditLabels(ctx, keys, {
+        fieldId,
+        add: strings(body.add),
+        remove: strings(body.remove),
+      });
+      return { ...res, max: BULK_MAX };
+    } catch (e) {
+      if (e instanceof NotALabelFieldError) {
+        throw new HttpException(
+          { error: 'invalid_field', message: e.message },
+          HttpStatus.UNPROCESSABLE_ENTITY,
+        );
+      }
+      throw toBulkHttpError(e);
+    }
+  }
+
+  /** ฟิลด์ป้ายที่เลือกแก้เป็นชุดได้ */
+  @Get('bulk/label-fields')
+  async bulkLabelFields(
+    @Ctx() ctx: TenantContext,
+  ): Promise<{ rows: Array<{ id: string; name: string }> }> {
+    return { rows: await labelFields(ctx) };
   }
 
   /**
