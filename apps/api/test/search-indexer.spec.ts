@@ -11,8 +11,6 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { prismaClient } from '../src/infrastructure/prisma/client';
 import { reindexAll, searchWorkItems } from '../src/modules/search-index/indexer.service';
-import { workItemIndexName } from '../src/modules/search-index/index-mapping';
-import { openSearch } from '../src/modules/search-index/opensearch-client';
 import type { TenantContext } from '@itsm/types';
 
 let ctx: TenantContext;
@@ -32,7 +30,19 @@ beforeAll(async () => {
 }, 300_000);
 
 afterAll(async () => {
-  await openSearch.deleteIndex(workItemIndexName(ctx.tenantId));
+  /*
+    **ไม่ลบดัชนีทิ้ง** — เดิมลบ แล้วทุกครั้งที่รัน `pnpm ci` การค้นหาบนเครื่อง
+    พัฒนาจะพังต่อจากนั้น จนกว่าจะมีคนนึกได้ว่าต้อง `reindex` · ตัวเฝ้าระวัง
+    ที่เพิ่งเพิ่มจับได้ว่าดัชนีขององค์กร 57 หายอยู่จริง และต้นเหตุคือไฟล์นี้
+    ไม่ใช่ Docker รีสตาร์ตอย่างที่เคยเข้าใจ
+
+    ดัชนีที่ `beforeAll` สร้างไว้ **คือสำเนาที่ตรงกับฐานข้อมูลพอดี** — เหมือน
+    ผลของ `pnpm reindex` ทุกประการ · การทิ้งมันไว้จึงทำให้เครื่องพัฒนาอยู่ใน
+    สภาพที่ถูกต้องกว่าเดิม ไม่ใช่สกปรกกว่าเดิม
+
+    เทสต์ที่ต้องการดัชนีของตัวเองจริง ๆ ให้ทำอย่าง `thai-search.spec.ts`
+    คือสร้างดัชนีชื่อของตัวเองแล้วลบของตัวเอง ไม่แตะของที่ใช้ร่วมกัน
+  */
   await prismaClient.$disconnect();
 });
 
