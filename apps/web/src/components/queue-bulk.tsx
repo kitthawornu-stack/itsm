@@ -97,6 +97,11 @@ export function QueueBulk({
   const [transition, setTransition] = useState('');
   const [resolution, setResolution] = useState('');
   const [moved, setMoved] = useState<TransitionResponse | null>(null);
+  /** ฟิลด์ป้ายที่เลือกแก้ได้ — ว่างแปลว่าระบบยังไม่มีฟิลด์ชนิดป้ายเลย */
+  const [labelFields, setLabelFields] = useState<Array<{ id: string; name: string }>>([]);
+  const [labelField, setLabelField] = useState('');
+  const [labelAdd, setLabelAdd] = useState('');
+  const [labelRemove, setLabelRemove] = useState('');
 
   const selectable = new Set(bulkEditable);
   const eligible = rows.filter((r) => selectable.has(r.projectKey));
@@ -174,6 +179,23 @@ export function QueueBulk({
     };
   }, [apiBase, pickedKey]);
 
+  useEffect(() => {
+    void (async () => {
+      try {
+        const res = await fetch(`${apiBase}/api/v1/work-items/bulk/label-fields`, {
+          credentials: 'include',
+          cache: 'no-store',
+        });
+        if (!res.ok) return;
+        const d = (await res.json()) as { rows: typeof labelFields };
+        setLabelFields(d.rows);
+        setLabelField((cur) => (cur === '' ? (d.rows[0]?.id ?? '') : cur));
+      } catch {
+        // ไม่มีฟิลด์ป้ายให้เลือก ไม่ควรทำให้แถบแก้เป็นชุดใช้ไม่ได้
+      }
+    })();
+  }, [apiBase]);
+
   const toggle = useCallback((key: string): void => {
     setResult(null);
     setMoved(null);
@@ -224,6 +246,51 @@ export function QueueBulk({
       setPriority('');
       // ดึงคิวใหม่จากเซิร์ฟเวอร์ ไม่ใช่แก้แถวในหน้าจอเอง — หน้าจอที่เดาผลลัพธ์
       // จะไม่ตรงกับฐานข้อมูลทันทีที่มีใบไหนล้ม
+      router.refresh();
+    } catch {
+      setError('เชื่อมต่อเซิร์ฟเวอร์ไม่ได้');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /**
+   * ติด/ถอดป้าย
+   *
+   * **ส่ง `add` กับ `remove` แยกกัน ไม่ส่งรายการป้ายทั้งชุด** — การเขียนทับ
+   * จะลบป้ายเดิมของทุกใบที่เลือกไว้ และคนกดจะไม่รู้จนกว่าจะมีคนมาถามหาป้ายเก่า
+   */
+  async function applyLabels(): Promise<void> {
+    setBusy(true);
+    setError(null);
+    setResult(null);
+    setMoved(null);
+    try {
+      const split = (v: string): string[] =>
+        v
+          .split(',')
+          .map((x) => x.trim())
+          .filter((x) => x !== '');
+      const res = await fetch(`${apiBase}/api/v1/work-items/bulk/labels`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          itemKeys: [...picked],
+          fieldId: labelField,
+          add: split(labelAdd),
+          remove: split(labelRemove),
+        }),
+      });
+      const data = (await res.json()) as BulkResponse & { message?: string };
+      if (!res.ok) {
+        setError(data.message ?? `ติดป้ายไม่สำเร็จ (HTTP ${String(res.status)})`);
+        return;
+      }
+      setResult(data);
+      setPicked(new Set());
+      setLabelAdd('');
+      setLabelRemove('');
       router.refresh();
     } catch {
       setError('เชื่อมต่อเซิร์ฟเวอร์ไม่ได้');
@@ -316,6 +383,61 @@ export function QueueBulk({
           <Button variant="primary" disabled={busy || nothingChosen} onClick={() => void apply()}>
             {busy ? 'กำลังแก้…' : 'แก้ทั้งหมด'}
           </Button>
+
+          {/*
+            ป้ายมีสองช่องแยกกัน — เพิ่ม กับ เอาออก
+
+            ไม่มีช่อง "ตั้งป้ายเป็น" เพราะการเขียนทับเป็นชุดจะลบป้ายเดิมของ
+            ทุกใบที่เลือกไว้ ซึ่งไม่มีใครตั้งใจ และไม่มีทางกู้กลับจากหน้าจอ
+          */}
+          {labelFields.length === 0 ? null : (
+            <>
+              {labelFields.length === 1 ? null : (
+                <label className="bulk-field">
+                  ฟิลด์ป้าย
+                  <select
+                    value={labelField}
+                    onChange={(e) => {
+                      setLabelField(e.target.value);
+                    }}
+                  >
+                    {labelFields.map((f) => (
+                      <option key={f.id} value={f.id}>
+                        {f.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+              <label className="bulk-field">
+                ติดป้าย
+                <input
+                  value={labelAdd}
+                  placeholder="คั่นด้วยจุลภาค"
+                  onChange={(e) => {
+                    setLabelAdd(e.target.value);
+                  }}
+                />
+              </label>
+              <label className="bulk-field">
+                ถอดป้าย
+                <input
+                  value={labelRemove}
+                  placeholder="คั่นด้วยจุลภาค"
+                  onChange={(e) => {
+                    setLabelRemove(e.target.value);
+                  }}
+                />
+              </label>
+              <Button
+                variant="primary"
+                disabled={busy || (labelAdd.trim() === '' && labelRemove.trim() === '')}
+                onClick={() => void applyLabels()}
+              >
+                {busy ? 'กำลังติดป้าย…' : 'ปรับป้าย'}
+              </Button>
+            </>
+          )}
 
           {/*
             เปลี่ยนสถานะแยกจากการแก้ค่า เพราะมันเดินผ่าน workflow จริง —
