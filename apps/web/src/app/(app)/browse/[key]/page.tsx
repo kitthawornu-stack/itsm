@@ -20,6 +20,7 @@ import { toSlaBar, type SlaSnapshotView } from '@/lib/sla-label';
 import { ArticlePanel, type AttachedArticle } from '@/components/article-panel';
 import { HierarchyPanel, type ChildRow, type ParentRow } from '@/components/hierarchy-panel';
 import { LinkPanel, type LinkRow } from '@/components/link-panel';
+import { TimePanel } from '@/components/time-panel';
 import { WatchButton } from '@/components/watch-button';
 import { TransitionButtons } from '@/components/transition-buttons';
 import { API_BASE, apiFetch } from '@/lib/api';
@@ -222,6 +223,13 @@ export default async function WorkItemDetail({
             types={detail.linkTypes ?? []}
             canLink={detail.permissions?.canLink ?? false}
           />
+
+          {/*
+            แผงเวลาโหลดข้อมูลของตัวเองจาก /time · ไม่ฝากมากับ payload ของหน้า
+            เพราะรายการบันทึกยาวได้เรื่อย ๆ และคนส่วนใหญ่เปิดหน้านี้เพื่ออ่าน
+            เรื่อง ไม่ใช่เพื่อดูเวลา
+          */}
+          <TimePanel apiBase={API} itemKey={detail.itemKey} />
 
           {detail.fields === undefined || detail.fields.length === 0 ? null : (
             <>
