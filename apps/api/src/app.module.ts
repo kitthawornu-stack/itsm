@@ -18,6 +18,7 @@ import { HealthController } from './modules/health/health.controller';
 import { NotificationController } from './modules/notification/notification.controller';
 import { ProjectAdminController } from './modules/tenancy/project-admin.controller';
 import { AutomationController } from './modules/automation/automation.controller';
+import { AutomationScheduler } from './modules/automation/automation.scheduler';
 import { WorkflowAdminController } from './modules/workflow/workflow-admin.controller';
 import { SavedFilterController } from './modules/search-index/saved-filter.controller';
 import {
@@ -66,6 +67,12 @@ import { WorkItemController } from './modules/workitem/workitem.controller';
    * ทิศทางนี้ทำให้ endpoint ที่ลืมตั้งค่าพังทันที แทนที่จะเปิดโล่งเงียบ ๆ
    */
   providers: [
+    /*
+      งานเบื้องหลังของกฎอัตโนมัติ · อยู่ในโปรเซสของ api เพราะ worker เรียกโค้ด
+      ของ api ไม่ได้ และการกวาดต้องใช้เอนจินกับ service ที่ลงมือทำจริง
+      — ดูเหตุผลเต็มที่หัวไฟล์ automation.scheduler.ts
+    */
+    AutomationScheduler,
     { provide: APP_GUARD, useClass: SessionGuard },
     // 403 ที่เดียวสำหรับทั้งแอป — handler ใหม่ไม่ต้องจำที่จะดักเอง
     { provide: APP_FILTER, useClass: PermissionDeniedFilter },
