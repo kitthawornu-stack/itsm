@@ -50,6 +50,8 @@ model Tenant {
   catalogCategories CatalogCategory[]
   automationRules   AutomationRule[]
   automationRuns    AutomationRun[]
+  notificationRules NotificationRule[]
+  notificationPrefs NotificationPreference[]
 
   @@map("tenant")
 }
@@ -68,25 +70,26 @@ model User {
   createdAt    DateTime  @default(now()) @map("created_at") @db.DateTime(3)
   updatedAt    DateTime  @updatedAt @map("updated_at") @db.DateTime(3)
 
-  tenant                Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  groupMemberships      GroupMember[]
-  reportedItems         WorkItem[]           @relation("WorkItemReporter")
-  assignedItems         WorkItem[]           @relation("WorkItemAssignee")
-  comments              WorkItemComment[]
-  attachments           WorkItemAttachment[]
-  watching              WorkItemWatcher[]
-  historyEntries        WorkItemHistory[]
-  auditLogs             AuditLog[]
-  sessions              Session[]
-  loginAttempts         LoginAttempt[]
-  verifiedCalendarYears SlaCalendarYear[]    @relation("CalendarVerifier")
-  savedFilters          SavedFilter[]
-  articles              KnowledgeArticle[]
-  articleLinks          WorkItemArticle[]
-  satisfactions         Satisfaction[]
-  approvalsRequested    Approval[]           @relation("ApprovalRequester")
-  approvalsDecided      Approval[]           @relation("ApprovalDecider")
-  automationRules       AutomationRule[]
+  tenant                  Tenant                   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  groupMemberships        GroupMember[]
+  reportedItems           WorkItem[]               @relation("WorkItemReporter")
+  assignedItems           WorkItem[]               @relation("WorkItemAssignee")
+  comments                WorkItemComment[]
+  attachments             WorkItemAttachment[]
+  watching                WorkItemWatcher[]
+  historyEntries          WorkItemHistory[]
+  auditLogs               AuditLog[]
+  sessions                Session[]
+  loginAttempts           LoginAttempt[]
+  verifiedCalendarYears   SlaCalendarYear[]        @relation("CalendarVerifier")
+  savedFilters            SavedFilter[]
+  articles                KnowledgeArticle[]
+  articleLinks            WorkItemArticle[]
+  satisfactions           Satisfaction[]
+  approvalsRequested      Approval[]               @relation("ApprovalRequester")
+  approvalsDecided        Approval[]               @relation("ApprovalDecider")
+  automationRules         AutomationRule[]
+  notificationPreferences NotificationPreference[]
 
   @@unique([tenantId, email])
   @@index([tenantId, isActive])
@@ -292,16 +295,17 @@ model Project {
   createdAt          DateTime    @default(now()) @map("created_at") @db.DateTime(3)
   updatedAt          DateTime    @updatedAt @map("updated_at") @db.DateTime(3)
 
-  tenant           Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  permissionScheme PermissionScheme? @relation(fields: [permissionSchemeId], references: [id], onDelete: SetNull)
-  notifyGroup      UserGroup?        @relation("ProjectNotifyGroup", fields: [notifyGroupId], references: [id], onDelete: SetNull)
-  counter          ProjectCounter?
-  slaPolicies      SlaPolicy[]
-  workItems        WorkItem[]
-  catalogItems     CatalogItem[]
-  workflowSchemes  WorkflowScheme[]
-  fieldConfigs     FieldConfig[]
-  automationRules  AutomationRule[]
+  tenant            Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  permissionScheme  PermissionScheme?  @relation(fields: [permissionSchemeId], references: [id], onDelete: SetNull)
+  notifyGroup       UserGroup?         @relation("ProjectNotifyGroup", fields: [notifyGroupId], references: [id], onDelete: SetNull)
+  counter           ProjectCounter?
+  slaPolicies       SlaPolicy[]
+  workItems         WorkItem[]
+  catalogItems      CatalogItem[]
+  workflowSchemes   WorkflowScheme[]
+  fieldConfigs      FieldConfig[]
+  automationRules   AutomationRule[]
+  notificationRules NotificationRule[]
 
   @@unique([tenantId, key])
   @@index([tenantId, isArchived])
@@ -1325,4 +1329,57 @@ model AutomationRun {
   @@index([tenantId, ruleId, createdAt])
   @@index([tenantId, traceId])
   @@map("automation_run")
+}
+
+// ============================================================
+// การแจ้งเตือน — ใครได้รับอะไร
+// ============================================================
+
+/// สวิตช์ของผู้ดูแล — ปิดการแจ้งเตือนชนิดหนึ่งทั้งองค์กร หรือเฉพาะโปรเจกต์
+///
+/// **ไม่มีแถว = เปิด** ไม่ใช่ปิด · กลับทางกับกติกาสิทธิ์โดยตั้งใจ เพราะ
+/// การไม่ส่งเงียบ ๆ ไม่มีอะไรฟ้อง ส่วนการส่งเกินมีคนมาบ่นแล้วได้แก้
+/// (เหตุผลเต็มอยู่ที่หัวไฟล์ notification-policy.ts)
+model NotificationRule {
+  id        BigInt  @id @default(autoincrement())
+  tenantId  BigInt  @map("tenant_id")
+  /// null = ทุกโปรเจกต์ · ระบุ = เฉพาะโปรเจกต์นั้น และชนะสวิตช์รวมเสมอ
+  projectId BigInt? @map("project_id")
+  /// ค่าตรงกับ NOTIFICATION_KINDS ใน notification-policy.ts — เทสต์เทียบสองฝั่ง
+  kind      String  @db.VarChar(64)
+  isEnabled Boolean @default(true) @map("is_enabled")
+
+  updatedAt DateTime @updatedAt @map("updated_at") @db.DateTime(3)
+
+  tenant  Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  project Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  /// หนึ่งความหมายเก็บแถวเดียว — สวิตช์ซ้ำสองแถวที่ค่าต่างกัน ตอบไม่ได้ว่าอันไหนจริง
+  @@unique([tenantId, projectId, kind])
+  @@index([tenantId, kind])
+  @@map("notification_rule")
+}
+
+/// สิ่งที่ผู้ใช้คนหนึ่งเลือกเอง — ปิดได้ทีละช่องทาง
+///
+/// เก็บเฉพาะแถวที่ **ต่างจากค่าปริยาย** · การเขียนแถว `isEnabled: true` ให้ทุกคน
+/// ทุกชนิดตอนสร้างบัญชี จะทำให้การเพิ่มชนิดใหม่ต้องไล่เขียนย้อนหลังทุกคน
+/// และคนที่เพิ่งเข้ามาจะไม่ได้รับชนิดใหม่จนกว่าจะมีใครไปเขียนให้
+model NotificationPreference {
+  id       BigInt @id @default(autoincrement())
+  tenantId BigInt @map("tenant_id")
+  userId   BigInt @map("user_id")
+  kind     String @db.VarChar(64)
+  /// "in-app" | "email"
+  channel  String @db.VarChar(16)
+
+  isEnabled Boolean  @default(true) @map("is_enabled")
+  updatedAt DateTime @updatedAt @map("updated_at") @db.DateTime(3)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, kind, channel])
+  @@index([tenantId, userId])
+  @@map("notification_preference")
 }
