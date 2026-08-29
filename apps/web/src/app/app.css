@@ -1,5 +1,12 @@
 /* เลย์เอาต์ระดับแอป — อ้าง semantic token เท่านั้น (INVARIANT 4) */
 
+/*
+  แถบบนสุด · ของทางขวา (กระดิ่ง · สลับธีม · เมนูผู้ใช้) **ห้ามหด**
+
+  `display: flex` ให้ทุกลูกหดได้เท่ากันเป็นค่าปริยาย · พอเมนูตรงกลางยาวขึ้น
+  ปุ่มสลับธีมถูกบีบจนข้อความไทยห่อกลางคำเป็นแนวตั้ง ("ส ว่ า ง") ซึ่งยังกดได้
+  แต่อ่านไม่ออก · สิ่งที่ควรหดคือเมนู ซึ่งห่อบรรทัดได้อยู่แล้ว
+*/
 .app-header {
   display: flex;
   align-items: center;
@@ -10,6 +17,19 @@
   position: sticky;
   top: 0;
   z-index: 10;
+}
+
+.app-header > .app-logo,
+.app-header > .app-title,
+.app-header > .tray,
+.app-header > .theme-toggle,
+.app-header > .user-menu {
+  flex-shrink: 0;
+}
+
+/* ปุ่มสลับธีมยาวได้ตามข้อความไทย ไม่ห่อกลางคำ (§5) */
+.theme-toggle-btn {
+  white-space: nowrap;
 }
 
 .app-logo {
@@ -27,16 +47,32 @@
   letter-spacing: -0.02em;
 }
 
+/*
+  แถบนำทางที่ห่อบรรทัดได้ ไม่ใช่บีบลิงก์จนตัวอักษรซ้อนกัน
+
+  ก่อนหน้านี้เป็น `display: flex` เฉย ๆ · พอเมนูเพิ่มจนเกินความกว้างจอ
+  flex บีบทุกลิงก์ให้แคบลงแทนที่จะขึ้นบรรทัดใหม่ แล้วภาษาไทยห่อกลางคำ
+  จนอ่านเป็นแนวตั้ง ("ส ว่ า ง") — เห็นจากภาพหน้าจอตอนตรวจงานอื่น
+  ไม่มี error ไม่มีเทสต์ไหนจับ เพราะหน้าจอยังเรนเดอร์ได้ปกติ แค่อ่านไม่ออก
+
+  สองบรรทัดที่แก้: `flex-wrap` ให้ขึ้นบรรทัดใหม่ และ `white-space: nowrap`
+  ที่ลิงก์เพื่อไม่ให้ห่อกลางคำไทยซึ่งไม่มีช่องว่างให้ตัด (CLAUDE.md §5)
+*/
 .app-nav {
   display: flex;
-  gap: var(--space-4);
+  flex-wrap: wrap;
+  row-gap: var(--space-2);
+  column-gap: var(--space-4);
   margin-left: var(--space-4);
+  /* ยอมให้หดได้แต่ไม่หายไป — เมนูที่กว้างเกินต้องดันตัวเองขึ้นบรรทัดใหม่ */
+  min-width: 0;
 }
 
 .app-nav a {
   font-size: 13.5px;
   color: var(--text-muted);
   text-decoration: none;
+  white-space: nowrap;
 }
 
 .app-nav a:hover { color: var(--text); }
