@@ -2098,3 +2098,151 @@
   line-height: 1.6;
   margin-bottom: calc(var(--space-2) * -1);
 }
+
+/* ---------- กระดานงาน ---------- */
+
+.board-help {
+  font-size: 12.5px;
+  color: var(--text-muted);
+  line-height: 1.6;
+  margin: 0 0 var(--space-3);
+}
+
+.board-help kbd {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  padding: 1px var(--space-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+/* คอลัมน์เลื่อนแนวนอนในกล่องของตัวเอง ไม่ดันหน้าให้เลื่อนทั้งหน้า */
+.board {
+  display: flex;
+  gap: var(--space-3);
+  overflow-x: auto;
+  padding-bottom: var(--space-2);
+  align-items: flex-start;
+}
+
+.board-col {
+  flex: 0 0 280px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-2);
+}
+
+.board-col-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-2);
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.6;
+}
+
+.board-count {
+  margin-inline-start: auto;
+  font-size: 11.5px;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.board-empty {
+  margin: 0;
+  padding: var(--space-3) var(--space-2);
+  font-size: 12px;
+  color: var(--text-faint);
+  line-height: 1.6;
+}
+
+.board-cards {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.board-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  width: 100%;
+  text-align: start;
+  padding: var(--space-2);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font: inherit;
+  line-height: 1.6;
+  cursor: pointer;
+}
+
+.board-card:hover:not(:disabled) {
+  border-color: var(--border-strong);
+}
+
+.board-card:focus-visible {
+  box-shadow: var(--focus-ring);
+  outline: none;
+}
+
+.board-card:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.board-card-key {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+
+/* หัวข้อไทยไม่มีช่องว่างระหว่างคำ ต้องยอมให้ตัดกลางคำในการ์ดแคบ */
+.board-card-summary {
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.board-card-foot {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  font-size: 11.5px;
+  color: var(--text-faint);
+}
+
+.board-card-pri {
+  flex: none;
+}
+
+.board-card-pri[data-rank='1'],
+.board-card-pri[data-rank='2'] {
+  color: var(--status-critical);
+}
+
+.board-card-who {
+  margin-inline-start: auto;
+  text-align: end;
+  word-break: break-word;
+}
+
+/* ข้อความสำหรับ screen reader เท่านั้น — ต้องไม่ใช้ display:none ซึ่งถูกข้าม */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
