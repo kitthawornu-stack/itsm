@@ -14,10 +14,15 @@
  * ค่าที่จะเอาไปเขียนต่อต้องมาจาก EAV เสมอ — ถ้า snapshot ไม่ตรงกับ EAV
  * (ซึ่งเป็นความเสี่ยงที่ ADR-001 ยอมรับไว้และมี job ตรวจ) การเขียนกลับจาก
  * snapshot จะทำให้ความไม่ตรงกันกลายเป็นความจริงถาวร
+ *
+ * ## ประวัติ
+ *
+ * `setFieldValues` เขียนประวัติให้แล้วในทรานแซกชันเดียวกับ EAV ·
+ * ไฟล์นี้เคยเขียนเองเพราะตอนนั้นต้นทางยังไม่เขียน — พอแก้ที่ต้นทางแล้ว
+ * ต้องถอดออก มิฉะนั้นการติดป้ายหนึ่งครั้งจะได้ประวัติสองแถว
  */
 import type { TenantContext } from '@itsm/types';
 
-import { auditedTransaction, change } from '../../infrastructure/audit/audited-transaction';
 import { tenantScoped } from '../../infrastructure/prisma/tenant-scope';
 import { readFieldValues, setFieldValues } from '../field';
 import { assertCan, browsableProjectIds } from '../permission';
@@ -177,29 +182,14 @@ export async function bulkEditLabels(
         { fieldId: field.id, type: 'LABELS', value: next },
       ]);
 
+      // ประวัติถูกเขียนโดย `setFieldValues` แล้ว — ไม่ต้องเขียนซ้ำที่นี่
+
       /*
-        เขียนประวัติเอง — **`setFieldValues` ไม่เขียนให้**
+        จัดดัชนีใหม่ ไม่งั้นป้ายที่เพิ่งติดจะค้นไม่เจอจนกว่าจะมีคนแตะงานใบนั้นอีก
 
-        มันใช้ `tenantTransaction` ไม่ใช่ `auditedTransaction` ผลคือการแก้ค่า
-        ฟิลด์เพิ่มเติมไม่เคยปรากฏในไทม์ไลน์เลย (ตรวจฐานข้อมูลจริงแล้ว: แถวที่
-        ไม่ใช่ฟิลด์ built-in มีแต่ `summary`) — เป็นช่องโหว่ของ INVARIANT 2
-        ที่มีมาก่อนไฟล์นี้ และต้องแก้ที่ต้นทางเป็นงานแยก เพราะแตะขอบเขต
-        ทรานแซกชันที่ ADR-001 กำหนดไว้
-
-        ที่นี่จึงเขียนเอง เพื่อไม่ให้เส้นทางใหม่สืบทอดช่องโหว่นั้นต่อ
+        ล้มที่นี่ไม่ควรทำให้การติดป้ายที่สำเร็จแล้วดูเหมือนล้ม — ดัชนีกู้ได้
+        ด้วย `reindex` ส่วนค่าที่เขียนไปแล้วถูกต้องอยู่
       */
-      await auditedTransaction(ctx, 'workitem.labels', () =>
-        /*
-          ไม่มีอะไรต้องเขียนในทรานแซกชันนี้นอกจากประวัติ — ค่าฟิลด์ถูกเขียน
-          ไปแล้วโดย `setFieldValues` ซึ่งมีทรานแซกชันของตัวเอง (ADR-001)
-          จึงคืน Promise ตรง ๆ แทนที่จะประกาศ async แล้วไม่ await อะไรเลย
-        */
-        Promise.resolve({
-          result: undefined,
-          audit: [change(item.id, field.key, before.join(', '), next.join(', '))],
-        }),
-      );
-      // ดัชนีตามหลังได้ · ล้มที่นี่ไม่ควรทำให้การแก้ที่สำเร็จแล้วดูเหมือนล้ม
       await indexWorkItem(ctx, item.id).catch(() => undefined);
       results.push({ itemKey: key, outcome: 'changed', labels: next });
     } catch (e) {
