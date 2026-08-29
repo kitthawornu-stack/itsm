@@ -6,6 +6,9 @@
  */
 import { describe, expect, it } from 'vitest';
 
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
 import {
   decide,
   renderEmail,
@@ -23,6 +26,7 @@ const base: PendingNotification = {
   recipientEmail: 'agent1@example.test',
   recipientName: 'สมชาย',
   readAt: null,
+  emailSuppressed: false,
 };
 
 const n = (over: Partial<PendingNotification> = {}): PendingNotification => ({ ...base, ...over });
@@ -30,6 +34,28 @@ const n = (over: Partial<PendingNotification> = {}): PendingNotification => ({ .
 describe('decide', () => {
   it('มีผู้รับและยังไม่อ่าน = ส่ง', () => {
     expect(decide(n())).toEqual({ send: true, to: 'agent1@example.test' });
+  });
+
+  it('**ผู้รับปิดอีเมลของชนิดนี้ไว้ = ไม่ส่ง**', () => {
+    /*
+      คำตอบนี้ตัดสินไปแล้วตั้งแต่ตอนสร้างแถวฝั่ง api · worker คำนวณนโยบายเองไม่ได้
+      (เรียกโค้ดของ api ไม่ได้) และไม่ควรคำนวณด้วย — นโยบายสองชุดที่เขียนคนละที่
+      จะเริ่มตอบต่างกันวันหนึ่งโดยไม่มีใครรู้
+    */
+    const d = decide(n({ emailSuppressed: true }));
+    expect(d.send).toBe(false);
+    expect(d).toMatchObject({ state: 'skipped' });
+    expect('reason' in d ? d.reason : '').toContain('ปิดอีเมล');
+  });
+
+  it('**เหตุผลที่บันทึกต้องเป็น "เขาปิดไว้" ไม่ใช่เหตุผลรอง**', () => {
+    /*
+      ผู้รับที่ปิดอีเมลไว้ ไม่ต้องรู้ด้วยซ้ำว่าอีเมลของเขาถูกรูปแบบไหม ·
+      เหตุผลที่ผู้ดูแลเอาไปทำอะไรได้คือ "เขาปิดไว้" ส่วน "อีเมลผิดรูปแบบ"
+      จะพาไปแก้ผิดที่ · ลำดับการตรวจจึงสำคัญ ไม่ใช่แค่ผลลัพธ์
+    */
+    const d = decide(n({ emailSuppressed: true, recipientEmail: 'ไม่ใช่อีเมล' }));
+    expect('reason' in d ? d.reason : '').toContain('ปิดอีเมล');
   });
 
   it('**อ่านบนหน้าเว็บไปแล้ว = ไม่ส่ง** — อีเมลซ้ำสิ่งที่เห็นแล้วมีแต่กวน', () => {
@@ -245,5 +271,30 @@ describe('runEmailDelivery', () => {
     });
     await runEmailDelivery(deps, 7);
     expect(got).toBe(7);
+  });
+});
+
+describe('สายต่อใน main.ts', () => {
+  /*
+    `decide()` ตัดสินถูกไม่ได้แปลว่าค่าเดินทางมาถึงมัน · `main.ts` เป็นชั้น
+    ประกอบร่างที่ไม่มีเทสต์ไหนแตะ — ตอนลบกลไกทีละบรรทัด การเปลี่ยน mapping
+    ให้ส่ง `false` ตายตัว ยังเขียวทั้ง 60 เคส · เทสต์นี้ปิดช่องนั้น
+
+    สแกนซอร์สจริง ไม่ใช่เชื่อว่าเขียนไว้แล้ว
+  */
+  const main = readFileSync(join(__dirname, 'main.ts'), 'utf8');
+
+  it('ตัวสแกนอ่านไฟล์เจอจริง', () => {
+    expect(main).toContain('loadUndelivered');
+    expect(main).not.toContain('ข้อความที่ไม่มีอยู่จริงในไฟล์นี้');
+  });
+
+  it('**เลือกคอลัมน์ emailSuppressed มาจากฐานข้อมูล**', () => {
+    expect(main).toContain('emailSuppressed: true');
+  });
+
+  it('**ส่งต่อค่าจริง ไม่ใช่ค่าตายตัว**', () => {
+    expect(main).toContain('emailSuppressed: r.emailSuppressed');
+    expect(main).not.toContain('emailSuppressed: false');
   });
 });

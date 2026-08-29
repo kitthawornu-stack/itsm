@@ -175,6 +175,8 @@ async function main(): Promise<void> {
           readAt: true,
           workItemId: true,
           userId: true,
+          // คำตอบของนโยบายที่ api ตัดสินไว้แล้ว — worker ไม่คำนวณเอง
+          emailSuppressed: true,
         },
       });
 
@@ -221,6 +223,8 @@ async function main(): Promise<void> {
         return {
           id: r.id,
           tenantId: r.tenantId,
+          // ส่งต่อคำตอบของนโยบายตรง ๆ ไม่ตีความใหม่
+          emailSuppressed: r.emailSuppressed,
           title: r.title,
           body: r.body,
           itemKey: item?.itemKey ?? null,
