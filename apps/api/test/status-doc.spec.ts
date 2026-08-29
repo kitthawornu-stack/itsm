@@ -16,7 +16,7 @@
  * **ตัวเลขที่นับจากซอร์สได้ ต้องถูกนับ ไม่ใช่พิมพ์มือ** — ถ้าไฟล์นี้แดง
  * ให้ไปแก้เอกสาร ไม่ใช่แก้เทสต์
  */
-import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
@@ -136,17 +136,53 @@ describe('เอกสารสถานะ · ตัวเลขที่นั
     */
     const total = /(\d[\d,]*) เทสต์ผ่าน/.exec(DOC);
     expect(total, 'หายอดรวมเทสต์ไม่เจอ').not.toBeNull();
-    const per = [...DOC.matchAll(/(?:api|worker|ui|hql|lexorank)\s+(\d+)/g)].map((m) => Number(m[1]));
-    expect(per.length, 'อ่านยอดรายโครงการไม่เจอ — ตัวสแกนพัง').toBe(5);
-    expect(per.reduce((a, b) => a + b, 0)).toBe(Number((total as RegExpExecArray)[1]?.replace(/,/g, '')));
+
+    /*
+      **รายชื่อ workspace อ่านจากดิสก์ ไม่ใช่จากรายการที่พิมพ์ไว้ในเทสต์**
+
+      เคยเขียนเป็น `(?:api|worker|ui|hql|lexorank)` กับ `.toBe(5)` · วันที่
+      `apps/web` มีเทสต์ชุดแรก ตัวสแกนอ่านไม่เห็น เอกสารจึงรายงานยอดที่น้อยกว่า
+      ความจริง 13 เคส โดยเทสต์ยังเขียว — รายการที่คนดูแลด้วยมือ พังแบบเงียบเสมอ
+      ในวันที่มีคนเพิ่มของใหม่ (CLAUDE.md §8)
+
+      `--passWithNoTests` ไม่นับ เพราะ workspace ที่ยังไม่มีเทสต์ ไม่ควรถูก
+      บังคับให้ปรากฏในเอกสาร
+    */
+    const workspaces = ['apps', 'packages']
+      .flatMap((g) =>
+        readdirSync(join(REPO, g)).map((name) => ({ name, dir: join(REPO, g, name) })),
+      )
+      .filter((w) => existsSync(join(w.dir, 'package.json')))
+      .filter((w) => {
+        const pkg = JSON.parse(readFileSync(join(w.dir, 'package.json'), 'utf8')) as {
+          scripts?: Record<string, string>;
+        };
+        const t = pkg.scripts?.test ?? '';
+        return t.includes('vitest') && !t.includes('passWithNoTests');
+      })
+      .map((w) => w.name);
+
+    expect(workspaces.length, 'หา workspace ที่มีเทสต์ไม่เจอ — ตัวสแกนพัง').toBeGreaterThan(3);
+
+    let sum = 0;
+    for (const name of workspaces) {
+      const m = new RegExp(String.raw`\b${name}\s+(\d+)`).exec(DOC);
+      expect(m, `เอกสารไม่ได้บอกยอดเทสต์ของ workspace "${name}"`).not.toBeNull();
+      sum += Number((m as RegExpExecArray)[1]);
+    }
+    expect(sum).toBe(Number((total as RegExpExecArray)[1]?.replace(/,/g, '')));
   });
 
   it('**จำนวนไฟล์เทสต์**', () => {
-    const roots = [
-      join(REPO, 'apps', 'api'),
-      join(REPO, 'apps', 'worker'),
-      join(REPO, 'packages'),
-    ];
+    /*
+      สแกน `apps` กับ `packages` ทั้งก้อน ไม่ใช่ไล่ชื่อ workspace ทีละตัว
+
+      เคยเขียนเป็นรายการตายตัว `[api, worker, packages]` · วันที่ `apps/web`
+      มีเทสต์ชุดแรก ตัวสแกนจึงนับไม่เห็น และเอกสารสถานะรายงานตัวเลขที่น้อยกว่า
+      ความจริงโดย **เทสต์ยังเขียว** — รายการที่กำหนดขอบเขตไว้ตายตัว คือรายการ
+      ที่คนดูแลด้วยมือ ซึ่ง CLAUDE.md ห้ามไว้สำหรับตัวเลขที่บอกสถานะของโค้ด
+    */
+    const roots = [join(REPO, 'apps'), join(REPO, 'packages')];
     const actual = roots
       .flatMap((r) => walk(r, (f) => f.endsWith('.spec.ts') || f.endsWith('.spec.tsx')))
       .length;
