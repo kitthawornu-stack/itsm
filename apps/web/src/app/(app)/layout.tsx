@@ -34,6 +34,7 @@ export default function AppLayout({ children }: { children: ReactNode }): ReactN
             <a href="/admin/issue-types">ประเภทงาน</a>
             <a href="/admin/catalog">บริการ</a>
             <a href="/admin/fields">ฟิลด์</a>
+            <a href="/knowledge">คลังความรู้</a>
             <a href="/reports">รายงาน</a>
         <a href="/admin/audit">ร่องรอย</a>
             <a href="/admin/users">ผู้ใช้</a>
