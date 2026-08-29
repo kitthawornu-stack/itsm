@@ -17,6 +17,7 @@ import {
   type AuditEntry,
 } from '../../infrastructure/audit/audited-transaction';
 import { tenantScoped } from '../../infrastructure/prisma/tenant-scope';
+import { createNotifications } from '../notification';
 import { assertCan } from '../permission';
 import { WorkItemNotFoundError } from './workitem.service';
 
@@ -121,20 +122,16 @@ export async function assignWorkItem(
      * เป็นสิ่งที่ทำให้คนเริ่มไม่อ่านการแจ้งเตือนจากระบบ
      */
     if (next !== null && next.id !== ctx.actorId) {
-      await tx.notification.createMany({
-        data: [
-          {
-            tenantId: ctx.tenantId,
-            userId: next.id,
-            workItemId: item.id,
-            kind: 'workitem.assigned',
-            title: `${item.itemKey} ถูกมอบหมายให้คุณ`,
-            body: item.summary,
-            dedupeKey: `assign:${item.id.toString()}:${next.id.toString()}:${String(now.getTime())}`,
-          },
-        ],
-        skipDuplicates: true,
-      });
+      await createNotifications(ctx, tx, item.projectId, [
+        {
+          userId: next.id,
+          workItemId: item.id,
+          kind: 'workitem.assigned',
+          title: `${item.itemKey} ถูกมอบหมายให้คุณ`,
+          body: item.summary,
+          dedupeKey: `assign:${item.id.toString()}:${next.id.toString()}:${String(now.getTime())}`,
+        },
+      ]);
     }
 
     return { result: undefined, audit };

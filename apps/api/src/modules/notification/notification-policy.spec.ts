@@ -171,12 +171,21 @@ describe('E · รายการชนิด เทียบกับที่�
     return out;
   }
 
-  /** ชนิดที่ปรากฏใน `notification.create*` จริง ๆ ไม่ใช่ทุกที่ที่มีคำว่า kind */
+  /**
+   * ชนิดที่ปรากฏในคำสั่งสร้างการแจ้งเตือนจริง ๆ ไม่ใช่ทุกที่ที่มีคำว่า kind
+   *
+   * ดูสองทางเข้า: `createNotifications()` ซึ่งเป็นจุดรวม และ `notifyGroup()`
+   * ที่รับชนิดมาจากผู้เรียก · **ต้องแก้ตัวสแกนทุกครั้งที่ทางเข้าเปลี่ยน** —
+   * ตอนย้ายทุกที่มาผ่านจุดรวม ตัวสแกนเดิมที่มองหา `notification.create`
+   * หาไม่เจอสักชนิด และเทสต์แดงทันที ซึ่งเป็นสิ่งที่มันควรทำ
+   */
   function kindsInSource(): Set<string> {
     const found = new Set<string>();
+    const ENTRIES = ['createNotifications(', 'notifyGroup('];
     for (const file of walk(join(ROOT, 'src'))) {
       const text = readFileSync(file, 'utf8');
-      for (const block of text.split('notification.create').slice(1)) {
+      const blocks = ENTRIES.flatMap((e) => text.split(e).slice(1));
+      for (const block of blocks) {
         // ดูเฉพาะช่วงสั้น ๆ หลังคำสั่งเขียน ไม่ใช่ทั้งไฟล์
         const head = block.slice(0, 900);
         for (const m of head.matchAll(/kind: '([a-z][a-z.]+)'/g)) {
@@ -212,5 +221,50 @@ describe('E · รายการชนิด เทียบกับที่�
       (k) => !(NOTIFICATION_KINDS as readonly string[]).includes(k),
     );
     expect(missing).toEqual([]);
+  });
+});
+
+describe('F · ไม่มีทางลัด', () => {
+  /*
+    นโยบายที่ถูกต้องแต่มีที่ที่ไม่เรียกมัน คือนโยบายที่ไม่มีผลตรงนั้น และ
+    **ไม่มีอะไรบอกว่าลืมที่ไหน** — ผู้ดูแลจะเห็นสวิตช์ปิดอยู่บนหน้าจอ แล้วยัง
+    ได้รับอีเมลต่อไป · เป็นกับดักเดิมของโครงการนี้ในรูปแบบใหม่ (CLAUDE.md §4)
+  */
+  const ROOT = join(__dirname, '..', '..', '..');
+  const ALLOWED = 'notification.service.ts';
+
+  function sourceFiles(dir: string): string[] {
+    const out: string[] = [];
+    for (const entry of readdirSync(dir)) {
+      const full = join(dir, entry);
+      if (statSync(full).isDirectory()) {
+        if (entry === 'node_modules' || entry === 'dist') continue;
+        out.push(...sourceFiles(full));
+        continue;
+      }
+      if (entry.endsWith('.ts') && !entry.endsWith('.spec.ts')) out.push(full);
+    }
+    return out;
+  }
+
+  it('ตัวสแกนหาเจอจริง — พิสูจน์ก่อนใช้', () => {
+    const files = sourceFiles(join(ROOT, 'src'));
+    expect(files.length).toBeGreaterThan(20);
+    // ไฟล์ที่ได้รับอนุญาต ต้องมีคำสั่งนั้นอยู่จริง ไม่งั้นตัวสแกนหาอะไรไม่เจอเลย
+    const allowed = files.find((f) => f.endsWith(ALLOWED));
+    expect(allowed).toBeDefined();
+    expect(readFileSync(allowed as string, 'utf8')).toContain('notification.createMany');
+  });
+
+  it('**ไม่มีไฟล์ไหนเรียก `notification.createMany` ตรง ๆ นอกจุดรวม**', () => {
+    const offenders = sourceFiles(join(ROOT, 'src'))
+      .filter((f) => !f.endsWith(ALLOWED))
+      .filter((f) =>
+        /tx\.notification\.createMany|db\.notification\.createMany/.test(
+          readFileSync(f, 'utf8'),
+        ),
+      )
+      .map((f) => f.slice(ROOT.length));
+    expect(offenders).toEqual([]);
   });
 });

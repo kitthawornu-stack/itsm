@@ -5,3 +5,5 @@
 // ESLint import/no-restricted-paths บังคับให้โมดูลอื่นเข้าถึงได้เฉพาะผ่านไฟล์นี้
 
 export * from './notify.service';
+export * from './notification-policy';
+export * from './notification.service';

@@ -17,6 +17,7 @@ import {
   type AuditEntry,
 } from '../../infrastructure/audit/audited-transaction';
 import { tenantScoped } from '../../infrastructure/prisma/tenant-scope';
+import { createNotifications } from '../notification';
 import { PermissionDeniedError, assertCan, can } from '../permission';
 import { WorkItemNotFoundError } from './workitem.service';
 import { eligibleMentions, eligibleWatcherIds } from './watcher.service';
@@ -190,18 +191,20 @@ export async function addComment(
           isInternal,
           mentioned,
         });
-      await tx.notification.createMany({
-        data: audience.map((r) => {
+      await createNotifications(
+        ctx,
+        tx,
+        item.projectId,
+        audience.map((r) => {
           const mentioned = r.reason === 'mention';
           const text = textFor(mentioned);
           return {
-            tenantId: ctx.tenantId,
             userId: r.userId,
             workItemId: item.id,
             /*
               ชนิดต่างกันเพื่อให้กล่องแจ้งเตือนจัดลำดับได้ — การถูกเรียกชื่อ
               โดยตรงเป็นสัญญาณที่แรงกว่า "มีความเห็นใหม่" ซึ่งผู้รับผิดชอบ
-              เห็นทุกวันจนเลิกอ่าน
+              เห็นทุกวันจนเลิกอ่าน · และเป็นชนิดที่ผู้ใช้ปิดแยกกันได้
             */
             kind: mentioned ? 'comment.mention' : isInternal ? 'comment.internal' : 'comment.added',
             title: text.title,
@@ -209,10 +212,7 @@ export async function addComment(
             dedupeKey: commentDedupeKey(row.id, r.userId),
           };
         }),
-        // unique index บน (tenantId, dedupeKey) เป็นด่านสุดท้าย
-        // ถ้าชนแปลว่าเคยแจ้งไปแล้ว ซึ่งไม่ใช่ความผิดพลาดที่ต้องล้มทั้งความเห็น
-        skipDuplicates: true,
-      });
+      );
     }
 
     /**

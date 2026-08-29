@@ -24,6 +24,7 @@ import {
   type AuditEntry,
 } from '../../infrastructure/audit/audited-transaction';
 import { tenantScoped } from '../../infrastructure/prisma/tenant-scope';
+import { createNotifications } from '../notification';
 import { assertCan, browsableProjectIds } from '../permission';
 import { indexWorkItem } from '../search-index';
 import { InvalidFieldValueError } from './edit.service';
@@ -244,20 +245,16 @@ export async function bulkEditWorkItems(
           เพื่อให้ unique index เป็นด่านสุดท้ายกันการส่งซ้ำ
         */
         if (nextAssignee !== null && nextAssignee.id !== ctx.actorId) {
-          await tx.notification.createMany({
-            data: [
-              {
-                tenantId: ctx.tenantId,
-                userId: nextAssignee.id,
-                workItemId: item.id,
-                kind: 'workitem.assigned',
-                title: `${item.itemKey} ถูกมอบหมายให้คุณ`,
-                body: item.summary,
-                dedupeKey: `assign:${item.id.toString()}:${nextAssignee.id.toString()}:${String(now.getTime())}`,
-              },
-            ],
-            skipDuplicates: true,
-          });
+          await createNotifications(ctx, tx, item.projectId, [
+            {
+              userId: nextAssignee.id,
+              workItemId: item.id,
+              kind: 'workitem.assigned',
+              title: `${item.itemKey} ถูกมอบหมายให้คุณ`,
+              body: item.summary,
+              dedupeKey: `assign:${item.id.toString()}:${nextAssignee.id.toString()}:${String(now.getTime())}`,
+            },
+          ]);
         }
 
         return { result: undefined, audit };

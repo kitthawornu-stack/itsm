@@ -12,6 +12,7 @@ import { systemClock, type TenantContext, type UtcDate } from '@itsm/types';
 
 import { auditedTransaction, change } from '../../infrastructure/audit/audited-transaction';
 import { tenantScoped } from '../../infrastructure/prisma/tenant-scope';
+import { createNotifications } from '../notification';
 
 export class WorkItemNotFoundForApprovalError extends Error {
   constructor(readonly itemKey: string) {
@@ -158,7 +159,8 @@ export async function requestApproval(
 
   const item = await db.workItem.findFirst({
     where: { itemKey },
-    select: { id: true, summary: true },
+    // projectId ใช้ตัดสินสวิตช์แจ้งเตือนระดับโปรเจกต์
+    select: { id: true, summary: true, projectId: true },
   });
   if (item === null) throw new WorkItemNotFoundForApprovalError(itemKey);
 
@@ -196,12 +198,14 @@ export async function requestApproval(
       where: { groupId: approverGroupId },
       select: { userId: true },
     });
-    await tx.notification.createMany({
-      data: members
+    await createNotifications(
+      ctx,
+      tx,
+      item.projectId,
+      members
         // ไม่แจ้งผู้ขอเอง แม้เขาจะอยู่ในกลุ่ม — เขารู้อยู่แล้วว่าเพิ่งกดขอ
         .filter((m) => m.userId !== ctx.actorId)
         .map((m) => ({
-          tenantId: ctx.tenantId,
           userId: m.userId,
           workItemId: item.id,
           kind: 'approval.requested',
@@ -209,8 +213,7 @@ export async function requestApproval(
           body: item.summary,
           dedupeKey: `approval:${row.id.toString()}:${m.userId.toString()}`,
         })),
-      skipDuplicates: true,
-    });
+    );
 
     return {
       result: row,
@@ -240,7 +243,10 @@ export async function decideApproval(
   if (ctx.actorId === null) throw new NotAnApproverError();
   const db = tenantScoped(ctx);
 
-  const item = await db.workItem.findFirst({ where: { itemKey }, select: { id: true } });
+  const item = await db.workItem.findFirst({
+    where: { itemKey },
+    select: { id: true, projectId: true },
+  });
   if (item === null) throw new WorkItemNotFoundForApprovalError(itemKey);
 
   const pending = await db.approval.findFirst({
@@ -273,20 +279,16 @@ export async function decideApproval(
         decisionNote: note,
       },
     });
-    await tx.notification.createMany({
-      data: [
-        {
-          tenantId: ctx.tenantId,
-          userId: pending.requestedById,
-          workItemId: item.id,
-          kind: 'approval.decided',
-          title: `${itemKey} ${input.approve ? 'ได้รับอนุมัติแล้ว' : 'ถูกปฏิเสธ'}`,
-          body: note,
-          dedupeKey: `approval-decided:${pending.id.toString()}`,
-        },
-      ],
-      skipDuplicates: true,
-    });
+    await createNotifications(ctx, tx, item.projectId, [
+      {
+        userId: pending.requestedById,
+        workItemId: item.id,
+        kind: 'approval.decided',
+        title: `${itemKey} ${input.approve ? 'ได้รับอนุมัติแล้ว' : 'ถูกปฏิเสธ'}`,
+        body: note,
+        dedupeKey: `approval-decided:${pending.id.toString()}`,
+      },
+    ]);
     return {
       result: undefined,
       audit: [

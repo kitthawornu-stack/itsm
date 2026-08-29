@@ -26,6 +26,7 @@ import type { TenantContext } from '@itsm/types';
 
 import { tenantScoped } from '../../infrastructure/prisma/tenant-scope';
 import { can } from '../permission';
+import { createNotifications } from './notification.service';
 
 export class GroupNotFoundError extends Error {
   constructor(readonly given: string) {
@@ -128,23 +129,32 @@ export async function notifyGroup(
     throw new NobodyToNotifyError(name, 'ไม่มีสมาชิกคนไหนเปิดโปรเจกต์นี้ได้');
   }
 
-  const created = await db.notification.createMany({
-    data: allowed.map((userId) => ({
-      tenantId: ctx.tenantId,
-      userId,
-      workItemId: notice.workItemId,
-      kind: notice.kind,
-      title: notice.title,
-      body: notice.body ?? null,
-      // ไม่มีเวลาในคีย์ — ลองใหม่ต้องชนของเดิม ไม่ใช่สร้างแถวใหม่
-      dedupeKey: `${notice.dedupeSeed}:${userId.toString()}`,
-    })),
-    // แถวที่ชนคือแถวที่เคยแจ้งไปแล้ว — ไม่ใช่ความผิดพลาด
-    skipDuplicates: true,
-  });
+  /*
+    เขียนผ่านจุดรวมเดียวกับที่อื่น ไม่เรียก `createMany` เอง — สวิตช์ของผู้ดูแล
+    ต้องมีผลกับการแจ้งกลุ่มด้วย · ทางลัดตรงนี้คือรูรั่วที่ไม่มีอะไรบอกว่ามีอยู่
+
+    ใช้ `$transaction` เพราะจุดรวมต้องการ `tx` — การแจ้งเตือนที่เขียนนอก
+    ทรานแซกชันจะรอดมาแม้ตอนที่การเปลี่ยนแปลงถูกย้อนกลับ
+  */
+  const result = await db.$transaction(async (tx) =>
+    createNotifications(
+      ctx,
+      tx,
+      notice.projectId,
+      allowed.map((userId) => ({
+        userId,
+        workItemId: notice.workItemId,
+        kind: notice.kind,
+        title: notice.title,
+        body: notice.body ?? null,
+        // ไม่มีเวลาในคีย์ — ลองใหม่ต้องชนของเดิม ไม่ใช่สร้างแถวใหม่
+        dedupeKey: `${notice.dedupeSeed}:${userId.toString()}`,
+      })),
+    ),
+  );
 
   return {
-    notified: created.count,
+    notified: result.created,
     skippedNoAccess: candidates.length - allowed.length,
   };
 }

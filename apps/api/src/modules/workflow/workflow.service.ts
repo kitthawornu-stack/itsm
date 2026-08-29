@@ -9,6 +9,7 @@ import { systemClock, type TenantContext } from '@itsm/types';
 
 import { auditedTransaction, change, type AuditEntry } from '../../infrastructure/audit/audited-transaction';
 import { tenantScoped } from '../../infrastructure/prisma/tenant-scope';
+import { createNotifications } from '../notification';
 import { approvalStateOf } from '../approval';
 import { recomputeSla, recordSlaEvent } from '../sla';
 import {
@@ -394,20 +395,16 @@ export async function applyTransition(
         ปิดแล้วเปิดใหม่แล้วปิดอีก ต้องไม่กลายเป็นการชวนซ้ำสามรอบ
       */
       if (askedForRating && item.reporterId !== actorId) {
-        await tx.notification.createMany({
-          data: [
-            {
-              tenantId: ctx.tenantId,
-              userId: item.reporterId,
-              workItemId: item.id,
-              kind: 'workitem.rate',
-              title: `${item.itemKey} เสร็จแล้ว — ให้คะแนนหน่อยได้ไหม`,
-              body: item.summary,
-              dedupeKey: `rate:${item.id.toString()}:${item.reporterId.toString()}`,
-            },
-          ],
-          skipDuplicates: true,
-        });
+        await createNotifications(ctx, tx, item.projectId, [
+          {
+            userId: item.reporterId,
+            workItemId: item.id,
+            kind: 'workitem.rate',
+            title: `${item.itemKey} เสร็จแล้ว — ให้คะแนนหน่อยได้ไหม`,
+            body: item.summary,
+            dedupeKey: `rate:${item.id.toString()}:${item.reporterId.toString()}`,
+          },
+        ]);
       }
 
       await tx.workItem.update({ where: { id: item.id }, data: data as never });
