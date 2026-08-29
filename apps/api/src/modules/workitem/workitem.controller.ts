@@ -71,6 +71,18 @@ import {
   createWorkItem,
 } from './workitem.service';
 import { EmptyCommentError, addComment, listComments } from './comment.service';
+import { DurationTooLargeError, InvalidDurationError } from './duration';
+import {
+  ItemNotFoundForWorkLogError,
+  NotYourWorkLogError,
+  WorkLogInFutureError,
+  WorkLogNotFoundError,
+  deleteWorkLog,
+  logWork,
+  setEstimate,
+  timeOf,
+  type TimeSummary,
+} from './worklog.service';
 import {
   AssigneeNotEligibleError,
   assignWorkItem,
@@ -284,6 +296,33 @@ function toCommentHttpError(e: unknown): unknown {
   if (e instanceof EmptyCommentError) {
     return new HttpException(
       { error: 'validation_failed', message: 'ต้องพิมพ์ข้อความก่อนบันทึก', missingFields: ['body'] },
+      HttpStatus.UNPROCESSABLE_ENTITY,
+    );
+  }
+  return e;
+}
+
+
+/**
+ * แปลง error ของบันทึกเวลาเป็น HTTP
+ *
+ * แยก 422 (คำขอถูกรูปแบบแต่ข้อมูลใช้ไม่ได้) ออกจาก 403 (ไม่มีสิทธิ์) และ
+ * 404 (ไม่มีของ) — สามอย่างนี้ผู้ใช้ต้องทำต่อคนละแบบ
+ */
+function toTimeHttp(e: unknown): unknown {
+  if (e instanceof ItemNotFoundForWorkLogError || e instanceof WorkLogNotFoundError) {
+    return new HttpException({ error: 'not_found', message: e.message }, HttpStatus.NOT_FOUND);
+  }
+  if (e instanceof NotYourWorkLogError) {
+    return new HttpException({ message: e.message }, HttpStatus.FORBIDDEN);
+  }
+  if (
+    e instanceof InvalidDurationError ||
+    e instanceof DurationTooLargeError ||
+    e instanceof WorkLogInFutureError
+  ) {
+    return new HttpException(
+      { error: 'validation_failed', message: e.message },
       HttpStatus.UNPROCESSABLE_ENTITY,
     );
   }
@@ -1687,6 +1726,77 @@ export class WorkItemController {
         );
       }
       throw e;
+    }
+  }
+
+  /*
+    เวลาของเรื่องหนึ่ง — สรุปพร้อมรายการบันทึกทั้งหมด
+
+    สิทธิ์ตรวจใน service ทุกครั้ง · ที่นี่แปลง error เป็น HTTP เท่านั้น
+  */
+  @Get(':key/time')
+  async time(@Ctx() ctx: TenantContext, @Param('key') key: string): Promise<TimeSummary> {
+    try {
+      return await timeOf(ctx, key);
+    } catch (e) {
+      throw toTimeHttp(e);
+    }
+  }
+
+  @Post(':key/time')
+  @HttpCode(HttpStatus.CREATED)
+  async addWorkLog(
+    @Ctx() ctx: TenantContext,
+    @Param('key') key: string,
+    @Body() body: { spent?: unknown; startedAt?: unknown; note?: unknown },
+  ): Promise<{ id: string; spentMinutes: number; spentText: string }> {
+    /*
+      แคบชนิดก่อนประกอบ ไม่ใช่เรียกซ้ำแล้ว assert — รอบที่สองคืน
+      `string | undefined` เหมือนเดิม TypeScript จึงไม่รู้ว่ามันผ่านการตรวจแล้ว
+      และ `as string` ที่ใส่ปิดปากมันคือการกลบ ไม่ใช่การพิสูจน์
+    */
+    const str = (v: unknown): string | undefined => (typeof v === 'string' ? v : undefined);
+    const startedAt = str(body.startedAt);
+    try {
+      return await logWork(ctx, {
+        itemKey: key,
+        spent: str(body.spent) ?? '',
+        ...(startedAt === undefined ? {} : { startedAt }),
+        note: str(body.note) ?? null,
+      });
+    } catch (e) {
+      throw toTimeHttp(e);
+    }
+  }
+
+  /** ตั้งเวลาประมาณและเวลาที่เหลือ — ส่งค่าว่างเพื่อล้าง */
+  @Post(':key/estimate')
+  @HttpCode(HttpStatus.OK)
+  async estimate(
+    @Ctx() ctx: TenantContext,
+    @Param('key') key: string,
+    @Body() body: { original?: unknown; remaining?: unknown },
+  ): Promise<{ originalMinutes: number | null; remainingMinutes: number | null }> {
+    const input: { original?: string | null; remaining?: string | null } = {};
+    if (typeof body.original === 'string') input.original = body.original;
+    if (typeof body.remaining === 'string') input.remaining = body.remaining;
+    try {
+      return await setEstimate(ctx, key, input);
+    } catch (e) {
+      throw toTimeHttp(e);
+    }
+  }
+
+  @Delete(':key/time/:logId')
+  @HttpCode(HttpStatus.OK)
+  async removeWorkLog(
+    @Ctx() ctx: TenantContext,
+    @Param('logId') logId: string,
+  ): Promise<{ deleted: string; spentMinutes: number }> {
+    try {
+      return await deleteWorkLog(ctx, BigInt(logId));
+    } catch (e) {
+      throw toTimeHttp(e);
     }
   }
 }
