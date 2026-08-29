@@ -525,6 +525,41 @@ export async function decideApproval(
   });
 }
 
+/**
+ * ผู้ใช้ที่กำลังดูอยู่ ตัดสินขั้นที่รออยู่ตอนนี้ได้ไหม
+ *
+ * **มีไว้ซ่อนปุ่มที่กดแล้วได้ 403 เท่านั้น ไม่ใช่การป้องกัน** — `decideApproval`
+ * ตรวจซ้ำเองทุกครั้ง (กติกาเดียวกับ `summarize()` ของโมดูล permission)
+ *
+ * ก่อนหน้านี้หน้าจอแสดงปุ่ม "อนุมัติ / ปฏิเสธ" ให้ทุกคนที่เปิดดู รวมทั้ง**ผู้ขอเอง**
+ * ทั้งที่คอมเมนต์ในคอมโพเนนต์เขียนไว้ว่าปุ่มขึ้นตามที่เซิร์ฟเวอร์จะยอมจริง ·
+ * เจอตอนกดจริงในเบราว์เซอร์ ไม่มีเทสต์ไหนจับได้ เพราะไม่มีใครถามคำถามนี้กับ API
+ */
+export async function canDecideNow(ctx: TenantContext, itemKey: string): Promise<boolean> {
+  if (ctx.actorId === null) return false;
+  const db = tenantScoped(ctx);
+  const item = await db.workItem.findFirst({ where: { itemKey }, select: { id: true } });
+  if (item === null) return false;
+
+  const chain = await latestChain(ctx, item.id);
+  const step = currentStep(chain);
+  if (step === null) return false;
+  const row = chain.find((c) => c.stepNumber === step.stepNumber);
+  if (row === undefined) return false;
+
+  // ผู้ขอกดเองไม่ได้ แม้อยู่ในกลุ่มผู้อนุมัติ
+  if (row.requestedById === ctx.actorId) return false;
+  // คนที่ตัดสินขั้นก่อนหน้าของสายนี้ไปแล้ว ตัดสินอีกขั้นไม่ได้
+  const me = ctx.actorId.toString();
+  if (chain.some((c) => c.stepNumber < step.stepNumber && c.decidedById === me)) return false;
+
+  const member = await db.groupMember.findFirst({
+    where: { groupId: row.approverGroupId, userId: ctx.actorId },
+    select: { userId: true },
+  });
+  return member !== null;
+}
+
 /** กลุ่มที่เลือกเป็นผู้อนุมัติได้ — เฉพาะกลุ่มที่มีสมาชิกจริง */
 export async function approverGroups(
   ctx: TenantContext,

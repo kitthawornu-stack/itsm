@@ -29,6 +29,7 @@ import {
   NotAnApproverError,
   approvalStateOf,
   approvalsFor,
+  canDecideNow,
   decideApproval,
   requestApproval,
 } from '../src/modules/approval';
@@ -310,6 +311,67 @@ describe('B · เดินสาย', () => {
     await decideApproval(a2, key, { approve: false, note: 'งบไม่พอปีนี้' });
     expect(await rawSteps(key)).toEqual(['APPROVED', 'REJECTED', 'CANCELLED']);
     expect(await approvalStateOf(requester, await itemIdOf(key))).toBe('rejected');
+  });
+});
+
+describe('D · หน้าจอถามว่าจะให้เห็นปุ่มไหม', () => {
+  /*
+    `canDecideNow` มีไว้ซ่อนปุ่มที่กดแล้วได้ 403 เท่านั้น · เทสต์ชุดนี้จึงต้อง
+    ตอบตรงกับสิ่งที่ `decideApproval` จะยอมจริงทุกกรณี — ไม่งั้นหน้าจอจะสร้าง
+    ความเชื่อขึ้นมาเอง ซึ่งเป็นสิ่งที่เจอจริงตอนกดในเบราว์เซอร์: ปุ่มขึ้นให้ทุกคน
+    รวมทั้งผู้ขอเอง ทั้งที่คอมเมนต์ในคอมโพเนนต์อ้างว่าขึ้นตามที่เซิร์ฟเวอร์จะยอม
+  */
+  it('คนในกลุ่มของขั้นที่รออยู่ → เห็นปุ่ม', async () => {
+    const key = await newItem('D1');
+    await requestApproval(requester, key, [g1, g2]);
+    expect(await canDecideNow(a1, key)).toBe(true);
+  });
+
+  it('**ผู้ขอไม่เห็นปุ่ม แม้อยู่ในกลุ่มผู้อนุมัติ**', async () => {
+    const key = await newItem('D2');
+    // ให้ผู้ขออยู่ในกลุ่มของขั้นแรกจริง ๆ — ถ้าดูแค่ "อยู่กลุ่มไหม" จะตอบผิด
+    await prismaClient.groupMember.create({
+      data: { tenantId, groupId: g1, userId: requesterId },
+    });
+    try {
+      await requestApproval(requester, key, [g1]);
+      expect(await canDecideNow(requester, key)).toBe(false);
+    } finally {
+      // คืนทุกแถวที่จับมา ไม่ใช่เชื่อว่าเคสจบสวย
+      await prismaClient.groupMember.deleteMany({
+        where: { groupId: g1, userId: requesterId },
+      });
+    }
+  });
+
+  it('คนในกลุ่มของขั้น**ถัดไป** ยังไม่เห็นปุ่ม', async () => {
+    const key = await newItem('D3');
+    await requestApproval(requester, key, [g1, g2]);
+    expect(await canDecideNow(a2, key)).toBe(false);
+    await decideApproval(a1, key, { approve: true });
+    expect(await canDecideNow(a2, key)).toBe(true);
+  });
+
+  it('**คนที่ตัดสินขั้นก่อนหน้าไปแล้ว ไม่เห็นปุ่มของขั้นถัดไป**', async () => {
+    const key = await newItem('D4');
+    // a1 อยู่ทั้ง g1 และ g2 — ถ้าดูแค่สมาชิกภาพจะตอบว่าเห็น แล้วกดได้ 403
+    await requestApproval(requester, key, [g1, g2]);
+    await decideApproval(a1, key, { approve: true });
+    expect(await canDecideNow(a1, key)).toBe(false);
+  });
+
+  it('สายที่จบแล้ว ไม่มีใครเห็นปุ่ม', async () => {
+    const key = await newItem('D5');
+    await requestApproval(requester, key, [g1]);
+    await decideApproval(a1, key, { approve: true });
+    expect(await canDecideNow(a1, key)).toBe(false);
+    expect(await canDecideNow(a2, key)).toBe(false);
+  });
+
+  it('เรื่องที่ไม่มีอยู่ / ยังไม่เคยขอ → ไม่เห็นปุ่ม ไม่ใช่ error', async () => {
+    const key = await newItem('D6');
+    expect(await canDecideNow(a1, key)).toBe(false);
+    expect(await canDecideNow(a1, `SD-ไม่มีจริง${STAMP}`)).toBe(false);
   });
 });
 

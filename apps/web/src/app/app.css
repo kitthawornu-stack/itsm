@@ -1609,6 +1609,77 @@
   color: var(--text-muted);
 }
 
+/* คำอธิบายที่ต้องอ่านก่อนกด — ไม่ใช่ป้ายประดับ จึงใช้สีข้อความปกติ ไม่ใช่ muted */
+.apv-hint {
+  margin: 0;
+  color: var(--text);
+  line-height: var(--line-height-body);
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+/* สายที่กำลังประกอบ — ลำดับในรายการคือลำดับขั้นจริง */
+.apv-chain {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  max-width: 30rem;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.apv-chain li {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  line-height: var(--line-height-body);
+}
+
+.apv-step-name {
+  flex: 1;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+/* เลขขั้นต้องไม่หดเมื่อชื่อกลุ่มยาว — ป้ายไทยยาวกว่าอังกฤษเฉลี่ย 1.3 เท่า */
+.apv-step-no {
+  flex-shrink: 0;
+  margin-inline-end: var(--space-2);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ขั้นที่ยังไม่ถึงคิว — เส้นจางกว่าขั้นที่กำลังรอ เพราะยังไม่ต้องทำอะไร */
+.apv-list li[data-status='WAITING'] { border-inline-start-color: var(--border-strong); }
+.apv-list li[data-status='CANCELLED'] { border-inline-start-color: var(--border); }
+
+/* สถานะสำหรับคนที่ตัดสินไม่ได้ — บอกว่ารอใคร แต่ไม่มีปุ่มให้กด */
+.apv-waiting {
+  margin-top: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+  font-size: 12.5px;
+}
+
+.apv-older {
+  margin-top: var(--space-3);
+  font-size: 12.5px;
+  line-height: var(--line-height-body);
+}
+
+.apv-older summary {
+  cursor: pointer;
+  color: var(--text-muted);
+}
+
 /* ---------- กฎของเส้นทาง ---------- */
 
 .rule-list {

@@ -21,6 +21,7 @@ import {
   WorkItemNotFoundForApprovalError,
   approvalsFor,
   approverGroups,
+  canDecideNow,
   decideApproval,
   requestApproval,
   type ApprovalView,
@@ -57,11 +58,17 @@ export class ApprovalController {
   async list(
     @Ctx() ctx: TenantContext,
     @Param('key') key: string,
-  ): Promise<{ rows: ApprovalView[]; groups: Array<{ id: string; name: string }> }> {
+  ): Promise<{
+    rows: ApprovalView[];
+    groups: Array<{ id: string; name: string }>;
+    canDecide: boolean;
+  }> {
     return {
       rows: await approvalsFor(ctx, key),
       // กลุ่มที่เลือกได้ ส่งมาพร้อมกันเลย ไม่ต้องยิงอีกคำขอ
       groups: await approverGroups(ctx),
+      // ซ่อนปุ่มที่กดแล้วได้ 403 — ไม่ใช่การป้องกัน เซิร์ฟเวอร์ตรวจซ้ำเองทุกครั้ง
+      canDecide: await canDecideNow(ctx, key),
     };
   }
 
