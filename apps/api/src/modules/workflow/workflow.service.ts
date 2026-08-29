@@ -137,6 +137,24 @@ async function loadTransitions(
  * แล้วปฏิเสธการปิดงานที่ผู้ใช้เพิ่งเลือกผลการแก้ไขมาให้เรียบร้อย — ระบบจะขอ
  * สิ่งที่ได้รับมาแล้ว ซึ่งเป็นทางตันที่ผู้ใช้ออกเองไม่ได้
  */
+/**
+ * นับงานย่อยของงานใบหนึ่ง
+ *
+ * คืน `{ total: 0, done: 0 }` เมื่อไม่มีงานย่อย — **ไม่ใช่ `undefined`** ·
+ * `undefined` แปลว่า "ผู้เรียกไม่ได้นับมา" ซึ่ง validator ต้องปฏิเสธ
+ * ส่วน `total: 0` แปลว่า "นับแล้ว ไม่มี" ซึ่งต้องปล่อยผ่าน
+ */
+async function countChildren(
+  db: ReturnType<typeof tenantScoped>,
+  workItemId: bigint,
+): Promise<{ total: number; done: number }> {
+  const rows = await db.workItem.findMany({
+    where: { parentId: workItemId },
+    select: { status: { select: { category: true } } },
+  });
+  return { total: rows.length, done: rows.filter((r) => r.status.category === 'DONE').length };
+}
+
 async function buildContext(
   ctx: TenantContext,
   item: LoadedWorkItem,
@@ -160,6 +178,17 @@ async function buildContext(
       โดยไม่ต้องมีฐานข้อมูล
     */
     approval: await approvalStateOf(ctx, item.id),
+    /*
+      นับงานย่อยที่นี่ แล้วส่งเข้าเอนจิน — กติกาเดียวกับ `approval`
+
+      คิวรีตรงจาก `db` ไม่ผ่านโมดูล `workitem` เพราะ `workitem` เรียก
+      `workflow` อยู่แล้ว (bulk transition) · การเรียกกลับจะทำให้สองโมดูล
+      พึ่งกันเป็นวง ซึ่งเป็นสิ่งที่ ADR-004 มีไว้กัน
+
+      **นับเฉพาะที่หมวด DONE ไม่ใช่ชื่อสถานะ** — ชื่อเปลี่ยนได้จากหน้าตั้งค่า
+      หมวดคือความหมาย
+    */
+    children: await countChildren(db, item.id),
     fields: {
       ...item.fieldSnapshot,
       // built-in field ที่ validator อ้างถึงได้เหมือน custom field

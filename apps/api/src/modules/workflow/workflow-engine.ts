@@ -49,6 +49,16 @@ export interface TransitionContext {
    * `none` = ยังไม่เคยขออนุมัติเลย · ต่างจาก `rejected` ซึ่งขอแล้วถูกปฏิเสธ
    */
   approval?: 'none' | 'pending' | 'approved' | 'rejected';
+  /**
+   * งานย่อยของงานใบนี้ — จำนวนทั้งหมดและจำนวนที่อยู่หมวด DONE
+   *
+   * ส่งเข้ามาจากผู้เรียกเหมือน `approval` ไม่ให้เอนจินไปนับเอง
+   *
+   * `undefined` = ผู้เรียกยังไม่ได้นับมา ซึ่งต่างจาก `{ total: 0 }`
+   * ที่แปลว่า "นับแล้ว ไม่มีงานย่อย" · validator ต้องแยกสองอย่างนี้
+   * มิฉะนั้นผู้เรียกที่ลืมนับจะได้ผลว่า "ไม่มีงานย่อย" แล้วปล่อยผ่านเงียบ ๆ
+   */
+  children?: { total: number; done: number };
 }
 
 export interface TransitionOutcome {
@@ -180,6 +190,25 @@ const VALIDATORS: Record<string, ValidatorFn> = {
     return { ok: false, missingFields: [`การอนุมัติ (${reason})`] };
   },
 
+  /**
+   * งานย่อยต้องเสร็จครบก่อน
+   *
+   * เรื่องหลักที่ปิดได้ทั้งที่งานย่อยยังค้าง ทำให้รายงาน "ค้างอยู่" ตกงานเหล่านั้น
+   * ไปทั้งกอง — เพราะคนดูรายงานที่ระดับเรื่องหลัก และมันบอกว่าเสร็จแล้ว
+   *
+   * **ผู้เรียกที่ไม่ได้นับมา ต้องถูกปฏิเสธ ไม่ใช่ปล่อยผ่าน** · ถ้าตีความ
+   * `undefined` เป็น "ไม่มีงานย่อย" กฎนี้จะเงียบสนิทในวันที่มีใครเพิ่ม
+   * เส้นทางเรียกใหม่แล้วลืมนับ — ซึ่งเป็นความล้มเหลวแบบที่ไม่มีใครสังเกต
+   */
+  'children-done': (_config, ctx) => {
+    if (ctx.children === undefined) {
+      return { ok: false, missingFields: ['จำนวนงานย่อย (ผู้เรียกไม่ได้ส่งมา)'] };
+    }
+    const left = ctx.children.total - ctx.children.done;
+    if (left <= 0) return { ok: true };
+    return { ok: false, missingFields: [`งานย่อยที่ยังไม่เสร็จ ${String(left)} เรื่อง`] };
+  },
+
   /** ฟิลด์ที่ระบุต้องมีค่าครบทุกตัว — รายงานที่ขาดทั้งหมดในครั้งเดียว */
   'required-fields': (config, ctx) => {
     const required = Array.isArray(config['fields'])
@@ -253,6 +282,13 @@ export const RULE_CATALOG: readonly RuleCatalogEntry[] = [
     ruleType: 'require-approval',
     label: 'ต้องได้รับอนุมัติก่อน',
     hint: 'กดปุ่มนี้ไม่ได้จนกว่าคำขออนุมัติจะผ่าน',
+    needsConfig: 'none',
+  },
+  {
+    kind: 'VALIDATOR',
+    ruleType: 'children-done',
+    label: 'งานย่อยต้องเสร็จครบก่อน',
+    hint: 'ปิดเรื่องหลักไม่ได้ถ้ายังมีงานย่อยค้าง',
     needsConfig: 'none',
   },
   {

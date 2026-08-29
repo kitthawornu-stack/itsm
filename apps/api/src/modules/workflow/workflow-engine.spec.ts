@@ -78,6 +78,16 @@ const needsApproval: TransitionDefinition = {
   rules: [{ kind: 'VALIDATOR', ruleType: 'require-approval', config: {}, position: 1 }],
 };
 
+/** transition ที่ต้องปิดงานย่อยให้ครบก่อน — ใช้ทดสอบ validator `children-done` */
+const needsChildrenDone: TransitionDefinition = {
+  id: 904n,
+  name: 'ปิดเรื่องหลัก',
+  fromStatusId: STATUS.new.id,
+  toStatusId: STATUS.resolved.id,
+  position: 3,
+  rules: [{ kind: 'VALIDATOR', ruleType: 'children-done', config: {}, position: 1 }],
+};
+
 const escalate: TransitionDefinition = {
   id: 902n,
   name: 'ยกระดับเป็น Major Incident',
@@ -392,5 +402,48 @@ describe('RULE_CATALOG · รายการที่หน้าจอเลื
   it('ไม่มีกฎซ้ำในรายการ', () => {
     const keys = RULE_CATALOG.map((e) => `${e.kind}/${e.ruleType}`);
     expect(new Set(keys).size).toBe(keys.length);
+  });
+});
+
+describe('Workflow Engine · validator `children-done`', () => {
+  const at = (children?: { total: number; done: number }): TransitionContext =>
+    ctx({ currentStatusId: STATUS.new.id, ...(children === undefined ? {} : { children }) });
+
+  it('ไม่มีงานย่อยเลย = ผ่าน', () => {
+    // "นับแล้ว ไม่มี" ต่างจาก "ไม่ได้นับ" — อันนี้คืออันแรก
+    expect(validateTransition(needsChildrenDone, at({ total: 0, done: 0 })).toStatusId).toBe(
+      STATUS.resolved.id,
+    );
+  });
+
+  it('งานย่อยเสร็จครบ = ผ่าน', () => {
+    expect(validateTransition(needsChildrenDone, at({ total: 3, done: 3 })).toStatusId).toBe(
+      STATUS.resolved.id,
+    );
+  });
+
+  it('**ยังมีงานย่อยค้าง = ปฏิเสธ และบอกว่าเหลือกี่เรื่อง**', () => {
+    /*
+      เรื่องหลักที่ปิดได้ทั้งที่งานย่อยยังค้าง ทำให้รายงาน "ค้างอยู่" ตกงาน
+      เหล่านั้นไปทั้งกอง — เพราะคนดูรายงานที่ระดับเรื่องหลัก และมันบอกว่าเสร็จแล้ว
+
+      ข้อความต้องบอกจำนวน ไม่ใช่แค่ "ยังปิดไม่ได้" · คนที่เห็นตัวเลขรู้ทันที
+      ว่าต้องไปตามอีกกี่ใบ
+    */
+    try {
+      validateTransition(needsChildrenDone, at({ total: 5, done: 2 }));
+      throw new Error('ต้องโยน');
+    } catch (e) {
+      expect(String(e)).toContain('3');
+    }
+  });
+
+  it('**ผู้เรียกที่ไม่ได้นับมา ต้องถูกปฏิเสธ ไม่ใช่ปล่อยผ่าน**', () => {
+    /*
+      ถ้าตีความ `undefined` เป็น "ไม่มีงานย่อย" กฎนี้จะเงียบสนิทในวันที่มีใคร
+      เพิ่มเส้นทางเรียกใหม่แล้วลืมนับ — และไม่มีอะไรบอกเลยว่ามันหยุดทำงาน
+      (บทเรียนเดียวกับกลไกที่ไม่มีอะไรเรียกใช้)
+    */
+    expect(() => validateTransition(needsChildrenDone, at())).toThrow();
   });
 });
