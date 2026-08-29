@@ -49,6 +49,23 @@ export const openSearch = {
     return res.ok;
   },
 
+  /**
+   * จำนวนเอกสารในดัชนี — `null` เมื่อถามไม่ได้
+   *
+   * **ไม่โยนเมื่อถามไม่ได้** เพราะผู้เรียกคือตัวตรวจสุขภาพ · ตัวตรวจที่ล้ม
+   * เพราะสิ่งที่มันกำลังตรวจพัง ไม่ได้บอกอะไรใครเลย มันแค่หายไปเงียบ ๆ
+   */
+  async countDocs(index: string): Promise<number | null> {
+    try {
+      const res = await fetch(`${BASE}/${index}/_count`, { signal: AbortSignal.timeout(3000) });
+      if (!res.ok) return null;
+      const body = (await res.json()) as { count?: number };
+      return typeof body.count === 'number' ? body.count : null;
+    } catch {
+      return null;
+    }
+  },
+
   async createIndex(index: string, settings: unknown): Promise<void> {
     await request('PUT', `/${index}`, settings);
   },

@@ -18,6 +18,8 @@ import {
   workItemIndexName,
 } from './index-mapping';
 import { OpenSearchError, openSearch } from './opensearch-client';
+import { withSystemScope } from '../../infrastructure/prisma/tenant-scope';
+import { judgeIndexHealth, type IndexHealth } from './index-health';
 
 /**
  * ดัชนียังไม่ถูกสร้าง — ไม่ใช่ error ของผู้ใช้ และ **ห้ามกลืนเป็นผลลัพธ์ว่าง**
@@ -333,4 +335,51 @@ export async function searchByHql(
       score: h.score,
     })),
   };
+}
+
+/**
+ * สถานะดัชนีของทุกองค์กร — ใช้โดย `/health` และตัวเฝ้าระวังเบื้องหลัง
+ *
+ * **ตอบเป็นรายองค์กร ไม่ใช่ตอบรวม** — ดัชนีของ tenant หนึ่งหายไป ไม่ได้แปลว่า
+ * ที่เหลือหายด้วย · การรวบเป็นคำตอบเดียวทำให้ไม่รู้ว่าต้อง reindex ของใคร
+ *
+ * ไม่โยนเมื่อถามไม่ได้ — ตัวตรวจที่ล้มเพราะสิ่งที่มันตรวจพัง ไม่ได้บอกอะไรใครเลย
+ */
+export async function indexHealthOfAll(): Promise<
+  Array<{ tenantId: string } & IndexHealth>
+> {
+  let clusterUp = false;
+  try {
+    const res = await fetch(`${process.env['OPENSEARCH_URL'] ?? 'http://localhost:4200'}/_cluster/health`, {
+      signal: AbortSignal.timeout(3000),
+    });
+    clusterUp = res.ok;
+  } catch {
+    clusterUp = false;
+  }
+
+  const tenants = await withSystemScope(
+    'ตัวตรวจสุขภาพต้องดูดัชนีของทุกองค์กร ไม่ได้มาจากคำขอของผู้ใช้คนใด',
+    async (db) =>
+      db.tenant.findMany({
+        select: { id: true, _count: { select: { workItems: true } } },
+      }),
+  );
+
+  const out: Array<{ tenantId: string } & IndexHealth> = [];
+  for (const t of tenants) {
+    const index = workItemIndexName(t.id);
+    const exists = clusterUp ? await openSearch.indexExists(index).catch(() => null) : null;
+    const docs = exists === true ? await openSearch.countDocs(index) : null;
+    out.push({
+      tenantId: t.id.toString(),
+      ...judgeIndexHealth({
+        clusterUp,
+        indexExists: exists,
+        indexedDocs: docs,
+        itemsInDatabase: t._count.workItems,
+      }),
+    });
+  }
+  return out;
 }
