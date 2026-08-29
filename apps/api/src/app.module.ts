@@ -18,6 +18,7 @@ import { HealthController } from './modules/health/health.controller';
 import { NotificationController } from './modules/notification/notification.controller';
 import { ProjectAdminController } from './modules/tenancy/project-admin.controller';
 import { AutomationController } from './modules/automation/automation.controller';
+import { NotificationSettingsController } from './modules/notification/notification-settings.controller';
 import { AutomationScheduler } from './modules/automation/automation.scheduler';
 import { WorkflowAdminController } from './modules/workflow/workflow-admin.controller';
 import { SavedFilterController } from './modules/search-index/saved-filter.controller';
@@ -50,6 +51,7 @@ import { WorkItemController } from './modules/workitem/workitem.controller';
     CalendarController,
     ProjectAdminController,
     AutomationController,
+    NotificationSettingsController,
     WorkflowAdminController,
     WorkItemController,
     SavedFilterController,

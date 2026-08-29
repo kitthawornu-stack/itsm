@@ -7,3 +7,4 @@
 export * from './notify.service';
 export * from './notification-policy';
 export * from './notification.service';
+export * from './notification-admin.service';

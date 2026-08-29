@@ -18,7 +18,16 @@ import type { TenantContext } from '@itsm/types';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { prismaClient } from '../src/infrastructure/prisma/client';
-import { createNotifications } from '../src/modules/notification';
+import {
+  CannotMuteError,
+  UnknownKindError,
+  createNotifications,
+  listAdminSwitches,
+  myPreferences,
+  setAdminSwitch,
+  setMyPreference,
+} from '../src/modules/notification';
+import { PermissionDeniedError } from '../src/modules/permission';
 
 const STAMP = String(Date.now()).slice(-6);
 const PKEY = `NSC${STAMP}`;
@@ -300,5 +309,66 @@ describe('C · ค่าของผู้ใช้', () => {
     });
     const r = await send();
     expect(r.created).toBe(1);
+  }, 60_000);
+});
+
+describe('D · ตั้งค่าจากหน้าจอ', () => {
+  it('**คนที่ไม่ใช่ผู้ดูแล แตะสวิตช์ระดับองค์กรไม่ได้**', async () => {
+    // ผู้ใช้ของเทสต์ไม่ได้อยู่กลุ่มไหนเลย จึงไม่ใช่ผู้ดูแลระบบ
+    await expect(listAdminSwitches(ctx)).rejects.toThrow(PermissionDeniedError);
+    await expect(
+      setAdminSwitch(ctx, { kind: KIND, isEnabled: false }),
+    ).rejects.toThrow(PermissionDeniedError);
+  }, 60_000);
+
+  it('**ชนิดที่ปิดไม่ได้ ต้องถูกปฏิเสธตอนบันทึก ไม่ใช่แค่ตอนตัดสินใจส่ง**', async () => {
+    /*
+      ตรรกะกันไว้อยู่แล้ว แต่ถ้ายอมให้บันทึก ผู้ใช้จะเห็นสวิตช์ปิดอยู่บนหน้าจอ
+      แล้วเชื่อว่าปิดได้ · หน้าจอที่โกหกแย่กว่าหน้าจอที่ปฏิเสธ
+    */
+    await expect(
+      setMyPreference(ctx, { kind: 'approval.requested', channel: 'email', isEnabled: false }),
+    ).rejects.toThrow(CannotMuteError);
+  }, 60_000);
+
+  it('ชนิดที่ไม่รู้จัก ถูกปฏิเสธ', async () => {
+    await expect(
+      setMyPreference(ctx, { kind: 'comment.explode', channel: 'email', isEnabled: false }),
+    ).rejects.toThrow(UnknownKindError);
+  }, 60_000);
+
+  it('**กลับไปใช้ค่าปริยาย = ลบแถวทิ้ง ไม่ใช่เขียน true**', async () => {
+    /*
+      แถวที่เขียน `true` ไว้จะกลายเป็นการยืนยันว่า "คนนี้เลือกจะรับ" ซึ่งไม่จริง
+      · และถ้าวันหนึ่งค่าปริยายเปลี่ยน คนที่มีแถวค้างจะไม่ตามค่าปริยายใหม่
+      โดยไม่มีใครรู้ว่าทำไม
+    */
+    await setMyPreference(ctx, { kind: KIND, channel: 'email', isEnabled: false });
+    expect(
+      await prismaClient.notificationPreference.count({
+        where: { userId: userId ?? 0n, kind: KIND, channel: 'email' },
+      }),
+    ).toBe(1);
+
+    await setMyPreference(ctx, { kind: KIND, channel: 'email', isEnabled: true });
+    expect(
+      await prismaClient.notificationPreference.count({
+        where: { userId: userId ?? 0n, kind: KIND, channel: 'email' },
+      }),
+    ).toBe(0);
+  }, 60_000);
+
+  it('รายการของผู้ใช้แสดงครบทุกชนิด รวมชนิดที่ยังไม่เคยแตะ', async () => {
+    /*
+      ช่องว่างคือคำตอบที่มีความหมายพอ ๆ กับรายชื่อ · การแสดงเฉพาะชนิดที่มีแถว
+      ทำให้ผู้ใช้ไม่รู้ว่ามีอะไรให้ปิดได้บ้าง แล้วเขาจะไปตั้งกฎกรองในอีเมลแทน
+      ซึ่งระบบมองไม่เห็นเลย
+    */
+    await prismaClient.notificationPreference.deleteMany({ where: { userId: userId ?? 0n } });
+    const rows = await myPreferences(ctx);
+    expect(rows.length).toBeGreaterThan(5);
+    expect(rows.every((r) => r.inApp && r.email)).toBe(true);
+    // ชนิดที่ปิดไม่ได้ ต้องบอกหน้าจอไว้ ไม่ใช่ให้กดแล้วเจอ error
+    expect(rows.some((r) => r.alwaysOn)).toBe(true);
   }, 60_000);
 });
