@@ -106,6 +106,8 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await prismaClient.workItemFieldValue.deleteMany({ where: { workItemId: { in: itemIds } } });
+  // ประวัติที่ `setFieldValues` เขียนให้ — เก็บกวาดด้วย ไม่งั้นค้างสะสมทุกรอบที่รัน
+  await prismaClient.workItemHistory.deleteMany({ where: { workItemId: { in: itemIds } } });
   await prismaClient.workItem.deleteMany({ where: { itemKey: { startsWith: `${KEY_PREFIX}-` } } });
   await prismaClient.fieldDefinition.deleteMany({
     where: { tenantId: ctx.tenantId, key: { startsWith: 'spike_' } },
@@ -361,4 +363,87 @@ describe('Spike B · 4 · ตัวเลขที่ตัดสิน ADR-001'
       'snapshot เร็วกว่าไม่ถึง 1.5 เท่า — ADR-001 อาจซับซ้อนเกินความจำเป็น',
     ).toBeGreaterThan(1.5);
   }, 300_000);
+});
+
+describe('Spike B · 5 · ประวัติของค่าฟิลด์ (INVARIANT 2)', () => {
+  /*
+    `setFieldValues` เคยใช้ `tenantTransaction` ธรรมดา ผลคือ **การแก้ค่าฟิลด์
+    เพิ่มเติมไม่เคยปรากฏในไทม์ไลน์เลย** — ตรวจฐานข้อมูลจริงแล้ว แถวประวัติ
+    ที่ไม่ใช่ฟิลด์ built-in มีแต่ `summary` เท่านั้น
+
+    เป็นการละเมิด INVARIANT 2 ที่เงียบสนิท เพราะไม่มีอะไรบังคับให้ mutation
+    เรียก `auditedTransaction` — กฎอยู่ในเอกสาร ไม่ได้อยู่ในเครื่องมือ
+  */
+  const historyOf = async (id: bigint, field: string) =>
+    prismaClient.workItemHistory.findMany({
+      where: { workItemId: id, field },
+      select: { oldValue: true, newValue: true },
+      orderBy: { id: 'asc' },
+    });
+
+  it('**เขียนค่าครั้งแรก ต้องมีประวัติ**', async () => {
+    const id = await makeItem('h1');
+    await setFieldValues(ctx, id, [
+      { fieldId: f('spike_text'), type: 'TEXT', value: 'ค่าแรก' },
+    ]);
+    const rows = await historyOf(id, 'spike_text');
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.oldValue).toBeNull();
+    expect(rows[0]?.newValue).toBe('ค่าแรก');
+  });
+
+  it('**แก้ค่า ต้องบันทึกทั้งค่าเก่าและค่าใหม่**', async () => {
+    /*
+      คำถามที่ประวัติมีไว้ตอบคือ "เปลี่ยนจากอะไรเป็นอะไร" · การบันทึกแค่
+      ค่าใหม่ทำให้ตอบไม่ได้ว่าเดิมเป็นอย่างไร ซึ่งเป็นครึ่งหนึ่งของคำตอบ
+    */
+    const id = await makeItem('h2');
+    await setFieldValues(ctx, id, [{ fieldId: f('spike_text'), type: 'TEXT', value: 'ก่อน' }]);
+    await setFieldValues(ctx, id, [{ fieldId: f('spike_text'), type: 'TEXT', value: 'หลัง' }]);
+    const rows = await historyOf(id, 'spike_text');
+    expect(rows).toHaveLength(2);
+    expect(rows[1]?.oldValue).toBe('ก่อน');
+    expect(rows[1]?.newValue).toBe('หลัง');
+  });
+
+  it('**เขียนค่าเดิมซ้ำ ต้องไม่เพิ่มประวัติ**', async () => {
+    // ประวัติที่รกเท่ากับไม่มีประวัติ — คนที่ไล่อ่านจะเลิกอ่าน
+    const id = await makeItem('h3');
+    await setFieldValues(ctx, id, [{ fieldId: f('spike_text'), type: 'TEXT', value: 'เท่าเดิม' }]);
+    await setFieldValues(ctx, id, [{ fieldId: f('spike_text'), type: 'TEXT', value: 'เท่าเดิม' }]);
+    expect(await historyOf(id, 'spike_text')).toHaveLength(1);
+  });
+
+  it('ล้างค่าทิ้ง ต้องบันทึกว่าเคยมีอะไร', async () => {
+    const id = await makeItem('h4');
+    await setFieldValues(ctx, id, [{ fieldId: f('spike_text'), type: 'TEXT', value: 'จะถูกลบ' }]);
+    await setFieldValues(ctx, id, [{ fieldId: f('spike_text'), type: 'TEXT', value: null }]);
+    const rows = await historyOf(id, 'spike_text');
+    expect(rows[1]?.oldValue).toBe('จะถูกลบ');
+    expect(rows[1]?.newValue).toBeNull();
+  });
+
+  it('ฟิลด์หลายค่า บันทึกทุกค่าในแถวเดียว', async () => {
+    /*
+      หนึ่งแถวต่อหนึ่งฟิลด์ ไม่ใช่หนึ่งแถวต่อหนึ่งค่า · การแก้ป้ายจาก
+      สองอันเป็นสามอัน ควรอ่านเป็นเหตุการณ์เดียว ไม่ใช่สามเหตุการณ์
+    */
+    const id = await makeItem('h5');
+    await setFieldValues(ctx, id, [
+      { fieldId: f('spike_labels'), type: 'LABELS', value: ['ก', 'ข'] },
+    ]);
+    const rows = await historyOf(id, 'spike_labels');
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.newValue).toBe('ก, ข');
+  });
+
+  it('แก้หลายฟิลด์พร้อมกัน ได้ประวัติฟิลด์ละแถว', async () => {
+    const id = await makeItem('h6');
+    await setFieldValues(ctx, id, [
+      { fieldId: f('spike_text'), type: 'TEXT', value: 'ข้อความ' },
+      { fieldId: f('spike_number'), type: 'NUMBER', value: 7 },
+    ]);
+    expect(await historyOf(id, 'spike_text')).toHaveLength(1);
+    expect(await historyOf(id, 'spike_number')).toHaveLength(1);
+  });
 });

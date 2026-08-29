@@ -18,6 +18,11 @@ import type { FieldType, Prisma } from '@prisma/client';
 import type { TenantContext } from '@itsm/types';
 
 import {
+  auditedTransaction,
+  change,
+  type AuditEntry,
+} from '../../infrastructure/audit/audited-transaction';
+import {
   tenantScoped,
   tenantTransaction,
   type TxScopedClient,
@@ -132,18 +137,77 @@ function normalise(input: FieldValueInput): ScalarValue[] {
   return input.value === null ? [] : [input.value];
 }
 
+/** ค่าฟิลด์หนึ่งตัวเป็นข้อความสำหรับประวัติ — รายการหลายค่าต่อด้วย ", " */
+function historyText(values: ScalarValue[]): string | null {
+  if (values.length === 0) return null;
+  /*
+    `ScalarValue` ไม่มี `Date` อยู่ในชนิด — วันที่ถูกแปลงเป็นสตริงมาก่อนแล้ว
+    ตอนอ่านจาก EAV · การเขียน `instanceof Date` ตรงนี้จึงเป็นโค้ดที่ไม่มีทาง
+    ทำงาน และ TypeScript ปฏิเสธให้เห็นทันที (ต่างจาก `as any` ที่จะกลบไว้)
+  */
+  return values.map((v) => (v === null ? '' : String(v))).join(', ');
+}
+
 /**
  * เขียนค่าฟิลด์ — ลบของเดิมของฟิลด์นั้นทิ้งแล้วเขียนใหม่ทั้งชุด
  *
  * เขียนทับ ไม่ใช่เพิ่มต่อท้าย · รายการว่างหมายถึงลบค่าทั้งหมดของฟิลด์นั้น
- * EAV และ snapshot เขียนในทรานแซกชันเดียวกัน
+ * EAV · snapshot · **และประวัติ** เขียนในทรานแซกชันเดียวกัน
+ *
+ * ## ทำไมต้องเป็น `auditedTransaction`
+ *
+ * ฟังก์ชันนี้เคยใช้ `tenantTransaction` ธรรมดา ผลคือ **การแก้ค่าฟิลด์เพิ่มเติม
+ * ไม่เคยปรากฏในไทม์ไลน์เลย** — ตรวจฐานข้อมูลจริงแล้ว แถวประวัติที่ไม่ใช่ฟิลด์
+ * built-in มีแต่ `summary` เท่านั้น · เป็นการละเมิด INVARIANT 2 ที่เงียบสนิท
+ * เพราะไม่มีอะไรบังคับให้ mutation เรียก `auditedTransaction`
+ *
+ * ในระบบ ITSM ที่ฟิลด์เพิ่มเติมเก็บผลกระทบ ความเร่งด่วน และบริการที่เกี่ยวข้อง
+ * คำถาม "ใครเปลี่ยนผลกระทบจากต่ำเป็นสูง" คือคำถามที่ประวัติมีไว้ตอบพอดี
+ *
+ * **การเขียนค่าเดิมซ้ำจะไม่เขียนประวัติ และไม่เปิดทรานแซกชันเลย** —
+ * `auditedTransaction` โยน `MissingAuditError` เมื่อรายการ audit ว่าง
+ * ซึ่งถูกต้องสำหรับ mutation ที่ไม่เปลี่ยนอะไร: มันไม่ควรถูกเรียกตั้งแต่แรก
  */
 export async function setFieldValues(
   ctx: TenantContext,
   workItemId: bigint,
   inputs: FieldValueInput[],
 ): Promise<void> {
-  await tenantTransaction(ctx, async (tx) => {
+  if (inputs.length === 0) return;
+
+  /*
+    อ่านค่าเดิมก่อนเปิดทรานแซกชัน เพื่อรู้ว่ามีอะไรเปลี่ยนจริงไหม
+
+    ถ้าไม่มีอะไรเปลี่ยน จะไม่เปิดทรานแซกชันเลย — ประวัติที่รกเท่ากับไม่มีประวัติ
+    และการเปิดทรานแซกชันเพื่อไม่เขียนอะไร คือการถือล็อกฟรี ๆ
+  */
+  const before = await readFieldValues(ctx, workItemId);
+  const keys = await tenantScoped(ctx).fieldDefinition.findMany({
+    where: { id: { in: inputs.map((i) => i.fieldId) } },
+    select: { id: true, key: true },
+  });
+  const keyOf = new Map(keys.map((k) => [k.id.toString(), k.key]));
+
+  const changes: AuditEntry[] = [];
+  for (const input of inputs) {
+    const key = keyOf.get(input.fieldId.toString());
+    if (key === undefined) continue;
+    const oldRaw = before[key];
+    const oldValues = (Array.isArray(oldRaw) ? oldRaw : oldRaw === undefined ? [] : [oldRaw]) as
+      ScalarValue[];
+    const newValues = normalise(input);
+    const oldText = historyText(oldValues);
+    const newText = historyText(
+      MULTI_VALUE_TYPES.has(input.type) ? newValues : newValues.slice(0, 1),
+    );
+    if (oldText === newText) continue;
+    changes.push(change(workItemId, key, oldText, newText));
+  }
+
+  // ไม่มีอะไรเปลี่ยน = ไม่ต้องเขียนอะไรเลย
+  if (changes.length === 0) return;
+
+  await auditedTransaction(ctx, 'workitem.fields', async (tx) => {
     const item = await tx.workItem.findFirst({
       where: { id: workItemId, tenantId: ctx.tenantId },
       select: { id: true },
@@ -171,6 +235,7 @@ export async function setFieldValues(
     }
 
     await writeSnapshot(tx, ctx, workItemId);
+    return { result: undefined, audit: changes };
   });
 }
 
