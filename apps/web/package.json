@@ -8,7 +8,7 @@
     "start": "next start -p 4300",
     "typecheck": "tsc --noEmit",
     "lint": "echo \"linted by root config\"",
-    "test": "echo \"no web tests yet\""
+    "test": "vitest run"
   },
   "dependencies": {
     "@itsm/ui": "workspace:*",
@@ -20,6 +20,7 @@
     "@types/node": "^22.10.2",
     "@types/react": "^19.0.2",
     "@types/react-dom": "^19.0.2",
-    "typescript": "^5.7.2"
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
   }
 }
