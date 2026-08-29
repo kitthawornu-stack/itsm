@@ -226,3 +226,43 @@ export const InputWithinLimit: StoryObj = {
     <Input value="เครื่องพิมพ์ชั้น 3 พิมพ์ไม่ออก" onChange={() => undefined} maxLength={500} />
   ),
 };
+
+/*
+  สถานะจริงที่มีอยู่ในแอป: ฟอร์มสร้างกฎอัตโนมัติมีแถวเงื่อนไขซ้ำกันหลายแถว
+  ทุกแถวมี Select และ Input หน้าตาเหมือนกันหมด · คนที่ไล่ด้วยคีย์บอร์ดจะได้ยิน
+  ชื่อเดียวกันซ้ำ ๆ โดยไม่รู้ว่ากำลังแก้แถวไหน
+
+  story นี้มีไว้ให้เห็นว่าหน้าตาไม่เปลี่ยน แต่ชื่อที่อ่านออกเสียงต่างกันทุกแถว
+  — เปิด accessibility panel ของ Storybook แล้วดู aria-label ของแต่ละช่อง
+*/
+export const RepeatedRowsNamedForScreenReader: StoryObj = {
+  name: 'แถวซ้ำ ๆ · ชื่อสำหรับ screen reader',
+  render: () => (
+    <div style={{ display: 'grid', gap: 12 }}>
+      {[1, 2, 3].map((n) => (
+        <div key={n} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <Select
+            value="3"
+            ariaLabel={`ฟิลด์ของเงื่อนไขข้อที่ ${String(n)}`}
+            options={PRIORITIES}
+            onChange={() => undefined}
+          />
+          <Input
+            value=""
+            ariaLabel={`ค่าที่เทียบของเงื่อนไขข้อที่ ${String(n)}`}
+            placeholder="ค่าที่เทียบ"
+            onChange={() => undefined}
+          />
+        </div>
+      ))}
+    </div>
+  ),
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'ต้องใช้ prop `ariaLabel` ไม่ใช่ `aria-label` — TypeScript ไม่ตรวจแอตทริบิวต์ที่มีขีดกลางบนคอมโพเนนต์ของเรา มันจึงหายไปเงียบ ๆ ทั้งที่ typecheck และ lint ผ่านทั้งคู่',
+      },
+    },
+  },
+};

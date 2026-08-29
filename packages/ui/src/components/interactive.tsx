@@ -30,6 +30,17 @@ export interface ButtonProps {
   onClick?: () => void;
   /** แสดงในคำแนะนำเครื่องมือและใช้ผูกคีย์ลัด */
   shortcut?: string;
+  /**
+   * ชื่อสำหรับ screen reader เมื่อข้อความที่เห็นไม่พอแยกแยะ
+   *
+   * ฟอร์มที่มีแถวเหมือนกันหลายแถว (เงื่อนไขข้อที่ 1 · ข้อที่ 2 · …) ทำให้คนที่
+   * ไล่ด้วยคีย์บอร์ดได้ยินชื่อเดียวกันซ้ำ ๆ โดยไม่รู้ว่ากำลังแก้แถวไหน
+   *
+   * **ต้องเป็น prop ชื่อนี้ ไม่ใช่ `aria-label`** — TypeScript ปล่อยแอตทริบิวต์
+   * ที่มีขีดกลางผ่านไปโดยไม่ตรวจว่าคอมโพเนนต์รับหรือเปล่า มันจึงหายไปเงียบ ๆ
+   * ทั้งที่ typecheck และ lint ผ่านทั้งคู่ (CLAUDE.md §8)
+   */
+  ariaLabel?: string;
 }
 
 export function Button({
@@ -40,6 +51,7 @@ export function Button({
   type = 'button',
   onClick,
   shortcut,
+  ariaLabel,
 }: ButtonProps): ReactNode {
   return (
     <button
@@ -49,6 +61,7 @@ export function Button({
       data-size={size}
       disabled={disabled}
       onClick={onClick}
+      {...(ariaLabel === undefined ? {} : { 'aria-label': ariaLabel })}
       // ไม่แปลง children เป็นสตริง — children เป็น ReactNode ซึ่งอาจเป็น object
       // และจะกลายเป็น [object Object] ใน tooltip
       title={shortcut === undefined ? undefined : `คีย์ลัด ${shortcut}`}
@@ -73,6 +86,17 @@ export interface InputProps {
    */
   maxLength?: number;
   id?: string;
+  /**
+   * ชื่อสำหรับ screen reader เมื่อข้อความที่เห็นไม่พอแยกแยะ
+   *
+   * ฟอร์มที่มีแถวเหมือนกันหลายแถว (เงื่อนไขข้อที่ 1 · ข้อที่ 2 · …) ทำให้คนที่
+   * ไล่ด้วยคีย์บอร์ดได้ยินชื่อเดียวกันซ้ำ ๆ โดยไม่รู้ว่ากำลังแก้แถวไหน
+   *
+   * **ต้องเป็น prop ชื่อนี้ ไม่ใช่ `aria-label`** — TypeScript ปล่อยแอตทริบิวต์
+   * ที่มีขีดกลางผ่านไปโดยไม่ตรวจว่าคอมโพเนนต์รับหรือเปล่า มันจึงหายไปเงียบ ๆ
+   * ทั้งที่ typecheck และ lint ผ่านทั้งคู่ (CLAUDE.md §8)
+   */
+  ariaLabel?: string;
 }
 
 export function Input({
@@ -83,6 +107,7 @@ export function Input({
   errorMessage,
   maxLength,
   id,
+  ariaLabel,
 }: InputProps): ReactNode {
   const errorId = id === undefined ? undefined : `${id}-error`;
   return (
@@ -95,6 +120,7 @@ export function Input({
         maxLength={maxLength}
         aria-invalid={invalid}
         aria-describedby={invalid ? errorId : undefined}
+        {...(ariaLabel === undefined ? {} : { 'aria-label': ariaLabel })}
         onChange={(e) => {
           onChange(e.target.value);
         }}
@@ -238,6 +264,17 @@ export interface SelectProps {
   errorMessage?: string;
   disabled?: boolean;
   id?: string;
+  /**
+   * ชื่อสำหรับ screen reader เมื่อข้อความที่เห็นไม่พอแยกแยะ
+   *
+   * ฟอร์มที่มีแถวเหมือนกันหลายแถว (เงื่อนไขข้อที่ 1 · ข้อที่ 2 · …) ทำให้คนที่
+   * ไล่ด้วยคีย์บอร์ดได้ยินชื่อเดียวกันซ้ำ ๆ โดยไม่รู้ว่ากำลังแก้แถวไหน
+   *
+   * **ต้องเป็น prop ชื่อนี้ ไม่ใช่ `aria-label`** — TypeScript ปล่อยแอตทริบิวต์
+   * ที่มีขีดกลางผ่านไปโดยไม่ตรวจว่าคอมโพเนนต์รับหรือเปล่า มันจึงหายไปเงียบ ๆ
+   * ทั้งที่ typecheck และ lint ผ่านทั้งคู่ (CLAUDE.md §8)
+   */
+  ariaLabel?: string;
 }
 
 /**
@@ -256,6 +293,7 @@ export function Select({
   errorMessage,
   disabled = false,
   id,
+  ariaLabel,
 }: SelectProps): ReactNode {
   const errorId = id === undefined ? undefined : `${id}-error`;
   return (
@@ -267,6 +305,7 @@ export function Select({
         disabled={disabled}
         aria-invalid={invalid}
         aria-describedby={invalid ? errorId : undefined}
+        {...(ariaLabel === undefined ? {} : { 'aria-label': ariaLabel })}
         onChange={(e) => {
           onChange(e.target.value);
         }}
@@ -301,6 +340,13 @@ export interface TextareaProps {
   /** แสดงตัวนับเมื่อมีเพดาน — ผู้ใช้ต้องรู้ก่อนถูกตัด ไม่ใช่หลังจากส่งไปแล้ว */
   maxLength?: number;
   id?: string;
+  /**
+   * ชื่อสำหรับ screen reader เมื่อข้อความที่เห็นไม่พอแยกแยะ
+   *
+   * **ต้องเป็น prop ชื่อนี้ ไม่ใช่ `aria-label`** — TypeScript ไม่ตรวจแอตทริบิวต์
+   * ที่มีขีดกลางบน JSX ของคอมโพเนนต์เรา มันจึงหายไปเงียบ ๆ (CLAUDE.md §8)
+   */
+  ariaLabel?: string;
 }
 
 export function Textarea({
@@ -312,6 +358,7 @@ export function Textarea({
   errorMessage,
   maxLength,
   id,
+  ariaLabel,
 }: TextareaProps): ReactNode {
   const errorId = id === undefined ? undefined : `${id}-error`;
   // เตือนเมื่อเหลือน้อยกว่า 10% ของเพดาน ไม่ใช่ตอนเต็มแล้ว
@@ -327,6 +374,7 @@ export function Textarea({
         maxLength={maxLength}
         aria-invalid={invalid}
         aria-describedby={invalid ? errorId : undefined}
+        {...(ariaLabel === undefined ? {} : { 'aria-label': ariaLabel })}
         onChange={(e) => {
           onChange(e.target.value);
         }}
