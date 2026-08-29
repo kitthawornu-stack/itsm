@@ -17,12 +17,27 @@ import {
   HttpException,
   HttpStatus,
   Param,
+  Post,
   Put,
   Query,
 } from '@nestjs/common';
 import type { TenantContext } from '@itsm/types';
 
 import { Ctx } from '../../infrastructure/http/session.guard';
+import { assertTenantAdmin } from '../permission';
+import {
+  BackwardWindowError as FreezeBackwardError,
+  DuplicateFreezeError,
+  FreezeNameRequiredError,
+  FreezeNotFoundError,
+  FreezeReasonRequiredError,
+  FreezeTooLongError,
+  createFreeze,
+  deleteFreeze,
+  listFreezes,
+  updateFreeze,
+  type FreezeView,
+} from './change-freeze.service';
 import {
   BackwardWindowError,
   InFreezeWindowError,
@@ -40,10 +55,18 @@ function toHttp(e: unknown): never {
   if (e instanceof WorkItemNotFoundForWindowError) {
     throw new HttpException({ error: 'not_found', message: e.message }, HttpStatus.NOT_FOUND);
   }
+  if (e instanceof FreezeNotFoundError) {
+    throw new HttpException({ error: 'not_found', message: e.message }, HttpStatus.NOT_FOUND);
+  }
   if (
     e instanceof BackwardWindowError ||
+    e instanceof FreezeBackwardError ||
     e instanceof WindowTooLongError ||
-    e instanceof InFreezeWindowError
+    e instanceof InFreezeWindowError ||
+    e instanceof FreezeNameRequiredError ||
+    e instanceof FreezeReasonRequiredError ||
+    e instanceof FreezeTooLongError ||
+    e instanceof DuplicateFreezeError
   ) {
     // 422 ไม่ใช่ 500 — ข้อมูลที่ส่งมาใช้ไม่ได้ ไม่ใช่ระบบพัง
     throw new HttpException(
@@ -141,4 +164,94 @@ export class ChangeCalendarController {
     }
     return changeCalendar(ctx, from, to);
   }
+}
+
+/**
+ * ช่วงห้ามเปลี่ยนแปลงระดับองค์กร — ผู้ดูแลเท่านั้น
+ *
+ * `assertTenantAdmin` อยู่ที่ทุกเมธอด **รวมทั้งการอ่าน** — รายชื่อช่วงห้าม
+ * พร้อมจำนวนที่กระทบ บอกได้ว่าองค์กรกำลังวางแผนอะไรอยู่บ้าง
+ */
+@Controller('change-freezes')
+export class ChangeFreezeController {
+  @Get()
+  async list(@Ctx() ctx: TenantContext): Promise<{ rows: FreezeView[] }> {
+    await assertTenantAdmin(ctx);
+    return { rows: await listFreezes(ctx) };
+  }
+
+  @Post()
+  @HttpCode(HttpStatus.CREATED)
+  async create(
+    @Ctx() ctx: TenantContext,
+    @Body() body: { name?: unknown; reason?: unknown; startsAt?: unknown; endsAt?: unknown },
+  ): Promise<{ id: string }> {
+    await assertTenantAdmin(ctx);
+    try {
+      const r = await createFreeze(ctx, readBody(body));
+      return { id: r.id.toString() };
+    } catch (e) {
+      return toHttp(e);
+    }
+  }
+
+  @Put(':id')
+  async update(
+    @Ctx() ctx: TenantContext,
+    @Param('id') id: string,
+    @Body() body: { name?: unknown; reason?: unknown; startsAt?: unknown; endsAt?: unknown },
+  ): Promise<{ ok: true }> {
+    await assertTenantAdmin(ctx);
+    try {
+      await updateFreeze(ctx, freezeId(id), readBody(body));
+      return { ok: true };
+    } catch (e) {
+      return toHttp(e);
+    }
+  }
+
+  @Delete(':id')
+  @HttpCode(HttpStatus.OK)
+  async remove(@Ctx() ctx: TenantContext, @Param('id') id: string): Promise<{ ok: true }> {
+    await assertTenantAdmin(ctx);
+    try {
+      await deleteFreeze(ctx, freezeId(id));
+      return { ok: true };
+    } catch (e) {
+      return toHttp(e);
+    }
+  }
+}
+
+/** รหัสที่แปลงไม่ได้ต้องเป็น 422 ไม่ใช่ 500 จาก `BigInt()` ที่โยนเอง */
+function freezeId(raw: string): bigint {
+  if (!/^[0-9]+$/.test(raw)) {
+    throw new HttpException(
+      { error: 'invalid_input', message: 'รหัสช่วงห้ามไม่ถูกต้อง' },
+      HttpStatus.UNPROCESSABLE_ENTITY,
+    );
+  }
+  return BigInt(raw);
+}
+
+/**
+ * อ่านข้อมูลนำเข้าโดยไม่แปลงชนิดเงียบ ๆ
+ *
+ * ค่าที่ไม่ใช่สตริงกลายเป็นสตริงว่าง แล้ว service ปฏิเสธพร้อมข้อความที่
+ * อ่านรู้เรื่อง — ดีกว่า `String(body.name)` ที่ทำให้ `undefined` กลายเป็น
+ * ชื่อช่วงห้ามว่า "undefined"
+ */
+function readBody(body: {
+  name?: unknown;
+  reason?: unknown;
+  startsAt?: unknown;
+  endsAt?: unknown;
+}): { name: string; reason: string; startsAt: string; endsAt: string } {
+  const str = (v: unknown): string => (typeof v === 'string' ? v : '');
+  return {
+    name: str(body.name),
+    reason: str(body.reason),
+    startsAt: str(body.startsAt),
+    endsAt: str(body.endsAt),
+  };
 }

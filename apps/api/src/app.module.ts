@@ -31,6 +31,7 @@ import {
 import { ApprovalController } from './modules/approval/approval.controller';
 import {
   ChangeCalendarController,
+  ChangeFreezeController,
   ChangeWindowController,
 } from './modules/workitem/change-window.controller';
 import { AuditController } from './modules/audit/audit.controller';
@@ -66,6 +67,7 @@ import { WorkItemController } from './modules/workitem/workitem.controller';
     ApprovalController,
     ChangeWindowController,
     ChangeCalendarController,
+    ChangeFreezeController,
     AuditController,
     ReportController,
     KnowledgeController,

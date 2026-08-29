@@ -21,3 +21,4 @@ export * from './duration';
 export * from './worklog.service';
 export * from './change-window';
 export * from './change-window.service';
+export * from './change-freeze.service';
