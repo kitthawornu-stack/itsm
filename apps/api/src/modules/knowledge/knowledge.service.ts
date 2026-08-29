@@ -82,6 +82,28 @@ async function seesDrafts(ctx: TenantContext): Promise<boolean> {
   return false;
 }
 
+export class NotAnAuthorError extends Error {
+  constructor() {
+    super('ต้องเป็นทีมงานจึงจะเขียนหรือแก้บทความได้');
+    this.name = 'NotAnAuthorError';
+  }
+}
+
+/**
+ * ใครเขียนบทความได้
+ *
+ * เกณฑ์เดียวกับการเห็นร่าง — คนที่เห็นของที่ทีมยังไม่พร้อมเผยแพร่ คือคนที่
+ * อยู่ในทีม · **ผู้แจ้งเขียนไม่ได้** ไม่ใช่เพราะเขาไม่รู้เรื่อง แต่เพราะ
+ * บทความในคลังคือคำตอบทางการของทีม ไม่ใช่ที่บันทึกของแต่ละคน
+ *
+ * รอบแรกไม่มีการตรวจสิทธิ์ตรงนี้เลย — ใครที่ล็อกอินได้ก็เขียนได้ รวมถึงผู้แจ้ง
+ * และเผยแพร่ให้ทุกคนอ่านได้ด้วย · จับได้ตอนจะต่อ endpoint แล้วต้องตอบว่า
+ * "ปลายทางนี้ให้ใครเรียก"
+ */
+async function assertAuthor(ctx: TenantContext): Promise<void> {
+  if (!(await seesDrafts(ctx))) throw new NotAnAuthorError();
+}
+
 /**
  * ค้นบทความ
  *
@@ -163,7 +185,8 @@ export async function createArticle(
   now: UtcDate = systemClock.nowUtc(),
 ): Promise<{ id: bigint }> {
   const actorId = ctx.actorId;
-  if (actorId === null) throw new ArticleNotFoundError();
+  if (actorId === null) throw new NotAnAuthorError();
+  await assertAuthor(ctx);
   const title = input.title.trim().slice(0, 500);
   const body = input.body.trim().slice(0, ARTICLE_MAX);
   if (title === '') throw new EmptyArticleError('title');
@@ -205,6 +228,7 @@ export async function updateArticle(
   input: Partial<ArticleInput>,
   now: UtcDate = systemClock.nowUtc(),
 ): Promise<void> {
+  await assertAuthor(ctx);
   const row = await tenantScoped(ctx).knowledgeArticle.findFirst({
     where: { id, deletedAt: null },
     select: { id: true, title: true, isPublished: true },
@@ -274,6 +298,7 @@ export async function deleteArticle(
   id: bigint,
   now: UtcDate = systemClock.nowUtc(),
 ): Promise<void> {
+  await assertAuthor(ctx);
   const row = await tenantScoped(ctx).knowledgeArticle.findFirst({
     where: { id, deletedAt: null },
     select: { id: true, title: true },

@@ -113,6 +113,13 @@ import {
   setParent,
 } from './hierarchy.service';
 import {
+  ArticleNotFoundError,
+  articlesOf,
+  attachArticle,
+  detachArticle,
+  rateArticle,
+} from '../knowledge';
+import {
   CommentNotFoundError,
   NotCommentAuthorError,
   deleteComment,
@@ -810,6 +817,8 @@ export class WorkItemController {
         `linksOf` กรองปลายทางที่ผู้ใช้เปิดดูไม่ได้ออกให้แล้ว
       */
       links: await linksOf(ctx, item.id),
+      // บทความที่แนบไว้ — กรองที่ยังไม่เผยแพร่ออกให้แล้วตามสิทธิ์ผู้อ่าน
+      articles: await articlesOf(ctx, item.id),
       // ลำดับชั้น — เรื่องหลักและงานย่อยพร้อมความคืบหน้า
       parent: await parentOf(ctx, item.id),
       children: await childrenOf(ctx, item.id),
@@ -1476,6 +1485,63 @@ export class WorkItemController {
           { error: 'invalid_parent', message: e.message },
           HttpStatus.UNPROCESSABLE_ENTITY,
         );
+      }
+      throw e;
+    }
+  }
+
+  /**
+   * แนบ/ถอดบทความคลังความรู้กับเรื่องนี้
+   *
+   * `helpful` ส่งมาเมื่อไรก็บันทึกทันที — เป็นข้อมูลเดียวที่บอกได้ว่าบทความไหน
+   * คุ้มค่าที่จะดูแลต่อ และบทความไหนเขียนไว้แล้วไม่มีใครใช้
+   */
+  @Post(':key/articles')
+  @HttpCode(HttpStatus.OK)
+  async attachArticleToItem(
+    @Ctx() ctx: TenantContext,
+    @Param('key') key: string,
+    @Body() body: { articleId?: unknown; helpful?: unknown },
+  ): Promise<{ ok: true }> {
+    let articleId: bigint;
+    try {
+      articleId = BigInt(typeof body.articleId === 'string' ? body.articleId : Number(body.articleId));
+    } catch {
+      throw new HttpException({ message: 'ไม่พบบทความที่ระบุ' }, HttpStatus.NOT_FOUND);
+    }
+    try {
+      if (typeof body.helpful === 'boolean') {
+        await rateArticle(ctx, key, articleId, body.helpful);
+      } else {
+        await attachArticle(ctx, key, articleId);
+      }
+      return { ok: true };
+    } catch (e) {
+      if (e instanceof ArticleNotFoundError) {
+        throw new HttpException({ message: e.message }, HttpStatus.NOT_FOUND);
+      }
+      throw e;
+    }
+  }
+
+  @Delete(':key/articles/:articleId')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async detachArticleFromItem(
+    @Ctx() ctx: TenantContext,
+    @Param('key') key: string,
+    @Param('articleId') articleId: string,
+  ): Promise<void> {
+    let id: bigint;
+    try {
+      id = BigInt(articleId);
+    } catch {
+      throw new HttpException({ message: 'ไม่พบบทความที่ระบุ' }, HttpStatus.NOT_FOUND);
+    }
+    try {
+      await detachArticle(ctx, key, id);
+    } catch (e) {
+      if (e instanceof ArticleNotFoundError) {
+        throw new HttpException({ message: e.message }, HttpStatus.NOT_FOUND);
       }
       throw e;
     }

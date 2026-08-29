@@ -25,6 +25,7 @@ import { PermissionDeniedError } from '../src/modules/permission';
 import {
   ArticleNotFoundError,
   EmptyArticleError,
+  NotAnAuthorError,
   articlesOf,
   attachArticle,
   createArticle,
@@ -360,5 +361,32 @@ describe('E · ลบบทความ', () => {
 
   it('ลบซ้ำ ตอบเหมือนไม่มีอยู่', async () => {
     await expect(deleteArticle(staff, publishedId)).rejects.toThrow(ArticleNotFoundError);
+  });
+});
+
+describe('F · ใครเขียนบทความได้', () => {
+  it('**ผู้แจ้งเขียนบทความไม่ได้**', async () => {
+    /*
+      รอบแรกไม่มีการตรวจสิทธิ์ตรงนี้เลย — ใครที่ล็อกอินได้ก็เขียนได้ และ
+      เผยแพร่ให้ทุกคนอ่านได้ด้วย · จับได้ตอนจะต่อ endpoint แล้วต้องตอบว่า
+      "ปลายทางนี้ให้ใครเรียก" ซึ่งเป็นคำถามที่ service ควรตอบได้อยู่แล้ว
+
+      บทความในคลังคือคำตอบทางการของทีม ไม่ใช่ที่บันทึกของแต่ละคน
+    */
+    await expect(
+      createArticle(customer, { title: 'ลูกค้าเขียนเอง', body: 'เนื้อหา' }),
+    ).rejects.toThrow(NotAnAuthorError);
+  });
+
+  it('ผู้แจ้งแก้และลบบทความของทีมไม่ได้', async () => {
+    await expect(updateArticle(customer, draftId, { title: 'แก้ชื่อ' })).rejects.toThrow(
+      NotAnAuthorError,
+    );
+    await expect(deleteArticle(customer, draftId)).rejects.toThrow(NotAnAuthorError);
+  });
+
+  it('ทีมงานเขียนได้', async () => {
+    const r = await createArticle(staff, { title: `ทีมเขียน ${STAMP}`, body: 'เนื้อหาของทีม' });
+    expect(r.id).toBeDefined();
   });
 });

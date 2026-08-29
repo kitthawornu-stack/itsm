@@ -26,6 +26,7 @@ import {
 import { ApprovalController } from './modules/approval/approval.controller';
 import { AuditController } from './modules/audit/audit.controller';
 import { ReportController } from './modules/reporting/report.controller';
+import { KnowledgeController } from './modules/knowledge/knowledge.controller';
 import { WorkItemController } from './modules/workitem/workitem.controller';
 
 /**
@@ -53,6 +54,7 @@ import { WorkItemController } from './modules/workitem/workitem.controller';
     ApprovalController,
     AuditController,
     ReportController,
+    KnowledgeController,
     NotificationController,
   ],
   /**
