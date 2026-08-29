@@ -26,6 +26,7 @@ import {
   CONDITION_FIELDS,
   MAX_DEPTH,
   TRIGGERS,
+  CONDITION_OPS,
   TooDeepError,
   matches,
   plan,
@@ -256,5 +257,77 @@ describe('F · ชนิดที่ประกาศ ต้องมีตั�
     const branches = [...source.matchAll(/case '([a-z-]+)':/g)].map((m) => m[1]);
     const known = new Set<string>(ACTION_KINDS);
     expect(branches.filter((b) => b !== undefined && !known.has(b))).toEqual([]);
+  });
+});
+
+describe('G · เงื่อนไขที่นับตัวเลข — สำหรับกฎที่ปลุกตัวเองตามเวลา', () => {
+  /*
+    กฎที่คุ้มที่สุดในระบบแจ้งปัญหาคือ "ไม่มีใครตอบมา 2 วันแล้ว → เตือนหัวหน้า"
+    ซึ่งเทียบ **มากกว่าหรือเท่ากับ** ไม่ใช่เท่ากับ · การใช้ `is` กับจำนวนวัน
+    แปลว่ากฎทำงานเฉพาะวันที่ 2 พอดี แล้วเงียบตั้งแต่วันที่ 3 เป็นต้นไป
+    ซึ่งกลับความหมายของกฎทั้งข้อ และไม่มีอะไรฟ้อง
+  */
+  const idle = (days: number | null): AutomationEvent => ({
+    ...ev({ kind: 'item.idle' }),
+    ...(days === null ? {} : { idleDays: days }),
+  });
+
+  it('`at-least` อยู่ในรายการเดียวกับ op อื่น', () => {
+    expect(CONDITION_OPS).toContain('at-least');
+  });
+
+  it('**เทียบมากกว่าหรือเท่ากับ ไม่ใช่เท่ากับ**', () => {
+    const c: Condition = { field: 'idleDays', op: 'at-least', value: '2' };
+    expect(matches(c, idle(2))).toBe(true);
+    expect(matches(c, idle(9))).toBe(true);
+    expect(matches(c, idle(1))).toBe(false);
+  });
+
+  it('**ค่าที่ไม่มี ต้องไม่ผ่าน** — เหมือน `is`', () => {
+    // เหตุการณ์ที่ไม่ใช่ item.idle ไม่มีจำนวนวัน · กฎต้องไม่ทำงานกับมัน
+    expect(matches({ field: 'idleDays', op: 'at-least', value: '2' }, ev())).toBe(false);
+  });
+
+  it('**เกณฑ์ที่ไม่ใช่ตัวเลข = กฎที่เขียนผิด ต้องไม่ผ่าน**', () => {
+    /*
+      "ไม่มีความเคลื่อนไหว at-least สองวัน" อ่านเข้าใจได้สำหรับคน แต่เทียบไม่ได้
+      · การปล่อยผ่านทำให้กฎทำงานทุกใบ ซึ่งตรงข้ามกับที่ผู้ดูแลตั้งใจอย่างสิ้นเชิง
+    */
+    expect(matches({ field: 'idleDays', op: 'at-least', value: 'สองวัน' }, idle(9))).toBe(false);
+    expect(matches({ field: 'idleDays', op: 'at-least', value: '' }, idle(9))).toBe(false);
+  });
+
+  it('**"ไม่มีค่า" ต่างจาก "ศูนย์"**', () => {
+    /*
+      เหตุการณ์ที่ไม่ใช่ `item.idle` ไม่มีจำนวนวัน — ไม่ใช่มี 0 วัน · ถ้าปล่อยให้
+      เป็น 0 กฎ "ไม่มีความเคลื่อนไหวอย่างน้อย 0 วัน" จะทำงานกับทุกความเห็น
+      ทุกการเปลี่ยนสถานะทั่วทั้งระบบ ซึ่งเป็นคนละกฎกับที่ผู้ดูแลเขียน
+    */
+    const c: Condition = { field: 'idleDays', op: 'at-least', value: '0' };
+    expect(matches(c, ev({ kind: 'comment.added' }))).toBe(false);
+    expect(matches(c, idle(0))).toBe(true);
+  });
+
+  it('`at-least` กับฟิลด์ที่เป็นข้อความ ต้องไม่ผ่าน', () => {
+    // "โปรเจกต์ at-least SD" ไม่มีความหมาย — เหมือน `has` กับค่าเดี่ยว
+    expect(matches({ field: 'project', op: 'at-least', value: '2' }, idle(9))).toBe(false);
+  });
+
+  it('`at-least` กับความสำคัญยังใช้ได้ — มันเป็นตัวเลขจริง', () => {
+    /*
+      แต่ต้องอ่านให้ถูก: rank 1 คือด่วนที่สุด "at-least 3" จึงแปลว่า
+      **ไม่ด่วน** ไม่ใช่ด่วนมาก · หน้าจอต้องอธิบายตรงนี้ ไม่ใช่ปล่อยให้เดา
+    */
+    expect(matches({ field: 'priority', op: 'at-least', value: '3' }, idle(9))).toBe(false);
+    const low = { ...idle(9), item: { ...idle(9).item, priorityRank: 4 } };
+    expect(matches({ field: 'priority', op: 'at-least', value: '3' }, low)).toBe(true);
+  });
+
+  it('`item.idle` เป็น trigger ที่ระบบรู้จัก', () => {
+    expect(TRIGGERS).toContain('item.idle');
+    const r = rule({ trigger: 'item.idle', conditions: [] });
+    expect(ruleApplies(r, idle(5))).toBe(true);
+    // และไม่ทำงานกับเหตุการณ์ชนิดอื่น
+    expect(ruleApplies(r, ev())).toBe(false);
   });
 });

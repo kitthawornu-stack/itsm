@@ -65,6 +65,7 @@ const TRIGGER_TH: Record<string, string> = {
   'item.transitioned': 'เมื่อสถานะเปลี่ยน',
   'comment.added': 'เมื่อมีความเห็นใหม่',
   'sla.breached': 'เมื่อเลยกำหนด SLA',
+  'item.idle': 'เมื่อไม่มีความเคลื่อนไหวมานาน',
 };
 const FIELD_TH: Record<string, string> = {
   project: 'โปรเจกต์ (คีย์)',
@@ -75,11 +76,14 @@ const FIELD_TH: Record<string, string> = {
   label: 'ป้าย',
   transition: 'ชื่อปุ่มที่กด',
   unassigned: 'ยังไม่มีผู้รับผิดชอบ (true/false)',
+  idleDays: 'จำนวนวันที่ไม่มีความเคลื่อนไหว',
 };
 const OP_TH: Record<string, string> = {
   is: 'เท่ากับ',
   'is-not': 'ไม่เท่ากับ',
   has: 'มีอยู่ในรายการ',
+  // rank 1 = ด่วนที่สุด · "อย่างน้อย 3" จึงแปลว่าไม่ด่วน ไม่ใช่ด่วนมาก
+  'at-least': 'อย่างน้อย (ตัวเลข)',
 };
 const ACTION_TH: Record<string, string> = {
   assign: 'มอบหมายให้ (รหัสผู้ใช้)',

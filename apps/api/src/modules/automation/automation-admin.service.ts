@@ -29,14 +29,13 @@ import { readActions, readConditions } from './automation.service';
 import {
   ACTION_KINDS,
   CONDITION_FIELDS,
+  CONDITION_OPS,
   MAX_DEPTH,
   TRIGGERS,
   type Action,
   type Condition,
   type TriggerKind,
 } from './automation-engine';
-
-export const CONDITION_OPS: readonly Condition['op'][] = ['is', 'is-not', 'has'];
 
 export class RuleNotFoundError extends Error {
   constructor(id: bigint) {
@@ -146,6 +145,14 @@ function validate(input: RuleInput): { conditions: Condition[]; actions: Action[
       ซึ่งอ่านบนหน้าจอเหมือนเงื่อนไขปกติทุกอย่าง
     */
     if (value.trim() === '') throw new InvalidRuleError(`${at}: ต้องระบุค่าที่จะเทียบ`);
+    /*
+      `at-least` เทียบตัวเลขเท่านั้น · เกณฑ์ที่ไม่ใช่ตัวเลขทำให้เงื่อนไขเป็นเท็จ
+      ตลอดกาล — กฎจะถูกบันทึก แสดงบนหน้าจอเหมือนกฎปกติ แล้วเงียบตลอดไป
+      ปฏิเสธตั้งแต่ตอนบันทึกจึงเป็นทางเดียวที่ผู้ดูแลจะรู้
+    */
+    if (op === 'at-least' && !Number.isFinite(Number(value.trim()))) {
+      throw new InvalidRuleError(`${at}: "${value.trim()}" ไม่ใช่ตัวเลข — "อย่างน้อย" เทียบได้เฉพาะตัวเลข`);
+    }
     return { field, op, value: value.trim() } as Condition;
   });
 
@@ -179,6 +186,14 @@ function warningsFor(trigger: string, conditions: Condition[], actions: Action[]
   }
   if (conditions.length === 0) {
     out.push('ไม่มีเงื่อนไขเลย — กฎนี้จะทำงานกับทุกเรื่องที่เกิดเหตุการณ์นี้');
+  }
+  if (trigger === 'item.idle' && !conditions.some((c) => c.field === 'idleDays')) {
+    /*
+      กฎที่ปลุกตามเวลาต่างจากกฎอื่นตรงที่ **ไม่มีใครเป็นคนจุดชนวน** · กฎที่
+      ไม่ระบุจำนวนวันจะทำงานกับทุกเรื่องที่ยังเปิดอยู่ในรอบกวาดรอบเดียว
+      ซึ่งอาจเป็นพันใบ และผู้ดูแลจะไม่ได้เห็นมันมาก่อนเลย
+    */
+    out.push('ยังไม่ได้ระบุจำนวนวัน — กฎนี้จะทำงานกับทุกเรื่องที่ยังเปิดอยู่ในรอบกวาดรอบเดียว');
   }
   return out;
 }

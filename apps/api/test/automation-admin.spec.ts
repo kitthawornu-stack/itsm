@@ -207,6 +207,30 @@ describe('B · กฎที่จะไม่ทำงาน ต้องไม�
     ).rejects.toThrow(InvalidRuleError);
   }, 60_000);
 
+  it('**เกณฑ์ของ "อย่างน้อย" ที่ไม่ใช่ตัวเลข ถูกปฏิเสธ**', async () => {
+    /*
+      เงื่อนไขที่เทียบตัวเลขไม่ได้ จะเป็นเท็จตลอดกาล · กฎถูกบันทึก แสดงบนหน้าจอ
+      เหมือนกฎปกติ แล้วเงียบตลอดไป — เหมือนชนิดการกระทำที่พิมพ์ผิดทุกประการ
+    */
+    await expect(
+      createRule(admin, {
+        ...goodRule('อย่างน้อยไม่ใช่ตัวเลข'),
+        trigger: 'item.idle',
+        conditions: [{ field: 'idleDays', op: 'at-least', value: 'สองวัน' }],
+      }),
+    ).rejects.toThrow(/ไม่ใช่ตัวเลข/);
+  }, 60_000);
+
+  it('เกณฑ์ที่เป็นตัวเลข ผ่าน', async () => {
+    // ต้องมีเคสนี้ด้วย — เคสปฏิเสธอย่างเดียวยังเขียวได้ถ้าโค้ดปฏิเสธทุกอย่าง
+    const { id } = await createRule(admin, {
+      ...goodRule('อย่างน้อยเป็นตัวเลข'),
+      trigger: 'item.idle',
+      conditions: [{ field: 'idleDays', op: 'at-least', value: '2' }],
+    });
+    expect(BigInt(id)).toBeGreaterThan(0n);
+  }, 60_000);
+
   it('**ค่าที่ไม่ใช่สตริง ต้องไม่กลายเป็น "[object Object]"**', async () => {
     /*
       `String({})` ผ่านการตรวจ "ไม่ว่าง" ไปได้ แล้วกฎจะถูกบันทึกด้วยค่าที่
@@ -303,6 +327,33 @@ describe('C · สร้าง แก้ เปิด ลบ', () => {
 
   it('ลบกฎที่ไม่มีอยู่ ได้ error ที่บอกว่าไม่พบ ไม่ใช่เงียบ', async () => {
     await expect(deleteRule(admin, 999_999_999n)).rejects.toThrow(RuleNotFoundError);
+  }, 60_000);
+});
+
+describe('C2 · คำเตือน — บอก ไม่ห้าม', () => {
+  it('**กฎที่ปลุกตามเวลาแต่ไม่ระบุจำนวนวัน ต้องมีคำเตือน**', async () => {
+    /*
+      กฎที่ปลุกตามเวลาต่างจากกฎอื่นตรงที่ไม่มีใครเป็นคนจุดชนวน · กฎที่ไม่ระบุ
+      จำนวนวันจะทำงานกับทุกเรื่องที่ยังเปิดอยู่ในรอบกวาดรอบเดียว ซึ่งอาจเป็นพันใบ
+      และผู้ดูแลจะไม่ได้เห็นมันมาก่อนเลย · เตือน ไม่ห้าม เพราะอาจตั้งใจจริง
+    */
+    const { id } = await createRule(admin, {
+      ...goodRule('ปลุกตามเวลาไม่ระบุวัน'),
+      trigger: 'item.idle',
+      conditions: [{ field: 'project', op: 'is', value: 'SD' }],
+    });
+    const listed = (await listRules(admin)).find((r) => r.id === id);
+    expect(listed?.warnings.some((w) => w.includes('จำนวนวัน'))).toBe(true);
+  }, 60_000);
+
+  it('ระบุจำนวนวันแล้ว ไม่มีคำเตือนนั้น', async () => {
+    const { id } = await createRule(admin, {
+      ...goodRule('ปลุกตามเวลาระบุวัน'),
+      trigger: 'item.idle',
+      conditions: [{ field: 'idleDays', op: 'at-least', value: '2' }],
+    });
+    const listed = (await listRules(admin)).find((r) => r.id === id);
+    expect(listed?.warnings.some((w) => w.includes('จำนวนวัน'))).toBe(false);
   }, 60_000);
 });
 

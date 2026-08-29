@@ -21,6 +21,8 @@ import { runAutomation, type AutomationResult } from './automation.service';
 export interface FireOptions {
   /** ชื่อปุ่มที่เพิ่งกด — เฉพาะ `item.transitioned` */
   transitionName?: string;
+  /** จำนวนวันที่ไม่มีความเคลื่อนไหว — เฉพาะ `item.idle` · ตัวกวาดคำนวณให้ */
+  idleDays?: number;
   /**
    * ชั้นของการปลุกต่อกัน
    *
@@ -90,6 +92,7 @@ export async function fireAutomation(
         labels: labelRows.map((r) => r.valueText).filter((v): v is string => v !== null),
       },
       ...(options.transitionName === undefined ? {} : { transitionName: options.transitionName }),
+      ...(options.idleDays === undefined ? {} : { idleDays: options.idleDays }),
       actorId: ctx.actorId?.toString() ?? null,
       depth: options.depth ?? 0,
     };
@@ -125,6 +128,8 @@ export async function fireAutomation(
     try {
       await tenantScoped(ctx).automationRun.create({
         data: {
+          // นาฬิกาเดียวกับที่เหลือของรอบ — ดู automation.service.ts
+          createdAt: now,
           tenantId: ctx.tenantId,
           ruleName: '—',
           trigger: kind,
