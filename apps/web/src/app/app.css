@@ -2246,3 +2246,79 @@
   white-space: nowrap;
   border: 0;
 }
+
+/* ---------- กฎอัตโนมัติ ---------- */
+
+/*
+  `.page-sub` ถูกใช้ใน 8 หน้าจอมาตลอดแต่ **ไม่เคยมีกฎ CSS อยู่จริง**
+  — ย่อหน้าใต้หัวเรื่องจึงได้ขนาดและสีเริ่มต้นของเบราว์เซอร์ ไม่มี error
+  ไม่มีคำเตือน หน้าจอยังเรนเดอร์ได้ปกติ แค่หน้าตาผิด (บทเรียนเดียวกับ
+  ตัวแปร CSS ที่ไม่มีนิยาม) · นิยามไว้ตรงนี้ให้ตรงกับ `.page-lead`
+*/
+.page-sub {
+  color: var(--text-muted);
+  font-size: 14px;
+  line-height: var(--line-height-body);
+  margin: 0 0 var(--space-6);
+  max-width: 60ch;
+}
+
+.section-title {
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-weight: 600;
+  line-height: var(--line-height-heading);
+  margin: var(--space-6) 0 var(--space-2);
+}
+
+.muted {
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: var(--line-height-body);
+  margin: 0;
+}
+
+/* คำเตือนของกฎ — เตือน ไม่ห้าม จึงใช้สี warning ไม่ใช่ critical */
+.auto-warn {
+  color: var(--status-warning);
+  font-size: 13px;
+  line-height: var(--line-height-body);
+  margin: var(--space-1) 0 0;
+}
+
+.auto-form {
+  display: grid;
+  gap: var(--space-3);
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  margin-bottom: var(--space-4);
+}
+
+/*
+  แถวเงื่อนไข/การกระทำ — ห่อลงบรรทัดใหม่เมื่อจอแคบ
+  ป้ายไทยยาวกว่าอังกฤษเฉลี่ย 1.3 เท่า (CLAUDE.md §5) ช่องจึงต้องยืดได้
+*/
+.auto-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+.auto-row > select,
+.auto-row > input {
+  flex: 1 1 10rem;
+  min-width: 0;
+}
+
+.auto-submit {
+  margin-top: var(--space-4);
+}
+
+/* ช่องติ๊กกับปุ่มลบในคอลัมน์เดียวกัน — ไม่มีระยะห่างจะอ่านติดกันเป็นคำเดียว */
+.auto-cell-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
