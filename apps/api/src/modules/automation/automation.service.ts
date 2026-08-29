@@ -58,6 +58,30 @@ export interface AutomationResult {
  * ทิ้งทั้งรอบ — กฎเสียหนึ่งข้อไม่ควรทำให้ที่เหลือเงียบ · และกฎที่ไม่มีการกระทำ
  * ไม่ผลิตอะไรออกมาอยู่แล้ว จึงปลอดภัยโดยตัวมันเอง
  */
+const arr = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
+const str = (v: unknown): string => (typeof v === 'string' ? v : '');
+
+/**
+ * อ่านเงื่อนไขจาก JSON ที่เก็บไว้
+ *
+ * ค่าที่รูปร่างผิดกลายเป็นสตริงว่าง **ไม่ใช่ถูกทิ้ง** — เงื่อนไขที่หายไปหนึ่งข้อ
+ * กลับความหมายของกฎได้ทั้งข้อ ส่วนเงื่อนไขที่ว่างจะไม่ตรงกับอะไร ซึ่งปลอดภัยกว่า
+ * และผู้ดูแลเห็นช่องว่างบนหน้าจอ จึงรู้ว่ามีอะไรผิด
+ */
+export function readConditions(v: unknown): Condition[] {
+  return arr(v).map((c) => {
+    const o = c as Record<string, unknown>;
+    return { field: str(o.field), op: str(o.op), value: str(o.value) } as Condition;
+  });
+}
+
+export function readActions(v: unknown): Rule['actions'][number][] {
+  return arr(v).map((a) => {
+    const o = a as Record<string, unknown>;
+    return { kind: str(o.kind), value: str(o.value) } as Rule['actions'][number];
+  });
+}
+
 function toRule(row: {
   id: bigint;
   name: string;
@@ -66,21 +90,13 @@ function toRule(row: {
   conditions: unknown;
   actions: unknown;
 }): Rule {
-  const arr = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
-  const str = (v: unknown): string => (typeof v === 'string' ? v : '');
   return {
     id: row.id.toString(),
     name: row.name,
     trigger: row.trigger as TriggerKind,
     isEnabled: row.isEnabled,
-    conditions: arr(row.conditions).map((c) => {
-      const o = c as Record<string, unknown>;
-      return { field: str(o.field), op: str(o.op), value: str(o.value) } as Condition;
-    }),
-    actions: arr(row.actions).map((a) => {
-      const o = a as Record<string, unknown>;
-      return { kind: str(o.kind), value: str(o.value) } as Rule['actions'][number];
-    }),
+    conditions: readConditions(row.conditions),
+    actions: readActions(row.actions),
   };
 }
 
