@@ -29,6 +29,10 @@ import {
   CatalogController,
 } from './modules/catalog/catalog.controller';
 import { ApprovalController } from './modules/approval/approval.controller';
+import {
+  ChangeCalendarController,
+  ChangeWindowController,
+} from './modules/workitem/change-window.controller';
 import { AuditController } from './modules/audit/audit.controller';
 import { ReportController } from './modules/reporting/report.controller';
 import { KnowledgeController } from './modules/knowledge/knowledge.controller';
@@ -60,6 +64,8 @@ import { WorkItemController } from './modules/workitem/workitem.controller';
     CatalogController,
     CatalogAdminController,
     ApprovalController,
+    ChangeWindowController,
+    ChangeCalendarController,
     AuditController,
     ReportController,
     KnowledgeController,

@@ -19,3 +19,5 @@ export * from './hierarchy.service';
 export * from './bulk-label.service';
 export * from './duration';
 export * from './worklog.service';
+export * from './change-window';
+export * from './change-window.service';

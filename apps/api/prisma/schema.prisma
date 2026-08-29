@@ -55,6 +55,8 @@ model Tenant {
   notificationRules NotificationRule[]
   notificationPrefs NotificationPreference[]
   notifications     Notification[]
+  changeWindows     ChangeWindow[]
+  changeFreezes     ChangeFreeze[]
 
   @@map("tenant")
 }
@@ -94,6 +96,7 @@ model User {
   automationRules         AutomationRule[]
   notificationPreferences NotificationPreference[]
   notifications           Notification[]
+  changeWindows           ChangeWindow[]
   workLogs                WorkLog[]
 
   @@unique([tenantId, email])
@@ -644,6 +647,7 @@ model WorkItem {
   workLogs       WorkLog[]
   inboundMails   InboundMail[]
   notifications  Notification[]
+  changeWindow   ChangeWindow?
 
   @@unique([tenantId, itemKey])
   @@index([tenantId, projectId, statusId])
@@ -952,6 +956,65 @@ model SlaGoal {
  * `sla_event`** คำนวณใหม่จากเหตุการณ์ได้เสมอ ซึ่งจำเป็นเมื่อต้องแก้ปฏิทิน
  * ย้อนหลังหรือแก้เป้าที่ตั้งผิด
  */
+/// หน้าต่างเวลาดำเนินการของการเปลี่ยนแปลงหนึ่งใบ
+///
+/// เป็นตารางบริวารของ `work_item` แบบเดียวกับ `work_item_sla` — ไม่ใช่คอลัมน์
+/// ใน `work_item` เพราะงานส่วนใหญ่ไม่มีหน้าต่างเวลา และไม่ใช่ custom field
+/// เพราะการหาว่า "ช่วงนี้ชนกับใครบ้าง" ต้องเป็นคิวรีช่วงเวลาที่ลง index ได้
+model ChangeWindow {
+  id         BigInt @id @default(autoincrement())
+  tenantId   BigInt @map("tenant_id")
+  workItemId BigInt @unique @map("work_item_id")
+
+  /// ช่วงเวลาแบบ [start, end) — ปลายของอันหนึ่งชนต้นของอีกอันพอดี ไม่ถือว่าชน
+  plannedStart DateTime @map("planned_start") @db.DateTime(3)
+  plannedEnd   DateTime @map("planned_end") @db.DateTime(3)
+
+  /// เหตุผลที่ขอข้ามช่วงห้ามเปลี่ยนแปลง — null เมื่อไม่ได้ข้ามอะไร
+  ///
+  /// เก็บข้อความ ไม่ใช่ boolean · "ข้ามแล้ว" ที่ตอบไม่ได้ว่าทำไม
+  /// คือความเงียบที่ไม่มีใครสืบต่อได้ (บทเรียนเดียวกับ notification_delivery)
+  freezeOverrideReason String? @map("freeze_override_reason") @db.VarChar(500)
+
+  createdById BigInt   @map("created_by_id")
+  createdAt   DateTime @default(now()) @map("created_at") @db.DateTime(3)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.DateTime(3)
+
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  workItem  WorkItem @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+  createdBy User     @relation(fields: [createdById], references: [id], onDelete: Restrict)
+
+  /// คิวรีหาการชนกันวิ่งด้วย (องค์กร, เวลาเริ่ม) แล้วกรอง end ในหน่วยความจำ
+  /// — MySQL ใช้ index ได้แค่คอลัมน์เดียวของช่วง จึงเลือกอันที่คัดทิ้งได้มากกว่า
+  @@index([tenantId, plannedStart])
+  @@map("change_window")
+}
+
+/// ช่วงห้ามเปลี่ยนแปลงระดับองค์กร
+///
+/// **ไม่มีสูตรคำนวณ** — ปิดงบสิ้นปี ช่วงสอบ ช่วงเทศกาล ล้วนมาจากการตกลงกัน
+/// ของคน · ต้องกรอกเอง เหมือนวันหยุดตามประกาศ ครม. ใน `SlaCalendarYear`
+model ChangeFreeze {
+  id       BigInt @id @default(autoincrement())
+  tenantId BigInt @map("tenant_id")
+
+  name String @db.VarChar(120)
+  /// ทำไมถึงห้าม — คนที่จะขอข้ามต้องอ่านแล้วตัดสินใจได้เอง
+  reason String @db.VarChar(500)
+
+  startsAt DateTime @map("starts_at") @db.DateTime(3)
+  endsAt   DateTime @map("ends_at") @db.DateTime(3)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.DateTime(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.DateTime(3)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, name, startsAt])
+  @@index([tenantId, startsAt])
+  @@map("change_freeze")
+}
+
 model WorkItemSla {
   id         BigInt @id @default(autoincrement())
   tenantId   BigInt @map("tenant_id")
