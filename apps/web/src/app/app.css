@@ -1506,6 +1506,136 @@
   line-height: var(--line-height-body);
 }
 
+/* ---------- ปฏิทินการเปลี่ยนแปลง ---------- */
+
+.cal-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-top: var(--space-4);
+}
+
+.cal-ranges {
+  display: flex;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+  font-size: 12.5px;
+  line-height: var(--line-height-body);
+}
+
+.cal-custom {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  font-size: 12.5px;
+}
+
+.cal-custom label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  line-height: var(--line-height-body);
+}
+
+.cal-summary {
+  margin: var(--space-3) 0 0;
+  color: var(--text-muted);
+  font-size: 12.5px;
+  line-height: var(--line-height-body);
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.cal-days {
+  list-style: none;
+  margin: var(--space-4) 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.cal-day-title {
+  margin: 0 0 var(--space-2);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: var(--line-height-body);
+  color: var(--text);
+  border-bottom: 1px solid var(--border);
+  padding-bottom: var(--space-1);
+}
+
+/* ช่วงห้ามเป็นแถบเต็มความกว้างของวัน — ไม่ใช่ป้ายเล็กที่มองข้ามได้ */
+.cal-freeze {
+  margin: 0 0 var(--space-2);
+  padding: var(--space-1) var(--space-3);
+  border-inline-start: 3px solid var(--status-critical);
+  background: var(--surface-2);
+  font-size: 12.5px;
+  line-height: var(--line-height-body);
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.cal-none {
+  margin: 0;
+  color: var(--text-faint);
+  font-size: 12.5px;
+  line-height: var(--line-height-body);
+}
+
+.cal-entries {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.cal-entries li {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-3);
+  border-inline-start: 3px solid var(--border);
+  background: var(--surface);
+  font-size: 12.5px;
+  line-height: var(--line-height-body);
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+/* สีบอกว่าชน แต่ป้าย "ชนกัน" ก็บอกอยู่แล้ว — ไม่ได้พึ่งสีอย่างเดียว */
+.cal-entries li[data-clash='true'] {
+  border-inline-start-color: var(--status-warning);
+}
+
+.cal-time {
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.cal-summary-text {
+  flex: 1 1 12rem;
+}
+
+.cal-tag {
+  flex-shrink: 0;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
 /* ---------- ช่วงห้ามเปลี่ยนแปลง ---------- */
 
 /*
