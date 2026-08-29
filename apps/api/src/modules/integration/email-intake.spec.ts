@@ -18,6 +18,7 @@
  */
 import { describe, expect, it } from 'vitest';
 
+import { bracket, parseReferences } from './mail-source';
 import {
   REJECT,
   cleanSubject,
@@ -207,5 +208,28 @@ describe('F · สร้างเรื่องใหม่', () => {
     expect(decideIntake(mail({ subject: '', text: '   ' }), ctx())).toMatchObject({
       reason: REJECT.empty,
     });
+  });
+});
+
+describe('G · อ่านหัวจดหมายอ้างอิง', () => {
+  it('**ทำให้ Message-ID อยู่ในรูปเดียวกันเสมอ**', () => {
+    // สองรูปแบบทำให้เทียบกันไม่ตรง แล้วตอบกลับกลายเป็นตั๋วใบใหม่ทุกครั้ง
+    expect(bracket('abc@x.local')).toBe('<abc@x.local>');
+    expect(bracket('<abc@x.local>')).toBe('<abc@x.local>');
+    expect(bracket('   ')).toBeNull();
+    expect(bracket(null)).toBeNull();
+  });
+
+  it('**อ่านทั้ง In-Reply-To และ References**', () => {
+    /*
+      โปรแกรมเมลบางตัวตัด `In-Reply-To` ทิ้งแต่ยังเก็บ `References` ไว้ครบ ·
+      อ่านแค่ตัวแรกแปลว่ากระทู้ที่มาจากโปรแกรมนั้นจะขาดตอนทุกครั้ง
+    */
+    const ids = parseReferences('<a@x>', '<a@x> <b@x> <c@x>');
+    expect(ids).toEqual(['<a@x>', '<b@x>', '<c@x>']);
+  });
+
+  it('ไม่มีหัวจดหมายเลย ได้รายการว่าง ไม่ใช่ค่าที่ใช้ไม่ได้', () => {
+    expect(parseReferences(undefined, undefined)).toEqual([]);
   });
 });

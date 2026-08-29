@@ -6,3 +6,4 @@
 
 export * from './email-intake';
 export * from './email-intake.service';
+export * from './mail-source';
