@@ -51,6 +51,7 @@ model Tenant {
   automationRules   AutomationRule[]
   automationRuns    AutomationRun[]
   workLogs          WorkLog[]
+  inboundMails      InboundMail[]
   notificationRules NotificationRule[]
   notificationPrefs NotificationPreference[]
 
@@ -639,6 +640,7 @@ model WorkItem {
   articles       WorkItemArticle[]
   automationRuns AutomationRun[]
   workLogs       WorkLog[]
+  inboundMails   InboundMail[]
 
   @@unique([tenantId, itemKey])
   @@index([tenantId, projectId, statusId])
@@ -1438,4 +1440,46 @@ model WorkLog {
   @@index([tenantId, userId, startedAt])
   @@index([tenantId, workItemId, startedAt])
   @@map("work_log")
+}
+
+// ============================================================
+// อีเมลขาเข้า
+// ============================================================
+
+/// จดหมายทุกฉบับที่ระบบอ่านมาจากกล่อง — **รวมฉบับที่ถูกปฏิเสธ**
+///
+/// จดหมายที่ถูกทิ้งเงียบ ๆ คือคำขอที่ไม่มีใครรู้ว่าเคยมี · คนที่ส่งมาแล้ว
+/// ไม่มีใครตอบ จะสรุปว่า "ส่งเมลไปแล้วไม่มีใครสนใจ" ซึ่งเสียหายกว่าการ
+/// เก็บแถวที่ไม่ได้ใช้ไว้มาก
+///
+/// `mailboxId` เป็น unique — **กันอ่านซ้ำที่ชั้นฐานข้อมูล ไม่ใช่ที่ตัวอ่าน**
+/// ตัวอ่านที่จำว่าอ่านถึงไหนแล้วในหน่วยความจำ จะเริ่มนับใหม่ทุกครั้งที่รีสตาร์ต
+/// แล้วสร้างตั๋วซ้ำทั้งกล่อง
+model InboundMail {
+  id        BigInt  @id @default(autoincrement())
+  tenantId  BigInt  @map("tenant_id")
+  /// รหัสของจดหมายในกล่อง — คีย์กันอ่านซ้ำ
+  mailboxId String  @map("mailbox_id") @db.VarChar(191)
+  /// `Message-ID` ของจดหมาย — ใช้ผูกจดหมายฉบับถัดไปกลับเข้าเรื่องเดิม
+  messageId String? @map("message_id") @db.VarChar(500)
+
+  fromAddress String  @map("from_address") @db.VarChar(320)
+  subject     String  @db.VarChar(1000)
+  /// created | commented | rejected
+  outcome     String  @db.VarChar(16)
+  /// เหตุผลที่ปฏิเสธ — ว่างได้เฉพาะเมื่อสำเร็จ
+  reason      String? @db.Text
+
+  workItemId BigInt?  @map("work_item_id")
+  receivedAt DateTime @map("received_at") @db.DateTime(3)
+  createdAt  DateTime @default(now()) @map("created_at") @db.DateTime(3)
+
+  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  workItem WorkItem? @relation(fields: [workItemId], references: [id], onDelete: SetNull)
+
+  @@unique([tenantId, mailboxId])
+  /// หา "เรื่องเดิม" จาก In-Reply-To ด้วยดัชนีนี้
+  @@index([tenantId, messageId])
+  @@index([tenantId, outcome, createdAt])
+  @@map("inbound_mail")
 }
