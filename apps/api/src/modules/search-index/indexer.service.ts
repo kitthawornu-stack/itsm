@@ -73,6 +73,8 @@ export interface WorkItemDoc {
   createdAt: string;
   updatedAt: string;
   resolvedAt: string | null;
+  /** ป้ายกำกับ — รวมค่าจากทุกฟิลด์ชนิด `LABELS` ของ tenant นี้ */
+  labels: string[];
 }
 
 export async function ensureIndex(tenantId: bigint): Promise<string> {
@@ -93,6 +95,48 @@ const INDEX_INCLUDE = {
 } as const;
 
 /**
+ * คีย์ของฟิลด์ชนิด `LABELS` ทั้งหมดใน tenant นี้
+ *
+ * อ่านครั้งเดียวต่อรอบการจัดดัชนี ไม่ใช่ต่อใบ — ตารางนี้เล็กและแทบไม่เปลี่ยน
+ *
+ * `labels` ในดัชนีเป็น **ค่ารวมของทุกฟิลด์ชนิดนี้** ไม่ได้แยกตามฟิลด์ ·
+ * เป็นการแลกที่ตั้งใจ: คนถามว่า "ใบนี้ติดป้ายอะไร" ไม่ได้ถามว่า "ฟิลด์
+ * ส่วนประกอบมีค่าอะไร" · ราคาที่จ่ายคือถ้ามีสองฟิลด์ชนิดนี้ ค่าจะปนกันตอนค้น
+ * — บันทึกไว้ให้รู้ ไม่ใช่แกล้งว่าไม่มี
+ */
+async function labelFieldKeys(ctx: TenantContext): Promise<Set<string>> {
+  // ผ่าน `tenantScoped` เสมอ ไม่ใช้ Prisma client ดิบ (INVARIANT 1)
+  const rows = await tenantScoped(ctx).fieldDefinition.findMany({
+    where: { type: 'LABELS' },
+    select: { key: true },
+  });
+  return new Set(rows.map((r: { key: string }) => r.key));
+}
+
+/**
+ * ป้ายของงานใบหนึ่ง อ่านจาก `fieldSnapshot`
+ *
+ * อ่าน snapshot ไม่ใช่ EAV เพราะการจัดดัชนีคือการ **เรนเดอร์** ซึ่งเป็นสิ่งที่
+ * snapshot มีไว้ทำ (ADR-001) · และห้ามเอาค่าที่อ่านจาก snapshot ไปเขียนต่อ
+ * ที่นี่ก็ไม่ได้เขียน
+ *
+ * ทิ้งค่าว่างและตัดซ้ำ — ป้ายว่างในดัชนีทำให้ตัวกรอง "มีป้าย" นับใบที่ไม่มีป้าย
+ */
+function labelsOf(snapshot: unknown, keys: ReadonlySet<string>): string[] {
+  if (snapshot === null || typeof snapshot !== 'object' || keys.size === 0) return [];
+  const out = new Set<string>();
+  for (const [k, v] of Object.entries(snapshot as Record<string, unknown>)) {
+    if (!keys.has(k)) continue;
+    for (const one of Array.isArray(v) ? v : [v]) {
+      if (typeof one !== 'string') continue;
+      const t = one.trim();
+      if (t !== '') out.add(t);
+    }
+  }
+  return [...out].sort();
+}
+
+/**
  * ดึงข้อความออกจาก description ที่เก็บเป็น structured document
  *
  * `description` เป็นคอลัมน์ JSON เสมอ ไม่เคยเป็นสตริง โค้ดเดิมเช็ก `typeof === 'string'`
@@ -108,7 +152,7 @@ function descriptionText(value: unknown): string {
 
 type IndexableWorkItem = Prisma.WorkItemGetPayload<{ include: typeof INDEX_INCLUDE }>;
 
-function toDoc(w: IndexableWorkItem): WorkItemDoc {
+function toDoc(w: IndexableWorkItem, labelKeys: ReadonlySet<string>): WorkItemDoc {
   return {
     tenantId: Number(w.tenantId),
     projectId: Number(w.projectId),
@@ -129,6 +173,7 @@ function toDoc(w: IndexableWorkItem): WorkItemDoc {
     createdAt: w.createdAt.toISOString(),
     updatedAt: w.updatedAt.toISOString(),
     resolvedAt: w.resolvedAt?.toISOString() ?? null,
+    labels: labelsOf(w.fieldSnapshot, labelKeys),
   };
 }
 
@@ -147,7 +192,8 @@ export async function indexWorkItem(ctx: TenantContext, workItemId: bigint): Pro
   if (w === null) return false;
 
   const index = await ensureIndex(ctx.tenantId);
-  await openSearch.bulkIndex(index, [{ id: w.itemKey, doc: toDoc(w) }]);
+  const labelKeys = await labelFieldKeys(ctx);
+  await openSearch.bulkIndex(index, [{ id: w.itemKey, doc: toDoc(w, labelKeys) }]);
   await openSearch.refresh(index);
   return true;
 }
@@ -165,6 +211,7 @@ export async function reindexAll(
   await openSearch.deleteIndex(index);
   await openSearch.createIndex(index, WORK_ITEM_INDEX_SETTINGS);
 
+  const labelKeys = await labelFieldKeys(ctx);
   const total = await db.workItem.count();
   let done = 0;
   let cursor: bigint | undefined;
@@ -180,7 +227,7 @@ export async function reindexAll(
 
     await openSearch.bulkIndex(
       index,
-      rows.map((w) => ({ id: w.itemKey, doc: toDoc(w) })),
+      rows.map((w) => ({ id: w.itemKey, doc: toDoc(w, labelKeys) })),
     );
 
     done += rows.length;

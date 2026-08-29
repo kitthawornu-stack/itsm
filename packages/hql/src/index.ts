@@ -95,6 +95,14 @@ const FIELDS: Record<string, FieldSpec> = {
   type: { target: 'issueTypeName', kind: 'keyword' },
   key: { target: 'itemKey', kind: 'keyword' },
   parent: { target: 'parentId', kind: 'keyword' },
+  /*
+    ป้ายกำกับ — `keyword` จึงต้องตรงทั้งคำ ไม่ใช่ตรงบางส่วน
+
+    ป้ายเป็นคำที่คนเลือกใช้ซ้ำ ๆ ไม่ใช่ประโยค · การให้ตรงบางส่วนจะทำให้
+    `label = "เครือข่าย"` ไปเจอ "เครือข่ายภายใน" ด้วย ซึ่งเป็นคนละป้าย
+    และคนตั้งชื่อป้ายทั้งสองอันตั้งใจให้ต่างกัน
+  */
+  label: { target: 'labels', kind: 'keyword' },
   summary: { target: 'summary', kind: 'text', ngram: true },
   description: { target: 'description', kind: 'text' },
   created: { target: 'createdAt', kind: 'keyword', sortable: true },
