@@ -1180,6 +1180,8 @@ model Satisfaction {
 // ============================================================
 
 enum ApprovalStatus {
+  /// ยังไม่ถึงคิว — สร้างพร้อมกันทั้งสายตั้งแต่ต้น เพื่อให้ผู้ขอเห็นว่าเหลืออีกกี่ขั้น
+  WAITING
   PENDING
   APPROVED
   REJECTED
@@ -1198,6 +1200,12 @@ model Approval {
   /// เหตุผลที่ขอ — ผู้อนุมัติต้องรู้ว่ากำลังอนุมัติอะไร ไม่ใช่เห็นแค่เลขที่เรื่อง
   reason          String? @db.Text
 
+  /// รอบการขออนุมัติของเรื่องนี้ — ขอใหม่หลังถูกปฏิเสธได้ โดยรอบเก่ายังอ่านย้อนหลังได้
+  chainSeq   Int @default(1) @map("chain_seq")
+  /// ขั้นที่เท่าไรในรอบนี้ — **ลำดับมาจากเลขนี้ ไม่ใช่จาก `createdAt`**
+  /// ทุกขั้นถูกสร้างในทรานแซกชันเดียวกัน เวลาจึงเท่ากันได้ทั้งสาย
+  stepNumber Int @default(1) @map("step_number")
+
   status       ApprovalStatus @default(PENDING)
   decidedById  BigInt?        @map("decided_by_id")
   decidedAt    DateTime?      @map("decided_at") @db.DateTime(3)
@@ -1213,7 +1221,9 @@ model Approval {
   requestedBy   User      @relation("ApprovalRequester", fields: [requestedById], references: [id], onDelete: Restrict)
   decidedBy     User?     @relation("ApprovalDecider", fields: [decidedById], references: [id], onDelete: Restrict)
 
-  @@index([tenantId, workItemId, createdAt])
+  /// หนึ่งขั้นต่อหนึ่งรอบเท่านั้น — ด่านสุดท้ายที่กันการสร้างสายซ้อนกันสองสาย
+  @@unique([tenantId, workItemId, chainSeq, stepNumber])
+  @@index([tenantId, workItemId, chainSeq, stepNumber])
   @@index([tenantId, status, createdAt])
   @@map("approval")
 }

@@ -47,6 +47,8 @@ let emptyGroupId: bigint;
 let itemKey: string;
 let itemId: bigint;
 const keys: string[] = [];
+/** สร้างงานของเทสต์เอง แล้วจำคีย์ไว้เก็บกวาด — ห้ามหยิบงานของ seed มาใช้ */
+let mkItem: (tag: string) => Promise<string>;
 
 async function step(what: string, run: () => Promise<unknown>): Promise<void> {
   try {
@@ -98,22 +100,28 @@ beforeAll(async () => {
   outsider = { tenantId, actorId: outsiderId };
 
   const template = await prismaClient.workItem.findFirstOrThrow({ where: { projectId } });
-  const w = await prismaClient.workItem.create({
-    data: {
-      tenantId,
-      projectId,
-      itemKey: `SD-APV${STAMP}`,
-      issueTypeId: template.issueTypeId,
-      statusId: template.statusId,
-      reporterId: requesterId,
-      summary: `ขอซื้อจอเพิ่ม ${STAMP}`,
-      rank: `zza${STAMP}`,
-    },
-    select: { id: true, itemKey: true },
-  });
-  itemKey = w.itemKey;
-  itemId = w.id;
-  keys.push(w.itemKey);
+  mkItem = async (tag: string): Promise<string> => {
+    const w = await prismaClient.workItem.create({
+      data: {
+        tenantId,
+        projectId,
+        itemKey: `SD-APV${STAMP}${tag}`,
+        issueTypeId: template.issueTypeId,
+        statusId: template.statusId,
+        reporterId: requesterId,
+        summary: `ขอซื้อจอเพิ่ม ${tag} ${STAMP}`,
+        rank: `zza${STAMP}${tag}`,
+      },
+      select: { id: true, itemKey: true },
+    });
+    keys.push(w.itemKey);
+    return w.itemKey;
+  };
+  itemKey = await mkItem('');
+  // เก็บ id ของใบหลักไว้ตัวเดียว — ใบที่สร้างทีหลังต้องไม่มาทับ
+  itemId = (
+    await prismaClient.workItem.findFirstOrThrow({ where: { itemKey }, select: { id: true } })
+  ).id;
 }, 120_000);
 
 afterAll(async () => {
@@ -158,7 +166,7 @@ describe('A · ขออนุมัติ', () => {
   });
 
   it('ขอแล้วสถานะเป็น pending และมีประวัติหนึ่งรายการ', async () => {
-    await requestApproval(requester, itemKey, groupId, 'จอเดิมเสีย ใช้งานไม่ได้');
+    await requestApproval(requester, itemKey, [groupId], 'จอเดิมเสีย ใช้งานไม่ได้');
     expect(await approvalStateOf(requester, itemId)).toBe('pending');
     const list = await approvalsFor(requester, itemKey);
     expect(list).toHaveLength(1);
@@ -167,7 +175,7 @@ describe('A · ขออนุมัติ', () => {
 
   it('**ขอซ้อนไม่ได้ขณะที่ยังรออยู่**', async () => {
     // สองคำขอที่คนละคนตัดสินคนละทาง = ไม่มีใครตอบได้ว่าอันไหนคือคำตอบ
-    await expect(requestApproval(requester, itemKey, groupId)).rejects.toThrow(AlreadyPendingError);
+    await expect(requestApproval(requester, itemKey, [groupId])).rejects.toThrow(AlreadyPendingError);
   });
 
   it('**กลุ่มที่ไม่มีสมาชิกเลย ขอไม่ได้**', async () => {
@@ -175,11 +183,14 @@ describe('A · ขออนุมัติ', () => {
       คำขอที่ไม่มีวันมีใครมาตัดสิน ต้องดังตอนขอ ไม่ใช่ค้างเงียบ ๆ
       แล้วผู้ขอรอไปเรื่อย ๆ โดยไม่มีอะไรบอกว่าไม่มีวันได้คำตอบ
     */
-    const other = await prismaClient.workItem.findFirstOrThrow({
-      where: { itemKey: { not: itemKey } },
-      select: { itemKey: true },
-    });
-    await expect(requestApproval(requester, other.itemKey, emptyGroupId)).rejects.toThrow(
+    /*
+      **สร้างงานของตัวเอง ไม่หยิบงานของ seed มาใช้** — เคสนี้ "ไม่ควรสร้างอะไร"
+      แต่ตอนกลไกถูกลบเพื่อพิสูจน์ว่าเทสต์แดงได้ มันขอสำเร็จจริงและเขียนประวัติ
+      ลงงานใบนั้น · เคยเกิดขึ้นแล้วกับ HR-1 และเก็บกวาดไม่ครอบเพราะไม่ได้อยู่ใน
+      รายการที่จำไว้
+    */
+    const other = await mkItem('EMPTY');
+    await expect(requestApproval(requester, other, [emptyGroupId])).rejects.toThrow(
       NotAnApproverError,
     );
   });
@@ -240,7 +251,7 @@ describe('C · การตัดสิน', () => {
   });
 
   it('**ปฏิเสธแล้วขอใหม่ได้ และประวัติเดิมยังอยู่**', async () => {
-    await requestApproval(requester, itemKey, groupId, 'ขอใหม่ ใช้งบปีหน้า');
+    await requestApproval(requester, itemKey, [groupId], 'ขอใหม่ ใช้งบปีหน้า');
     expect(await approvalStateOf(requester, itemId)).toBe('pending');
 
     const list = await approvalsFor(requester, itemKey);

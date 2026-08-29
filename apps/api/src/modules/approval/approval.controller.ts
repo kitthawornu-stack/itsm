@@ -9,7 +9,11 @@ import type { TenantContext } from '@itsm/types';
 
 import { Ctx } from '../../infrastructure/http/session.guard';
 import {
+  AlreadyDecidedInChainError,
   AlreadyPendingError,
+  DuplicateGroupInChainError,
+  EmptyChainError,
+  NotYourTurnError,
   NoPendingApprovalError,
   NotAnApproverError,
   RejectionNeedsReasonError,
@@ -32,7 +36,11 @@ function toHttp(e: unknown): never {
   if (
     e instanceof AlreadyPendingError ||
     e instanceof NoPendingApprovalError ||
-    e instanceof RejectionNeedsReasonError
+    e instanceof RejectionNeedsReasonError ||
+    e instanceof EmptyChainError ||
+    e instanceof DuplicateGroupInChainError ||
+    e instanceof NotYourTurnError ||
+    e instanceof AlreadyDecidedInChainError
   ) {
     // 422 ไม่ใช่ 500 — สถานะของเรื่องไม่ตรงกับสิ่งที่ขอ ไม่ใช่ระบบพัง
     throw new HttpException(
@@ -62,13 +70,30 @@ export class ApprovalController {
   async request(
     @Ctx() ctx: TenantContext,
     @Param('key') key: string,
-    @Body() body: { approverGroupId?: unknown; reason?: unknown },
-  ): Promise<{ id: string }> {
-    const groupId =
-      typeof body.approverGroupId === 'string' && body.approverGroupId !== ''
-        ? BigInt(body.approverGroupId)
-        : null;
-    if (groupId === null) {
+    @Body() body: { approverGroupId?: unknown; approverGroupIds?: unknown; reason?: unknown },
+  ): Promise<{ id: string; steps: number }> {
+    /*
+      รับได้ทั้ง `approverGroupIds` (สาย) และ `approverGroupId` (ขั้นเดียว) ·
+      รูปแบบเดิมยังใช้ได้เพื่อไม่ให้ผู้เรียกที่มีอยู่พังเงียบ ๆ — สายขั้นเดียว
+      คือสายที่มีขั้นเดียว ไม่ใช่กรณีพิเศษ
+    */
+    const raw = Array.isArray(body.approverGroupIds)
+      ? body.approverGroupIds
+      : typeof body.approverGroupId === 'string'
+        ? [body.approverGroupId]
+        : [];
+    const ids: bigint[] = [];
+    for (const v of raw) {
+      // ตัวเลขที่แปลงไม่ได้ต้องเป็น 422 ไม่ใช่ 500 จาก BigInt() ที่โยนเอง
+      if (typeof v !== 'string' || !/^[0-9]+$/.test(v)) {
+        throw new HttpException(
+          { error: 'invalid_input', message: 'รหัสกลุ่มผู้อนุมัติไม่ถูกต้อง' },
+          HttpStatus.UNPROCESSABLE_ENTITY,
+        );
+      }
+      ids.push(BigInt(v));
+    }
+    if (ids.length === 0) {
       throw new HttpException(
         { error: 'invalid_input', message: 'ต้องเลือกกลุ่มผู้อนุมัติ' },
         HttpStatus.UNPROCESSABLE_ENTITY,
@@ -78,10 +103,10 @@ export class ApprovalController {
       const r = await requestApproval(
         ctx,
         key,
-        groupId,
+        ids,
         typeof body.reason === 'string' ? body.reason : undefined,
       );
-      return { id: r.id.toString() };
+      return { id: r.id.toString(), steps: r.steps };
     } catch (e) {
       return toHttp(e);
     }
