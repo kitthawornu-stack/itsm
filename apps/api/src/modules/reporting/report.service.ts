@@ -18,7 +18,7 @@
  * 3. **นับเฉพาะโปรเจกต์ที่ผู้อ่านเปิดดูได้** — ยอดรวมที่กินโปรเจกต์ที่มองไม่เห็น
  *    คือการรั่วข้อมูลแบบที่ตรวจยากที่สุด เพราะไม่มีคีย์เรื่องไหนโผล่ให้เห็น
  */
-import type { TenantContext } from '@itsm/types';
+import { toUtcDate, type TenantContext } from '@itsm/types';
 
 import { tenantScoped } from '../../infrastructure/prisma/tenant-scope';
 import { assertCan, browsableProjectIds, can } from '../permission';
@@ -118,7 +118,8 @@ export async function reportSummary(
   // เตรียมทุกวันในช่วงไว้ก่อน รวมวันที่ไม่มีงานเลย
   for (const day of daysIn(win)) daily.set(day, { day, opened: 0, resolved: 0 });
   const bump = (at: Date, field: 'opened' | 'resolved'): void => {
-    const point = daily.get(thaiDayKey(at as never));
+    // `toUtcDate` ไม่ใช่ `as never` — ดูเหตุผลที่ time-report.service.ts
+    const point = daily.get(thaiDayKey(toUtcDate(at)));
     if (point !== undefined) point[field] += 1;
   };
   for (const r of openedRows) bump(r.createdAt, 'opened');

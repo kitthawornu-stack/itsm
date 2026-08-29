@@ -11,6 +11,7 @@ import { systemClock, type TenantContext } from '@itsm/types';
 import { Ctx } from '../../infrastructure/http/session.guard';
 import { PermissionDeniedError } from '../permission';
 import { NoReportAccessError, reportSummary, type ReportSummary } from './report.service';
+import { NoTimeReportAccessError, timeReport, type TimeReport } from './time-report.service';
 import { RANGE_LABEL, windowFor, type RangeKey } from './report-window';
 
 const RANGES = Object.keys(RANGE_LABEL) as RangeKey[];
@@ -49,6 +50,41 @@ export class ReportController {
     } catch (e) {
       if (e instanceof NoReportAccessError || e instanceof PermissionDeniedError) {
         // ข้อความไม่บอกว่าขาดสิทธิ์อะไร — การไล่บอกทีละสิทธิ์คือการวาดแผนที่
+        throw new HttpException({ message: e.message }, HttpStatus.FORBIDDEN);
+      }
+      throw e;
+    }
+  }
+
+  /**
+   * เวลาที่ทีมใช้ไปในช่วงหนึ่ง
+   *
+   * แยก endpoint จาก `summary` เพราะคนละคำถามและคนละต้นทุน — หน้าที่ถามแต่
+   * ยอดแจ้งเข้า/ปิดได้ ไม่ควรต้องอ่านตาราง `work_log` ทั้งเดือนไปด้วย
+   */
+  @Get('time')
+  async time(
+    @Ctx() ctx: TenantContext,
+    @Query('range') range?: string,
+    @Query('project') projectId?: string,
+  ): Promise<TimeReport & { ranges: Array<{ key: string; label: string }> }> {
+    const key: RangeKey = RANGES.find((r) => r === range) ?? 'this-month';
+    const win = windowFor(key, systemClock.nowUtc());
+
+    let pid: bigint | undefined;
+    if (projectId !== undefined && projectId !== '') {
+      try {
+        pid = BigInt(projectId);
+      } catch {
+        throw new HttpException({ message: 'ไม่พบโปรเจกต์ที่ระบุ' }, HttpStatus.FORBIDDEN);
+      }
+    }
+
+    try {
+      const data = await timeReport(ctx, win, pid === undefined ? {} : { projectId: pid });
+      return { ...data, ranges: RANGES.map((r) => ({ key: r, label: RANGE_LABEL[r] })) };
+    } catch (e) {
+      if (e instanceof NoTimeReportAccessError || e instanceof PermissionDeniedError) {
         throw new HttpException({ message: e.message }, HttpStatus.FORBIDDEN);
       }
       throw e;
