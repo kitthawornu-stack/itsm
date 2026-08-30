@@ -51,6 +51,13 @@ export interface AttachmentView {
   sizeBytes: number;
   uploader: string;
   createdAt: string;
+  /**
+   * ผู้ที่กำลังดูลบไฟล์นี้ได้ไหม
+   *
+   * มีไว้ให้หน้าจอไม่แสดงปุ่มที่กดแล้วได้ 403 เท่านั้น — **เซิร์ฟเวอร์ปฏิเสธเอง
+   * ทุกครั้ง** การซ่อนปุ่มไม่ใช่การป้องกัน (CLAUDE.md กติกาเฉพาะของสิทธิ์)
+   */
+  canDelete: boolean;
 }
 
 export interface UploadInput {
@@ -144,6 +151,8 @@ export async function uploadAttachment(
         sizeBytes: input.content.byteLength,
         uploader: uploader?.displayName ?? 'ไม่ทราบชื่อ',
         createdAt: draft.createdAt.toISOString(),
+        // คนที่เพิ่งแนบเอง ลบของตัวเองได้เสมอ
+        canDelete: true,
       },
       audit,
     };
@@ -170,6 +179,11 @@ export async function listAttachments(
     include: { uploader: { select: { displayName: true } } },
   });
 
+  /*
+    ถามสิทธิ์ลบครั้งเดียวสำหรับทั้งหน้า ไม่ใช่ทีละไฟล์ — `MANAGE_ATTACHMENT`
+    ผูกกับโปรเจกต์ ไม่ได้ผูกกับไฟล์ · กติกาเดียวกับความเห็น
+  */
+  const mayDeleteAny = await can(ctx, item.projectId, 'MANAGE_ATTACHMENT');
   return rows.map((r) => ({
     id: r.id.toString(),
     filename: r.filename,
@@ -177,6 +191,7 @@ export async function listAttachments(
     sizeBytes: Number(r.sizeBytes),
     uploader: r.uploader.displayName,
     createdAt: r.createdAt.toISOString(),
+    canDelete: (ctx.actorId !== null && r.uploaderId === ctx.actorId) || mayDeleteAny,
   }));
 }
 
@@ -212,17 +227,36 @@ export async function downloadAttachment(
 }
 
 /**
- * ลบไฟล์แนบ — ไบต์ก่อน แถวทีหลัง
+ * ลบไฟล์แนบ — **แถวก่อน ไบต์ทีหลัง**
  *
- * ลำดับนี้กลับกับตอนอัปโหลดโดยตั้งใจ ทั้งสองทางเลือกให้ผลลัพธ์ที่แย่น้อยกว่า
- * เป็นไฟล์กำพร้าที่กวาดทีหลังได้ ไม่ใช่แถวที่ชี้ไปไฟล์ที่ไม่มีอยู่
+ * ## ลำดับเดิมกลับด้านกับเหตุผลของตัวเอง
+ *
+ * โค้ดเดิมลบไบต์ก่อนแล้วค่อยลบแถว พร้อมคอมเมนต์ว่าทำเพื่อไม่ให้เหลือ
+ * "แถวที่ชี้ไปไฟล์ที่ไม่มีอยู่" — แต่ลำดับนั้นให้ผลตรงข้าม ถ้าทรานแซกชันล้ม
+ * หลังไบต์หายไปแล้ว แถวจะค้างอยู่และชี้ไปไฟล์ที่ไม่มี ซึ่งผู้ใช้เห็นในรายการ
+ * แต่กดโหลดไม่ได้ · ไม่มีใครเจอเพราะ **ไม่เคยมีอะไรเรียกฟังก์ชันนี้เลย**
+ *
+ * ลบแถวก่อนให้ผลที่แย่น้อยกว่า: ไฟล์กำพร้าใน MinIO ที่กวาดทีหลังได้
+ * — เสียพื้นที่ ไม่เสียความเชื่อถือ (เหตุผลเดียวกับหัวไฟล์)
+ *
+ * ## ใครลบได้
+ *
+ * เจ้าของไฟล์ลบของตัวเองได้เสมอ · ลบของคนอื่นต้องมี `MANAGE_ATTACHMENT`
+ * · **`EDIT_ITEM` ให้แนบได้แต่ไม่ให้ลบของคนอื่น** — การลบหลักฐานที่คนอื่น
+ * แนบไว้เป็นการกระทำที่หนักกว่าการแนบเพิ่ม และกู้กลับไม่ได้
  */
 export async function deleteAttachment(ctx: TenantContext, attachmentId: bigint): Promise<void> {
   const db = tenantScoped(ctx);
-  const row = await db.workItemAttachment.findFirst({ where: { id: attachmentId } });
+  const row = await db.workItemAttachment.findFirst({
+    where: { id: attachmentId },
+    include: { workItem: { select: { projectId: true } } },
+  });
   if (row === null) throw new AttachmentNotFoundError(attachmentId.toString());
 
-  if (row.storageKey !== '') await deleteObject(row.storageKey);
+  const mine = ctx.actorId !== null && row.uploaderId === ctx.actorId;
+  if (!mine && !(await can(ctx, row.workItem.projectId, 'MANAGE_ATTACHMENT'))) {
+    throw new PermissionDeniedError('MANAGE_ATTACHMENT');
+  }
 
   await auditedTransaction(ctx, 'workitem.attachment.delete', async (tx) => {
     await tx.workItemAttachment.delete({ where: { id: row.id } });
@@ -231,4 +265,17 @@ export async function deleteAttachment(ctx: TenantContext, attachmentId: bigint)
       audit: [change(row.workItemId, '__attachment_deleted__', row.filename, null)],
     };
   });
+
+  /*
+    ไบต์หลังสุด และนอกทรานแซกชัน — ถ้าลบไม่สำเร็จเหลือแค่ขยะใน MinIO
+    ไม่ใช่แถวที่ผู้ใช้กดแล้วพัง · ไม่โยนต่อเพราะแถวหายไปแล้ว
+    ผู้ใช้ทำอะไรกับ error นี้ไม่ได้
+  */
+  if (row.storageKey !== '') {
+    try {
+      await deleteObject(row.storageKey);
+    } catch {
+      // ตั้งใจกลืน — ดูเหตุผลข้างบน
+    }
+  }
 }

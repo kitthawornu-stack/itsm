@@ -164,6 +164,7 @@ import {
 import {
   AttachmentNotFoundError,
   AttachmentRejectedError,
+  deleteAttachment,
   downloadAttachment,
   listAttachments,
   uploadAttachment,
@@ -1079,6 +1080,36 @@ export class WorkItemController {
       res.setHeader('Content-Disposition', f.disposition);
       res.setHeader('X-Content-Type-Options', 'nosniff');
       res.send(f.content);
+    } catch (e) {
+      if (e instanceof AttachmentNotFoundError) {
+        throw new HttpException({ error: 'not_found', message: e.message }, HttpStatus.NOT_FOUND);
+      }
+      throw e;
+    }
+  }
+
+  /**
+   * ลบไฟล์แนบ
+   *
+   * ไม่รับ `:key` ของงานในเส้นทาง เพราะ id ของไฟล์ชี้ไปงานอยู่แล้ว — เส้นทางที่
+   * รับทั้งคู่เปิดช่องให้ส่งคู่ที่ไม่เข้ากันมา แล้วต้องมีโค้ดตรวจว่าตรงกันไหม
+   * ซึ่งเป็นโค้ดที่ลืมเขียนได้ · กติกาเดียวกับ `download` ที่อยู่ข้างบน
+   */
+  @Delete('attachments/:id')
+  @HttpCode(HttpStatus.OK)
+  async removeAttachment(
+    @Ctx() ctx: TenantContext,
+    @Param('id') id: string,
+  ): Promise<{ ok: true }> {
+    if (!/^[0-9]+$/.test(id)) {
+      throw new HttpException(
+        { error: 'invalid_input', message: 'รหัสไฟล์แนบไม่ถูกต้อง' },
+        HttpStatus.UNPROCESSABLE_ENTITY,
+      );
+    }
+    try {
+      await deleteAttachment(ctx, BigInt(id));
+      return { ok: true };
     } catch (e) {
       if (e instanceof AttachmentNotFoundError) {
         throw new HttpException({ error: 'not_found', message: e.message }, HttpStatus.NOT_FOUND);
