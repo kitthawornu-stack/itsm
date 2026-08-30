@@ -145,6 +145,7 @@ import {
   SelfLinkError,
   linkWorkItems,
   linksOf,
+  problemImpactOf,
   unlinkWorkItems,
 } from '../link';
 import {
@@ -1640,6 +1641,56 @@ export class WorkItemController {
    * `404` เมื่อปลายทางไม่มีอยู่จริง **หรือเปิดดูไม่ได้** — service ตั้งใจตอบ
    * เหมือนกันทั้งสองกรณี เพื่อไม่ยืนยันว่าเลขที่เรื่องนั้นมีอยู่
    */
+  /**
+   * ผลกระทบของปัญหา — เรื่องที่ใบนี้เป็นสาเหตุ
+   *
+   * แยกจาก payload ของหน้ารายละเอียด เพราะปัญหาใบเดียวเป็นสาเหตุของเรื่อง
+   * ได้เป็นร้อยใบ · คนส่วนใหญ่เปิดหน้านี้เพื่ออ่านเรื่อง ไม่ใช่เพื่อดูผลกระทบ
+   *
+   * งานที่ไม่ได้เป็นสาเหตุของอะไรเลย ตอบ `total: 0` ไม่ใช่ 404 —
+   * "ยังไม่มีผลกระทบ" กับ "ไม่มีงานใบนี้" เป็นคนละคำตอบ
+   */
+  @Get(':key/problem-impact')
+  async problemImpact(
+    @Ctx() ctx: TenantContext,
+    @Param('key') key: string,
+  ): Promise<{
+    impact: Awaited<ReturnType<typeof problemImpactOf>>['impact'];
+    incidents: Array<{
+      itemKey: string;
+      summary: string;
+      statusCategory: string;
+      projectKey: string;
+      createdAt: string;
+      resolvedAt: string | null;
+    }>;
+  }> {
+    const item = await tenantScoped(ctx).workItem.findFirst({
+      where: { itemKey: key },
+      select: { id: true, projectId: true },
+    });
+    if (item === null) {
+      throw new HttpException(
+        { error: 'not_found', message: `ไม่พบงาน ${key}` },
+        HttpStatus.NOT_FOUND,
+      );
+    }
+    await assertCan(ctx, item.projectId, 'BROWSE_PROJECT');
+
+    const r = await problemImpactOf(ctx, item.id);
+    return {
+      impact: r.impact,
+      incidents: r.incidents.map((i) => ({
+        itemKey: i.itemKey,
+        summary: i.summary,
+        statusCategory: i.statusCategory,
+        projectKey: i.projectKey,
+        createdAt: i.createdAt.toISOString(),
+        resolvedAt: i.resolvedAt?.toISOString() ?? null,
+      })),
+    };
+  }
+
   @Post(':key/links')
   @HttpCode(HttpStatus.CREATED)
   async addLink(

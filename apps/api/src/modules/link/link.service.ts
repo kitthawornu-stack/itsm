@@ -15,11 +15,12 @@
  * จึงเก็บทิศเดียว (`CANONICAL`) แล้ว **คำนวณคู่ตรงข้ามตอนอ่าน** ·
  * ราคาที่จ่ายคือคิวรีต้องดูทั้ง `sourceId` และ `targetId` ซึ่งมี index ทั้งคู่
  */
-import type { TenantContext } from '@itsm/types';
+import { systemClock, toUtcDate, type TenantContext, type UtcDate } from '@itsm/types';
 
 import { auditedTransaction } from '../../infrastructure/audit/audited-transaction';
 import { tenantScoped } from '../../infrastructure/prisma/tenant-scope';
 import { assertCan, browsableProjectIds } from '../permission';
+import { summarizeImpact, type CausedIncident, type ProblemImpact } from './problem-impact';
 
 /** ชนิดของความสัมพันธ์ตามสคีมา — ตรงกับ enum `LinkType` */
 export type LinkType =
@@ -313,4 +314,62 @@ export async function unlinkWorkItems(ctx: TenantContext, linkId: bigint): Promi
       ],
     };
   });
+}
+
+/**
+ * ผลกระทบของปัญหา — เรื่องทั้งหมดที่ใบนี้ "เป็นสาเหตุของ"
+ *
+ * `linksOf` คืนความสัมพันธ์ทุกชนิดพร้อมข้อมูลแค่พอแสดงเป็นรายการ ·
+ * การสรุปผลกระทบต้องการเวลาที่เรื่องเข้ามาและโปรเจกต์ของแต่ละใบด้วย
+ * จึงเป็นคิวรีของตัวเอง ไม่ใช่การกรองผลของ `linksOf`
+ *
+ * **นับเฉพาะทิศ "เป็นสาเหตุของ"** — ใบที่เป็น `source` ของแถวชนิด `CAUSES` ·
+ * ถ้านับทั้งสองทิศ ปัญหาจะรวมใบที่ *ทำให้ตัวมันเกิด* เข้าไปด้วย แล้วตัวเลข
+ * ผลกระทบจะสูงกว่าความจริงโดยไม่มีใครสังเกต
+ */
+export async function problemImpactOf(
+  ctx: TenantContext,
+  workItemId: bigint,
+  now: UtcDate = systemClock.nowUtc(),
+): Promise<{ impact: ProblemImpact; incidents: CausedIncident[] }> {
+  const allowed = await browsableProjectIds(ctx);
+  /*
+    ทางลัดนี้เป็นการ **ประหยัดคิวรี ไม่ใช่ด่าน** — ตัวกรองปลายทางข้างล่าง
+    ให้คำตอบเดียวกันอยู่แล้วเมื่อไม่มีโปรเจกต์ที่เข้าถึงได้ · ลบทิ้งแล้วเทสต์
+    ยังเขียวทุกเคส และนั่นถูกต้อง · เขียนไว้ให้ตรงกับ `linksOf` ที่ทำแบบเดียวกัน
+  */
+  if (allowed.length === 0) return { impact: summarizeImpact([], now), incidents: [] };
+
+  const rows = await tenantScoped(ctx).workItemLink.findMany({
+    where: { sourceId: workItemId, type: 'CAUSES' },
+    select: {
+      target: {
+        select: {
+          itemKey: true,
+          summary: true,
+          createdAt: true,
+          resolvedAt: true,
+          projectId: true,
+          project: { select: { key: true } },
+          status: { select: { category: true } },
+        },
+      },
+    },
+    orderBy: { id: 'asc' },
+  });
+
+  const visible = new Set(allowed.map((a) => a.toString()));
+  const incidents: CausedIncident[] = rows
+    // เรื่องในโปรเจกต์ที่ผู้ดูเข้าไม่ถึง ต้องไม่ถูกนับ — ตัวเลขก็เป็นข้อมูลรั่วได้
+    .filter((r) => visible.has(r.target.projectId.toString()))
+    .map((r) => ({
+      itemKey: r.target.itemKey,
+      summary: r.target.summary,
+      statusCategory: r.target.status.category,
+      projectKey: r.target.project.key,
+      createdAt: toUtcDate(r.target.createdAt),
+      resolvedAt: r.target.resolvedAt === null ? null : toUtcDate(r.target.resolvedAt),
+    }));
+
+  return { impact: summarizeImpact(incidents, now), incidents };
 }
