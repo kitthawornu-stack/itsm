@@ -14,6 +14,7 @@ import { AssignControl } from '@/components/assign-control';
 import { EditItem } from '@/components/edit-item';
 import { CommentThread } from '@/components/comment-thread';
 import { ApprovalPanel } from '@/components/approval-panel';
+import { AttachmentPanel } from '@/components/attachment-panel';
 import { ChangeWindowPanel } from '@/components/change-window-panel';
 import { RatingForm, type Satisfaction } from '@/components/rating-form';
 import { toSlaBar, type SlaSnapshotView } from '@/lib/sla-label';
@@ -244,6 +245,8 @@ export default async function WorkItemDetail({
           <ItemCiPanel apiBase={API} itemKey={detail.itemKey} />
 
           <ProblemImpactPanel apiBase={API} itemKey={detail.itemKey} />
+
+          <AttachmentPanel apiBase={API} itemKey={detail.itemKey} />
 
           <TimePanel apiBase={API} itemKey={detail.itemKey} />
 

@@ -2947,3 +2947,63 @@ tr[data-current='true'] td {
 .dash-edit .dash-add {
   margin-bottom: var(--space-3);
 }
+
+/* ============================================================
+   ไฟล์แนบ
+   ============================================================ */
+
+.atp-list {
+  list-style: none;
+  margin: 0 0 var(--space-3);
+  padding: 0;
+}
+
+.atp-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-1) var(--space-2);
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--border);
+  line-height: 1.6;
+  /* ชื่อไฟล์ยาวไม่มีช่องว่างต้องตัดได้ทุกตำแหน่ง เหมือนข้อความไทย */
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.atp-list li:last-child {
+  border-bottom: none;
+}
+
+.atp-meta {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.atp-quiet {
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1.6;
+  margin: 0 0 var(--space-3);
+}
+
+.atp-add {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/*
+  ช่องเลือกไฟล์ของเบราว์เซอร์ยังอยู่ครบ แค่ไม่แสดงผล — ซ่อนด้วย `display: none`
+  จะทำให้คีย์บอร์ดโฟกัสไม่ได้และ screen reader อ่านไม่เจอ
+*/
+.atp-file {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
