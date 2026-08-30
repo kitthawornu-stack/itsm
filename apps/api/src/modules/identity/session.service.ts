@@ -12,7 +12,7 @@
  *   - **นับความพยายามตามอีเมลที่กรอก** ไม่ใช่ตาม userId เพราะการยิงสุ่มอีเมล
  *     ที่ไม่มีบัญชีต้องถูกจำกัดด้วย
  */
-import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { systemClock, type TenantContext, type UtcDate } from '@itsm/types';
 
 import { tenantScoped, withSystemScope } from '../../infrastructure/prisma/tenant-scope';
@@ -263,16 +263,4 @@ export async function revokeAllSessions(
       raw.session.updateMany({ where: { userId, revokedAt: null }, data: { revokedAt: now } }),
   );
   return r.count;
-}
-
-/**
- * เทียบโทเคนสองตัวแบบคงเวลา — ใช้ตอนตรวจ CSRF token
- *
- * อยู่ที่นี่เพราะเป็นเรื่องเดียวกับเซสชัน และเพื่อให้มีที่เดียวที่ทำเรื่องนี้
- */
-export function tokensEqual(a: string, b: string): boolean {
-  const ba = Buffer.from(a);
-  const bb = Buffer.from(b);
-  if (ba.length !== bb.length) return false;
-  return timingSafeEqual(ba, bb);
 }

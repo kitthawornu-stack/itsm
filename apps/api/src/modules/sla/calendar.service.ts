@@ -164,7 +164,12 @@ export async function calendarYearTrusted(
  * ตั้งเป็น false เสมอ ไม่ใช่ตั้งตามสถานะใหม่ — "ต้องคำนวณใหม่" กับ "เชื่อได้"
  * เป็นคนละเรื่อง และการเดาไปทางเชื่อได้คือการเดาผิดทาง
  */
-export async function invalidateTrustForCalendar(
+/*
+  ไม่ export — ตัวนี้เป็นขั้นตอนภายในของการแก้และการยืนยัน ไม่ใช่สิ่งที่โมดูลอื่น
+  ควรเรียกเอง · ADR-004 บอกให้ `index.ts` เปิดเฉพาะ Application Service
+  และ `export *` ทำให้ตัวช่วยทุกตัวหลุดออกไปโดยไม่มีใครตั้งใจ
+*/
+async function invalidateTrustForCalendar(
   ctx: TenantContext,
   calendarId: bigint,
 ): Promise<number> {
