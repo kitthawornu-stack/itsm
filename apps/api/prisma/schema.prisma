@@ -60,6 +60,8 @@ model Tenant {
   configItems       ConfigurationItem[]
   ciDependencies    CiDependency[]
   workItemCis       WorkItemCi[]
+  dashboards        Dashboard[]
+  dashboardGadgets  DashboardGadget[]
 
   @@map("tenant")
 }
@@ -91,6 +93,7 @@ model User {
   loginAttempts           LoginAttempt[]
   verifiedCalendarYears   SlaCalendarYear[]        @relation("CalendarVerifier")
   savedFilters            SavedFilter[]
+  dashboards              Dashboard[]
   articles                KnowledgeArticle[]
   articleLinks            WorkItemArticle[]
   satisfactions           Satisfaction[]
@@ -172,10 +175,10 @@ model UserGroup {
   createdAt DateTime @default(now()) @map("created_at") @db.DateTime(3)
   updatedAt DateTime @updatedAt @map("updated_at") @db.DateTime(3)
 
-  tenant         Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant         Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   members        GroupMember[]
   grants         PermissionGrant[]
-  notifyProjects Project[]         @relation("ProjectNotifyGroup")
+  notifyProjects Project[]           @relation("ProjectNotifyGroup")
   approvals      Approval[]
   ownedCis       ConfigurationItem[]
 
@@ -318,6 +321,7 @@ model Project {
   fieldConfigs      FieldConfig[]
   automationRules   AutomationRule[]
   notificationRules NotificationRule[]
+  dashboardGadgets  DashboardGadget[]
 
   @@unique([tenantId, key])
   @@index([tenantId, isArchived])
@@ -987,9 +991,9 @@ model ConfigurationItem {
   tenantId BigInt @map("tenant_id")
 
   /// รหัสสั้นที่คนพูดถึงกันได้ เช่น `DB-PROD-01`
-  key  String   @db.VarChar(64)
-  name String   @db.VarChar(255)
-  kind CiKind
+  key    String   @db.VarChar(64)
+  name   String   @db.VarChar(255)
+  kind   CiKind
   /// `PLANNED` = ยังไม่ขึ้นใช้จริง · `RETIRED` = เลิกใช้แล้วแต่เก็บประวัติไว้
   status CiStatus @default(ACTIVE)
 
@@ -1099,7 +1103,7 @@ model ChangeFreeze {
   id       BigInt @id @default(autoincrement())
   tenantId BigInt @map("tenant_id")
 
-  name String @db.VarChar(120)
+  name   String @db.VarChar(120)
   /// ทำไมถึงห้าม — คนที่จะขอข้ามต้องอ่านแล้วตัดสินใจได้เอง
   reason String @db.VarChar(500)
 
@@ -1201,16 +1205,16 @@ model Notification {
   createdAt       DateTime  @default(now()) @map("created_at") @db.DateTime(3)
 
   deliveries NotificationDelivery[]
-  /*
-    **ต้องมี foreign key ทั้งสามทาง** — เดิมตารางนี้ไม่มี FK เลยสักตัว
-    ลบผู้ใช้หรือลบงานแล้วแถวแจ้งเตือนค้างอยู่เงียบ ๆ โดยไม่มี error สักบรรทัด
-    วัดจริงในฐานข้อมูลพัฒนา: 170 แถวชี้ไปหาผู้ใช้ที่ถูกลบไปแล้ว สะสมจากเทสต์
-    ที่สร้างผู้ใช้แล้วลบ · ไม่มีใครเห็นเพราะทุกคิวรีกรองด้วย userId ของคนที่
-    ล็อกอินอยู่ แถวกำพร้าจึงไม่โผล่ที่ไหนเลย
-  */
-  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  user     User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  workItem WorkItem? @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+  /**
+   * *ต้องมี foreign key ทั้งสามทาง** — เดิมตารางนี้ไม่มี FK เลยสักตัว
+   * ลบผู้ใช้หรือลบงานแล้วแถวแจ้งเตือนค้างอยู่เงียบ ๆ โดยไม่มี error สักบรรทัด
+   * วัดจริงในฐานข้อมูลพัฒนา: 170 แถวชี้ไปหาผู้ใช้ที่ถูกลบไปแล้ว สะสมจากเทสต์
+   * ที่สร้างผู้ใช้แล้วลบ · ไม่มีใครเห็นเพราะทุกคิวรีกรองด้วย userId ของคนที่
+   * ล็อกอินอยู่ แถวกำพร้าจึงไม่โผล่ที่ไหนเลย
+   */
+  tenant     Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user       User?                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workItem   WorkItem?              @relation(fields: [workItemId], references: [id], onDelete: Cascade)
 
   @@unique([tenantId, dedupeKey])
   @@index([tenantId, userId, readAt])
@@ -1669,4 +1673,61 @@ model InboundMail {
   @@index([tenantId, messageId])
   @@index([tenantId, outcome, createdAt])
   @@map("inbound_mail")
+}
+
+/// แดชบอร์ดที่เจ้าของจัดวางเอง
+///
+/// **แถวที่เก็บคือ "ความตั้งใจ" ไม่ใช่ "สิ่งที่จะได้เห็น"** — การ์ดที่อ้างชนิดซึ่ง
+/// ถูกถอดไปแล้ว หรืออ้างโปรเจกต์ที่คนดูไม่มีสิทธิ์ ยังอยู่ในตารางนี้ตามเดิม
+/// และถูกคัดออกตอนเรนเดอร์โดย `resolveLayout` ซึ่งรายงานว่าคัดอะไรออกเพราะอะไร
+/// · การลบแถวทิ้งตอนสิทธิ์เปลี่ยน ทำให้เจ้าของเสียหน้าที่จัดไว้อย่างถาวร
+/// เพียงเพราะวันหนึ่งเขาถูกย้ายทีม
+model Dashboard {
+  id       BigInt  @id @default(autoincrement())
+  tenantId BigInt  @map("tenant_id")
+  ownerId  BigInt  @map("owner_id")
+  name     String  @db.VarChar(128)
+  /// จำนวนคอลัมน์ที่เจ้าของเลือก — เอนจินดึงค่าที่ใช้ไม่ได้กลับเข้าขอบให้เอง
+  columns  Int     @default(2)
+  /// แชร์ให้ทุกคนในองค์กรเห็น — แต่ **แต่ละคนเห็นตามสิทธิ์ของตัวเอง**
+  /// กติกาเดียวกับ SavedFilter · หน้าที่แชร์แล้วต้องไม่กลายเป็นทางลัดดูข้อมูล
+  /// ของโปรเจกต์ที่ตัวเองเข้าไม่ถึง
+  isShared Boolean @default(false) @map("is_shared")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.DateTime(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.DateTime(3)
+
+  tenant  Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  owner   User              @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  gadgets DashboardGadget[]
+
+  @@unique([ownerId, name])
+  @@index([tenantId, isShared, name])
+  @@map("dashboard")
+}
+
+/// การ์ดหนึ่งใบบนแดชบอร์ด
+model DashboardGadget {
+  id          BigInt  @id @default(autoincrement())
+  tenantId    BigInt  @map("tenant_id")
+  dashboardId BigInt  @map("dashboard_id")
+  /// `VarChar` ไม่ใช่ enum **โดยตั้งใจ** — ชนิดที่ถูกถอดออกจากโค้ดต้องยังอ่านแถวได้
+  /// ไม่ใช่ทำให้ทั้งหน้าอ่านไม่ขึ้น · enum จะบังคับให้ migration ไปแตะข้อมูลของคน
+  kind        String  @db.VarChar(64)
+  /// `column` เป็น reserved word ของ MySQL 8 — ชื่อคอลัมน์จริงจึงเป็น `col_index`
+  colIndex    Int     @map("col_index")
+  /// ลำดับภายในหน้า — เอนจินอ่านลำดับนี้ ไม่ได้เรียงจาก id
+  position    Int
+  /// `null` = ทุกโปรเจกต์ที่คนดูเปิดดูได้
+  projectId   BigInt? @map("project_id")
+  title       String? @db.VarChar(128)
+
+  tenant    Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  dashboard Dashboard @relation(fields: [dashboardId], references: [id], onDelete: Cascade)
+  /// โปรเจกต์ถูกลบ = การ์ดกลายเป็น "ทุกโปรเจกต์" ไม่ใช่การ์ดหายไป
+  project   Project?  @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  @@unique([dashboardId, position])
+  @@index([tenantId, dashboardId])
+  @@map("dashboard_gadget")
 }
