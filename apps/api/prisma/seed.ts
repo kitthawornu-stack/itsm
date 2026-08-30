@@ -13,7 +13,7 @@
  * รันด้วย: pnpm db:seed
  */
 import type { Prisma} from '@prisma/client';
-import { PrismaClient, ProjectType, RuleKind, StatusCategory, FieldType } from '@prisma/client';
+import { PrismaClient, ProjectType, RuleKind, StatusCategory, FieldType, LinkType } from '@prisma/client';
 import { distribute } from '@itsm/lexorank';
 import { hashPassword } from '../src/modules/identity/password';
 
@@ -337,6 +337,103 @@ async function main(): Promise<void> {
     ],
   });
 
+  /*
+    ---------- ITSM: Change Management ----------
+
+    **นี่คือที่เดียวที่ `require-approval` ถูกใช้จริง** · ก่อนหน้านี้ validator
+    ตัวนั้นมีอยู่ในเอนจิน มีเทสต์ และตั้งจากหน้าจอได้ **แต่ไม่มี workflow ไหน
+    ในข้อมูลตั้งต้นใช้มันเลย** — สายอนุมัติหลายขั้นทั้งชุดจึงไม่ได้กั้นอะไร
+    ซึ่งเป็นรูปแบบเดียวกับ `BULK_EDIT` ที่ให้สิทธิ์แล้วไม่มีผล
+
+    Change ใช้ workflow ของตัวเอง ไม่ใช่ของ Incident เพราะกระบวนการต่างกัน
+    ตรงจุดสำคัญ: **ต้องมีคนอนุมัติก่อนถึงจะลงมือได้**
+  */
+  const wfChange = await prisma.workflow.create({
+    data: { tenantId, name: 'ITSM: Change Management' },
+  });
+  await prisma.workflowStatus.createMany({
+    data: [
+      { tenantId, workflowId: wfChange.id, name: 'ร่างคำขอ', category: StatusCategory.TODO, position: 1, isInitial: true },
+      { tenantId, workflowId: wfChange.id, name: 'รออนุมัติ', category: StatusCategory.TODO, position: 2, pausesSla: true },
+      { tenantId, workflowId: wfChange.id, name: 'รอถึงกำหนด', category: StatusCategory.TODO, position: 3, pausesSla: true },
+      { tenantId, workflowId: wfChange.id, name: 'กำลังดำเนินการ', category: StatusCategory.IN_PROGRESS, position: 4 },
+      { tenantId, workflowId: wfChange.id, name: 'เสร็จแล้ว', category: StatusCategory.DONE, position: 5 },
+      { tenantId, workflowId: wfChange.id, name: 'ยกเลิก', category: StatusCategory.DONE, position: 6 },
+    ],
+  });
+  const chStatuses = await prisma.workflowStatus.findMany({ where: { workflowId: wfChange.id } });
+  const chBy = (n: string) => chStatuses.find((x) => x.name === n)!;
+
+  await prisma.workflowTransition.createMany({
+    data: [
+      { tenantId, workflowId: wfChange.id, name: 'ส่งขออนุมัติ', fromStatusId: chBy('ร่างคำขอ').id, toStatusId: chBy('รออนุมัติ').id, position: 1 },
+      { tenantId, workflowId: wfChange.id, name: 'ถอนคำขอ', fromStatusId: chBy('รออนุมัติ').id, toStatusId: chBy('ร่างคำขอ').id, position: 2 },
+      { tenantId, workflowId: wfChange.id, name: 'เริ่มดำเนินการ', fromStatusId: chBy('รอถึงกำหนด').id, toStatusId: chBy('กำลังดำเนินการ').id, position: 1 },
+      { tenantId, workflowId: wfChange.id, name: 'ทำเสร็จแล้ว', fromStatusId: chBy('กำลังดำเนินการ').id, toStatusId: chBy('เสร็จแล้ว').id, position: 1 },
+      { tenantId, workflowId: wfChange.id, name: 'ยกเลิกคำขอ', fromStatusId: chBy('ร่างคำขอ').id, toStatusId: chBy('ยกเลิก').id, position: 3 },
+    ],
+  });
+
+  /*
+    ปุ่มที่ **ต้องได้รับอนุมัติก่อน** — สร้างแยกเพราะต้องผูกกฎเข้าไป
+
+    เป็น VALIDATOR ไม่ใช่ CONDITION โดยตั้งใจ: ปุ่มต้องยังเห็นอยู่ ผู้ขอจึงรู้ว่า
+    ทำต่อได้แต่ต้องรออนุมัติก่อน · ถ้าเป็น CONDITION ปุ่มจะหายไปเฉย ๆ
+    แล้วไม่มีใครรู้ว่าต้องทำอะไร (ดูหัวไฟล์ workflow-engine.ts)
+  */
+  const trApproved = await prisma.workflowTransition.create({
+    data: {
+      tenantId,
+      workflowId: wfChange.id,
+      name: 'อนุมัติแล้ว รอถึงกำหนด',
+      fromStatusId: chBy('รออนุมัติ').id,
+      toStatusId: chBy('รอถึงกำหนด').id,
+      position: 1,
+    },
+  });
+  await prisma.transitionRule.create({
+    data: {
+      tenantId,
+      transitionId: trApproved.id,
+      kind: RuleKind.VALIDATOR,
+      ruleType: 'require-approval',
+      config: {},
+      position: 1,
+    },
+  });
+
+  /*
+    ---------- ITSM: Problem Management ----------
+
+    แยกจาก Incident เพราะปัญหาจบคนละแบบ: **"รู้สาเหตุแล้ว" เป็นสถานะจริง**
+    ไม่ใช่ขั้นระหว่างทาง · known error ที่ยังไม่มีทางแก้ถาวรอยู่ตรงนั้นได้เป็นปี
+    และต้องแยกออกจาก "แก้ที่ต้นเหตุแล้ว" ให้ชัด — ไม่งั้นรายงานจะนับปัญหาที่
+    ยังกวนอยู่ว่าแก้แล้ว
+  */
+  const wfProblem = await prisma.workflow.create({
+    data: { tenantId, name: 'ITSM: Problem Management' },
+  });
+  await prisma.workflowStatus.createMany({
+    data: [
+      { tenantId, workflowId: wfProblem.id, name: 'ตั้งเรื่องไว้', category: StatusCategory.TODO, position: 1, isInitial: true },
+      { tenantId, workflowId: wfProblem.id, name: 'กำลังหาสาเหตุ', category: StatusCategory.IN_PROGRESS, position: 2 },
+      { tenantId, workflowId: wfProblem.id, name: 'รู้สาเหตุแล้ว', category: StatusCategory.IN_PROGRESS, position: 3 },
+      { tenantId, workflowId: wfProblem.id, name: 'แก้ที่ต้นเหตุแล้ว', category: StatusCategory.DONE, position: 4 },
+      { tenantId, workflowId: wfProblem.id, name: 'ไม่แก้', category: StatusCategory.DONE, position: 5 },
+    ],
+  });
+  const prStatuses = await prisma.workflowStatus.findMany({ where: { workflowId: wfProblem.id } });
+  const prBy = (n: string) => prStatuses.find((x) => x.name === n)!;
+  await prisma.workflowTransition.createMany({
+    data: [
+      { tenantId, workflowId: wfProblem.id, name: 'เริ่มหาสาเหตุ', fromStatusId: prBy('ตั้งเรื่องไว้').id, toStatusId: prBy('กำลังหาสาเหตุ').id, position: 1 },
+      { tenantId, workflowId: wfProblem.id, name: 'บันทึกสาเหตุ', fromStatusId: prBy('กำลังหาสาเหตุ').id, toStatusId: prBy('รู้สาเหตุแล้ว').id, position: 1 },
+      { tenantId, workflowId: wfProblem.id, name: 'แก้ที่ต้นเหตุแล้ว', fromStatusId: prBy('รู้สาเหตุแล้ว').id, toStatusId: prBy('แก้ที่ต้นเหตุแล้ว').id, position: 1 },
+      { tenantId, workflowId: wfProblem.id, name: 'ตัดสินใจไม่แก้', fromStatusId: prBy('รู้สาเหตุแล้ว').id, toStatusId: prBy('ไม่แก้').id, position: 2 },
+      { tenantId, workflowId: wfProblem.id, name: 'กลับไปหาสาเหตุใหม่', fromStatusId: prBy('รู้สาเหตุแล้ว').id, toStatusId: prBy('กำลังหาสาเหตุ').id, position: 3 },
+    ],
+  });
+
   const wfSoftware = await prisma.workflow.create({
     data: { tenantId, name: 'Software: Simplified' },
   });
@@ -378,11 +475,22 @@ async function main(): Promise<void> {
     },
   });
 
-  const sdTypes = ['Incident', 'Service Request', 'Problem', 'Change'];
+  /*
+    Problem กับ Change ใช้ workflow ของตัวเอง ไม่ใช่ของ Incident
+
+    ก่อนหน้านี้ทั้งสี่ชนิดชี้ไปที่ `ITSM: Incident Management` เหมือนกันหมด ·
+    ผลคือ Change ไม่มีสถานะ "รออนุมัติ" และ **ไม่มีที่ไหนใช้ validator
+    `require-approval` เลย** — สายอนุมัติหลายขั้นทั้งชุดจึงไม่ได้กั้นอะไร
+  */
+  const incidentTypes = ['Incident', 'Service Request'];
+  /** ทุกชนิดใน SD — ใช้ตั้งค่าฟิลด์ ซึ่งถามเหมือนกันทุกชนิด */
+  const sdTypes = [...incidentTypes, 'Problem', 'Change'];
   const platTypes = ['Epic', 'Story', 'Task', 'Bug', 'Sub-task'];
   await prisma.workflowScheme.createMany({
     data: [
-      ...sdTypes.map((n) => ({ tenantId, projectId: projectSd.id, issueTypeId: it(n).id, workflowId: wfIncident.id })),
+      ...incidentTypes.map((n) => ({ tenantId, projectId: projectSd.id, issueTypeId: it(n).id, workflowId: wfIncident.id })),
+      { tenantId, projectId: projectSd.id, issueTypeId: it('Problem').id, workflowId: wfProblem.id },
+      { tenantId, projectId: projectSd.id, issueTypeId: it('Change').id, workflowId: wfChange.id },
       ...platTypes.map((n) => ({ tenantId, projectId: projectPlat.id, issueTypeId: it(n).id, workflowId: wfSoftware.id })),
     ],
   });
@@ -437,7 +545,16 @@ async function main(): Promise<void> {
     const seq = isSd ? i + 1 : i - SD_COUNT + 1;
     const rank = (isSd ? ranksSd[seq - 1] : ranksPlat[seq - 1])!;
 
-    const typeName = isSd ? pick(sdTypes) : pick(platTypes);
+    /*
+      **สุ่มเฉพาะชนิดที่ใช้ workflow ของ Incident** — สถานะที่สุ่มมาจาก
+      `incStatuses` ซึ่งเป็นของ workflow นั้น · ถ้าสุ่มชนิด Problem หรือ Change
+      เข้ามาด้วย งานจะได้สถานะที่ไม่ได้อยู่ใน workflow ของตัวเอง ซึ่งเป็นข้อมูล
+      ที่ขัดกันเองโดยไม่มีอะไรฟ้อง — หน้าจอจะไม่มีปุ่มให้กดเลยสักปุ่ม
+
+      (ก่อนหน้านี้ทุกชนิดใน SD ใช้ workflow เดียวกัน การสุ่มทั้งสี่ชนิดจึงถูกต้อง
+       ในตอนนั้น · พอแยก workflow แล้วเงื่อนไขนั้นหายไป)
+    */
+    const typeName = isSd ? pick(incidentTypes) : pick(platTypes);
     const statusPool = isSd ? incStatuses : swStatuses;
     // 62% ปิดแล้ว · ที่เหลือกระจายตามสถานะที่ยังเปิด — สัดส่วนใกล้เคียงงานจริง
     const closed = rnd(100) < 62;
@@ -488,7 +605,106 @@ async function main(): Promise<void> {
   }
   process.stdout.write('\n');
 
-  await prisma.projectCounter.update({ where: { projectId: projectSd.id }, data: { lastValue: SD_COUNT } });
+  /*
+    ---------- งาน ITIL ตัวอย่าง ----------
+
+    **จำเป็นต้องมี** ไม่ใช่ของประดับ · Problem กับ Change มี workflow ของตัวเอง
+    แล้ว แต่ถ้าไม่มีงานสักใบ คนที่เปิดโปรเจกต์ดูจะสรุปว่าฟีเจอร์ยังไม่มี —
+    ซึ่งเป็นความเชื่อที่หน้าจอสร้างขึ้นเอง แบบเดียวกับที่หน้าตั้งค่าเคยบอกว่า
+    IT Support "แก้ไขหลายเรื่องพร้อมกัน" ได้
+
+    สร้างหลังก้อนหลักเพราะต้องใช้สถานะจาก workflow ของตัวเอง ไม่ใช่ของ Incident
+    และผูกกับเรื่องที่มีอยู่แล้ว เพื่อให้แผงผลกระทบมีของจริงให้แสดง
+  */
+  const itilStart = SD_COUNT + 1;
+  const changeSpecs = [
+    ['อัปเกรดเซิร์ฟเวอร์ฐานข้อมูลหลักเป็นรุ่นใหม่', 'ร่างคำขอ'],
+    ['เปลี่ยนสวิตช์เครือข่ายชั้น 3', 'รออนุมัติ'],
+    ['ย้ายระบบสำรองข้อมูลไปเครื่องใหม่', 'รออนุมัติ'],
+    ['ติดตั้งแพตช์ความปลอดภัยประจำไตรมาส', 'รอถึงกำหนด'],
+    ['ขยายพื้นที่จัดเก็บของระบบบัญชี', 'กำลังดำเนินการ'],
+    ['เปลี่ยนใบรับรอง SSL ของเว็บภายใน', 'เสร็จแล้ว'],
+  ] as const;
+  const problemSpecs = [
+    ['ผู้ใช้เข้าระบบไม่ได้เป็นช่วง ๆ ตอนเช้า', 'กำลังหาสาเหตุ'],
+    ['เครื่องพิมพ์ชั้น 2 หลุดจากเครือข่ายซ้ำ ๆ', 'รู้สาเหตุแล้ว'],
+    ['ระบบบัญชีช้าผิดปกติทุกสิ้นเดือน', 'รู้สาเหตุแล้ว'],
+    ['อีเมลขาออกถูกตีกลับจากปลายทางบางแห่ง', 'แก้ที่ต้นเหตุแล้ว'],
+  ] as const;
+
+  const itilRows: Prisma.WorkItemCreateManyInput[] = [];
+  let itilSeq = itilStart;
+  for (const [summary, statusName] of changeSpecs) {
+    const st = chBy(statusName);
+    const created = new Date(NOW - rnd(60) * DAY);
+    itilRows.push({
+      tenantId,
+      itemKey: `SD-${itilSeq}`,
+      projectId: projectSd.id,
+      issueTypeId: it('Change').id,
+      summary,
+      statusId: st.id,
+      priorityId: priorities[rnd(5)]!.id,
+      // ผลการแก้ไขผูกกับการปิดงาน — สถานะหมวด DONE เท่านั้นที่มีค่านี้
+      resolutionId: st.category === StatusCategory.DONE ? resolutions[0]!.id : null,
+      reporterId: pick(agents).id,
+      assigneeId: pick(agents).id,
+      rank: `zzz${String(itilSeq)}`,
+      createdAt: created,
+      updatedAt: created,
+      resolvedAt: st.category === StatusCategory.DONE ? created : null,
+    });
+    itilSeq += 1;
+  }
+  for (const [summary, statusName] of problemSpecs) {
+    const st = prBy(statusName);
+    const created = new Date(NOW - rnd(120) * DAY);
+    itilRows.push({
+      tenantId,
+      itemKey: `SD-${itilSeq}`,
+      projectId: projectSd.id,
+      issueTypeId: it('Problem').id,
+      summary,
+      statusId: st.id,
+      priorityId: priorities[rnd(5)]!.id,
+      resolutionId: st.category === StatusCategory.DONE ? resolutions[0]!.id : null,
+      reporterId: pick(agents).id,
+      assigneeId: pick(agents).id,
+      rank: `zzz${String(itilSeq)}`,
+      createdAt: created,
+      updatedAt: created,
+      resolvedAt: st.category === StatusCategory.DONE ? created : null,
+    });
+    itilSeq += 1;
+  }
+  await prisma.workItem.createMany({ data: itilRows });
+
+  /*
+    ผูกเรื่องที่มีอยู่เข้ากับปัญหาใบแรก — **แผงผลกระทบต้องมีของจริงให้แสดง**
+    ไม่งั้นมันจะไม่ขึ้นเลยสักใบ แล้วไม่มีใครรู้ว่ามันมีอยู่
+
+    เลือกจากเรื่องที่ยังเปิดอยู่ เพื่อให้ตัวเลข "ยังค้างอยู่" ไม่เป็นศูนย์
+  */
+  const firstProblem = await prisma.workItem.findFirstOrThrow({
+    where: { tenantId, itemKey: `SD-${String(itilStart + changeSpecs.length)}` },
+    select: { id: true },
+  });
+  const victims = await prisma.workItem.findMany({
+    where: { tenantId, projectId: projectSd.id, resolvedAt: null, issueTypeId: it('Incident').id },
+    select: { id: true },
+    orderBy: { id: 'asc' },
+    take: 5,
+  });
+  await prisma.workItemLink.createMany({
+    data: victims.map((v) => ({
+      tenantId,
+      sourceId: firstProblem.id,
+      targetId: v.id,
+      type: LinkType.CAUSES,
+    })),
+  });
+
+  await prisma.projectCounter.update({ where: { projectId: projectSd.id }, data: { lastValue: itilSeq - 1 } });
   await prisma.projectCounter.update({ where: { projectId: projectPlat.id }, data: { lastValue: TOTAL - SD_COUNT } });
 
   // ---------- ยืนยันสิ่งที่ ADR-002 เตือน ----------
