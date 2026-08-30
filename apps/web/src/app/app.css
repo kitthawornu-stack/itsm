@@ -1557,6 +1557,33 @@
   overflow-wrap: anywhere;
 }
 
+/* กล่องปิดเป็นชุด — แยกจากรายการด้วยพื้นหลัง เพราะเป็นการกระทำ ไม่ใช่ข้อมูล */
+.pim-closer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  align-items: flex-start;
+  margin-top: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+  font-size: 12.5px;
+  line-height: var(--line-height-body);
+}
+
+.pim-closer .ui-field {
+  width: 100%;
+  max-width: 28rem;
+}
+
+.pim-closer-lead {
+  margin: 0;
+  line-height: var(--line-height-body);
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
 .pim-list {
   list-style: none;
   margin: var(--space-3) 0 var(--space-2);

@@ -1,7 +1,8 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
-import { Alert, LinkButton, TextLink, Timestamp } from '@itsm/ui';
+import { Alert, Button, Field, LinkButton, Select, TextLink, Timestamp } from '@itsm/ui';
 
 interface Incident {
   itemKey: string;
@@ -10,6 +11,19 @@ interface Incident {
   projectKey: string;
   createdAt: string;
   resolvedAt: string | null;
+}
+
+interface TransitionOption {
+  name: string;
+  eligible: number;
+  requiredFields: string[];
+}
+
+interface TransitionResult {
+  requested: number;
+  changed: number;
+  failed: number;
+  items: Array<{ itemKey: string; outcome: string; reason?: string }>;
 }
 
 interface Impact {
@@ -60,8 +74,17 @@ export function ProblemImpactPanel({
   apiBase: string;
   itemKey: string;
 }): ReactNode {
+  const router = useRouter();
   const [data, setData] = useState<{ impact: Impact; incidents: Incident[] } | null>(null);
   const [expanded, setExpanded] = useState(false);
+  const [closing, setClosing] = useState(false);
+  const [options, setOptions] = useState<TransitionOption[]>([]);
+  const [resolutions, setResolutions] = useState<string[]>([]);
+  const [transition, setTransition] = useState('');
+  const [resolution, setResolution] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<TransitionResult | null>(null);
 
   const load = useCallback(async (): Promise<void> => {
     try {
@@ -79,6 +102,77 @@ export function ProblemImpactPanel({
   useEffect(() => {
     void load();
   }, [load]);
+
+  const openKeys = (data?.incidents ?? [])
+    .filter((i) => i.statusCategory !== 'DONE')
+    .map((i) => i.itemKey);
+
+  /**
+   * ถามว่าปุ่มไหนกดได้กับชุดนี้บ้าง
+   *
+   * ใช้ endpoint เดียวกับหน้าคิว — **ปุ่มที่กดแล้วล้มทุกใบคือปุ่มที่ไม่ควรอยู่
+   * บนหน้าจอ** และเซิร์ฟเวอร์เป็นคนตอบว่ากดได้กี่ใบ ไม่ใช่หน้าจอเดาเอง
+   */
+  async function openCloser(): Promise<void> {
+    setClosing(true);
+    setError(null);
+    setResult(null);
+    try {
+      const res = await fetch(`${apiBase}/api/v1/work-items/bulk/transitions`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ itemKeys: openKeys }),
+      });
+      if (!res.ok) {
+        const d = (await res.json().catch(() => null)) as { message?: string } | null;
+        setError(d?.message ?? `อ่านปุ่มที่กดได้ไม่สำเร็จ (HTTP ${String(res.status)})`);
+        setOptions([]);
+        return;
+      }
+      const d = (await res.json()) as { options: TransitionOption[]; resolutions: string[] };
+      setOptions(d.options);
+      setResolutions(d.resolutions);
+    } catch {
+      setError('เชื่อมต่อเซิร์ฟเวอร์ไม่ได้');
+      setOptions([]);
+    }
+  }
+
+  const chosen = options.find((o) => o.name === transition);
+  const needsResolution = chosen?.requiredFields.includes('resolution') ?? false;
+
+  async function closeAll(): Promise<void> {
+    if (chosen === undefined) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch(`${apiBase}/api/v1/work-items/bulk/transition`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          itemKeys: openKeys,
+          transitionName: transition,
+          ...(needsResolution && resolution !== '' ? { resolutionName: resolution } : {}),
+        }),
+      });
+      const d = (await res.json()) as TransitionResult & { message?: string };
+      if (!res.ok) {
+        setError(d.message ?? `เปลี่ยนสถานะไม่สำเร็จ (HTTP ${String(res.status)})`);
+        return;
+      }
+      setResult(d);
+      setTransition('');
+      setResolution('');
+      await load();
+      router.refresh();
+    } catch {
+      setError('เชื่อมต่อเซิร์ฟเวอร์ไม่ได้');
+    } finally {
+      setBusy(false);
+    }
+  }
 
   if (data === null || data.impact.total === 0) return null;
 
@@ -143,6 +237,110 @@ export function ProblemImpactPanel({
           กล่องสีบนทุกสถานะทำให้กล่องสีไม่มีความหมาย
         */
         <p className="pim-quiet">ไม่มีเรื่องใหม่มาสามสิบวันแล้ว — อาจแก้ที่ต้นเหตุไปแล้ว</p>
+      )}
+
+      {error === null ? null : (
+        <Alert tone="error" inline>
+          {error}
+        </Alert>
+      )}
+
+      {result === null ? null : (
+        <Alert tone={result.failed === 0 ? 'success' : 'warning'} inline>
+          เปลี่ยนสถานะได้ {result.changed} จาก {result.requested} เรื่อง
+          {result.failed === 0 ? null : (
+            <>
+              {' · '}ทำไม่ได้ {result.failed} เรื่อง:{' '}
+              {result.items
+                .filter((i) => i.outcome !== 'changed')
+                .map((i) => `${i.itemKey} (${i.reason ?? 'ไม่ทราบสาเหตุ'})`)
+                .join(' · ')}
+            </>
+          )}
+        </Alert>
+      )}
+
+      {/*
+        **ไม่ปิดอัตโนมัติตอนปิดปัญหา** — ต้องเป็นการกระทำที่คนตั้งใจกด ·
+        การปิดตามอัตโนมัติจะปิดเรื่องของคนที่ไม่เคยได้รับคำตอบสักคำ
+        แล้วเขาจะรู้ตัวก็ต่อเมื่อเปิดดูเองว่าเรื่องปิดไปแล้ว
+      */}
+      {impact.open === 0 ? null : closing ? (
+        <div className="pim-closer">
+          <p className="pim-closer-lead">
+            เปลี่ยนสถานะเรื่องที่ยังค้างอยู่ {openKeys.length} เรื่องพร้อมกัน — เสนอเฉพาะปุ่ม
+            ที่มีใบกดได้จริง และเซิร์ฟเวอร์ตรวจกฎของแต่ละใบเองอีกครั้ง
+            ใบที่ติดกฎจะถูกรายงานกลับมาทีละใบ
+          </p>
+          {options.length === 0 ? (
+            <p className="pim-quiet">
+              ไม่มีปุ่มที่กดได้กับชุดนี้ — อาจไม่มีสิทธิ์ หรือทุกใบติดกฎของ workflow
+            </p>
+          ) : (
+            <>
+              <Field label="ปุ่มที่จะกด" htmlFor="pim-transition" required>
+                <Select
+                  id="pim-transition"
+                  value={transition}
+                  onChange={setTransition}
+                  placeholder="เลือกปุ่ม"
+                  options={options.map((o) => ({
+                    value: o.name,
+                    // บอกจำนวนใบที่กดได้จริงตรงตัวเลือก ไม่ใช่รู้ตอนอ่านผล
+                    label: `${o.name} (กดได้ ${String(o.eligible)} จาก ${String(openKeys.length)})`,
+                  }))}
+                />
+              </Field>
+              {needsResolution ? (
+                <Field label="ผลการแก้ไข" htmlFor="pim-resolution" required>
+                  <Select
+                    id="pim-resolution"
+                    value={resolution}
+                    onChange={setResolution}
+                    placeholder="เลือกผลการแก้ไข"
+                    options={resolutions.map((r) => ({ value: r, label: r }))}
+                  />
+                </Field>
+              ) : null}
+            </>
+          )}
+          <div className="admin-btn-row">
+            <Button
+              variant="primary"
+              disabled={
+                busy || chosen === undefined || (needsResolution && resolution === '')
+              }
+              onClick={() => {
+                void closeAll();
+              }}
+            >
+              {/*
+                ป้ายบนปุ่มบอกสิ่งที่จะเกิดขึ้นจริง ไม่ใช่คำว่า "ปิด" ลอย ๆ ·
+                workflow ของแต่ละองค์กรอาจต้องผ่านหลายขั้นกว่าจะปิดได้
+                การเขียนว่า "ปิด" จึงเป็นคำสัญญาที่ระบบทำตามไม่ได้ทุกครั้ง
+              */}
+              {chosen === undefined ? 'เลือกปุ่มก่อน' : `กด "${chosen.name}" กับ ${String(chosen.eligible)} เรื่อง`}
+            </Button>
+            <LinkButton
+              disabled={busy}
+              onClick={() => {
+                setClosing(false);
+                setTransition('');
+                setResolution('');
+              }}
+            >
+              ยกเลิก
+            </LinkButton>
+          </div>
+        </div>
+      ) : (
+        <LinkButton
+          onClick={() => {
+            void openCloser();
+          }}
+        >
+          จัดการเรื่องที่ค้าง {impact.open} เรื่องพร้อมกัน
+        </LinkButton>
       )}
 
       <ul className="pim-list">
