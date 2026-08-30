@@ -37,6 +37,7 @@ export default function AppLayout({ children }: { children: ReactNode }): ReactN
             <a href="/admin/fields">ฟิลด์</a>
             <a href="/knowledge">คลังความรู้</a>
             <a href="/change-calendar">ปฏิทินเปลี่ยนแปลง</a>
+            <a href="/dashboard">แดชบอร์ด</a>
             <a href="/reports">รายงาน</a>
             <a href="/reports/time">เวลาที่ใช้</a>
             <a href="/admin/audit">ร่องรอย</a>
