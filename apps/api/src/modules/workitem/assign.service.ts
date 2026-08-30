@@ -127,6 +127,7 @@ export async function assignWorkItem(
           userId: next.id,
           workItemId: item.id,
           kind: 'workitem.assigned',
+          reason: 'assignee',
           title: `${item.itemKey} ถูกมอบหมายให้คุณ`,
           body: item.summary,
           dedupeKey: `assign:${item.id.toString()}:${next.id.toString()}:${String(now.getTime())}`,

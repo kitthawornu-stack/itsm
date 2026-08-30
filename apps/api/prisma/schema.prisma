@@ -31,37 +31,38 @@ model Tenant {
   createdAt DateTime @default(now()) @map("created_at") @db.DateTime(3)
   updatedAt DateTime @updatedAt @map("updated_at") @db.DateTime(3)
 
-  users             User[]
-  groups            UserGroup[]
-  projects          Project[]
-  issueTypes        IssueType[]
-  priorities        Priority[]
-  resolutions       Resolution[]
-  workflows         Workflow[]
-  fieldDefinitions  FieldDefinition[]
-  workItems         WorkItem[]
-  permissionSchemes PermissionScheme[]
-  auditLogs         AuditLog[]
-  savedFilters      SavedFilter[]
-  knowledgeArticles KnowledgeArticle[]
-  catalogItems      CatalogItem[]
-  satisfactions     Satisfaction[]
-  approvals         Approval[]
-  catalogCategories CatalogCategory[]
-  automationRules   AutomationRule[]
-  automationRuns    AutomationRun[]
-  workLogs          WorkLog[]
-  inboundMails      InboundMail[]
-  notificationRules NotificationRule[]
-  notificationPrefs NotificationPreference[]
-  notifications     Notification[]
-  changeWindows     ChangeWindow[]
-  changeFreezes     ChangeFreeze[]
-  configItems       ConfigurationItem[]
-  ciDependencies    CiDependency[]
-  workItemCis       WorkItemCi[]
-  dashboards        Dashboard[]
-  dashboardGadgets  DashboardGadget[]
+  users                     User[]
+  groups                    UserGroup[]
+  projects                  Project[]
+  issueTypes                IssueType[]
+  priorities                Priority[]
+  resolutions               Resolution[]
+  workflows                 Workflow[]
+  fieldDefinitions          FieldDefinition[]
+  workItems                 WorkItem[]
+  permissionSchemes         PermissionScheme[]
+  auditLogs                 AuditLog[]
+  savedFilters              SavedFilter[]
+  knowledgeArticles         KnowledgeArticle[]
+  catalogItems              CatalogItem[]
+  satisfactions             Satisfaction[]
+  approvals                 Approval[]
+  catalogCategories         CatalogCategory[]
+  automationRules           AutomationRule[]
+  automationRuns            AutomationRun[]
+  workLogs                  WorkLog[]
+  inboundMails              InboundMail[]
+  notificationRules         NotificationRule[]
+  notificationPrefs         NotificationPreference[]
+  notifications             Notification[]
+  changeWindows             ChangeWindow[]
+  changeFreezes             ChangeFreeze[]
+  configItems               ConfigurationItem[]
+  ciDependencies            CiDependency[]
+  workItemCis               WorkItemCi[]
+  dashboards                Dashboard[]
+  dashboardGadgets          DashboardGadget[]
+  notificationAudienceRules NotificationAudienceRule[]
 
   @@map("tenant")
 }
@@ -310,18 +311,19 @@ model Project {
   createdAt          DateTime    @default(now()) @map("created_at") @db.DateTime(3)
   updatedAt          DateTime    @updatedAt @map("updated_at") @db.DateTime(3)
 
-  tenant            Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  permissionScheme  PermissionScheme?  @relation(fields: [permissionSchemeId], references: [id], onDelete: SetNull)
-  notifyGroup       UserGroup?         @relation("ProjectNotifyGroup", fields: [notifyGroupId], references: [id], onDelete: SetNull)
-  counter           ProjectCounter?
-  slaPolicies       SlaPolicy[]
-  workItems         WorkItem[]
-  catalogItems      CatalogItem[]
-  workflowSchemes   WorkflowScheme[]
-  fieldConfigs      FieldConfig[]
-  automationRules   AutomationRule[]
-  notificationRules NotificationRule[]
-  dashboardGadgets  DashboardGadget[]
+  tenant                    Tenant                     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  permissionScheme          PermissionScheme?          @relation(fields: [permissionSchemeId], references: [id], onDelete: SetNull)
+  notifyGroup               UserGroup?                 @relation("ProjectNotifyGroup", fields: [notifyGroupId], references: [id], onDelete: SetNull)
+  counter                   ProjectCounter?
+  slaPolicies               SlaPolicy[]
+  workItems                 WorkItem[]
+  catalogItems              CatalogItem[]
+  workflowSchemes           WorkflowScheme[]
+  fieldConfigs              FieldConfig[]
+  automationRules           AutomationRule[]
+  notificationRules         NotificationRule[]
+  dashboardGadgets          DashboardGadget[]
+  notificationAudienceRules NotificationAudienceRule[]
 
   @@unique([tenantId, key])
   @@index([tenantId, isArchived])
@@ -1730,4 +1732,33 @@ model DashboardGadget {
   @@unique([dashboardId, position])
   @@index([tenantId, dashboardId])
   @@map("dashboard_gadget")
+}
+
+/// บทบาทผู้รับที่ผู้ดูแลปิดได้ — "ใครควรได้รับ" ไม่ใช่ "ส่งชนิดนี้ไหม"
+///
+/// สองเรื่องนี้แยกกันโดยตั้งใจ: ผู้ดูแลที่อยากให้ผู้เฝ้าดูหยุดได้รับความเห็นใหม่
+/// ไม่ได้อยากปิดความเห็นใหม่ทั้งระบบ · สวิตช์ของชนิดอยู่ที่ `notification_rule`
+///
+/// **เก็บเฉพาะแถวที่ต่างจากค่าปริยาย** เหมือน `notification_preference`
+/// — ไม่มีแถว = ได้รับ ซึ่งเป็นพฤติกรรมเดิมก่อนมีฟีเจอร์นี้
+model NotificationAudienceRule {
+  id        BigInt  @id @default(autoincrement())
+  tenantId  BigInt  @map("tenant_id")
+  /// null = ทุกโปรเจกต์ · ระบุ = เฉพาะโปรเจกต์นั้น และชนะกฎรวมเสมอ
+  projectId BigInt? @map("project_id")
+  /// ตรงกับ NOTIFICATION_KINDS
+  kind      String  @db.VarChar(64)
+  /// ตรงกับ AUDIENCE_ROLES ใน audience-policy.ts — เทสต์เทียบสองฝั่ง
+  role      String  @db.VarChar(32)
+  isEnabled Boolean @default(true) @map("is_enabled")
+
+  updatedAt DateTime @updatedAt @map("updated_at") @db.DateTime(3)
+
+  tenant  Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  project Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  /// หนึ่งความหมายเก็บแถวเดียว
+  @@unique([tenantId, projectId, kind, role])
+  @@index([tenantId, kind])
+  @@map("notification_audience_rule")
 }

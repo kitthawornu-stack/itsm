@@ -18,6 +18,12 @@ import type { TenantContext } from '@itsm/types';
 
 import type { TxClient } from '../../infrastructure/audit/audited-transaction';
 import {
+  AUDIENCE_ROLES,
+  roleReaches,
+  type AudienceRole,
+  type AudienceRule,
+} from './audience-policy';
+import {
   decideNotification,
   type AdminSwitch,
   type Channel,
@@ -37,11 +43,26 @@ export interface NotificationDraft {
   title: string;
   body?: string | null;
   dedupeKey: string;
+  /**
+   * ทำไมคนนี้ถึงได้รับ — **บังคับให้ระบุ**
+   *
+   * ประกาศเป็นฟิลด์บังคับเพื่อให้ TypeScript ทวงจากทุกจุดเรียก · ถ้าเป็น
+   * ตัวเลือก จุดเรียกใหม่ที่ลืมใส่จะ **ข้ามการตั้งค่าของผู้ดูแลไปเงียบ ๆ**
+   * แล้วผู้ดูแลจะเชื่อว่าปิดบทบาทนั้นแล้ว ทั้งที่ยังมีทางลอดอยู่
+   *
+   * ค่าที่ตรงกับ `AUDIENCE_ROLES` ถูกกรองตามกฎ · ค่าที่อยู่ใน
+   * `PASS_THROUGH_REASONS` ผ่านเสมอเพราะเป็นคนที่ต้องลงมือ ไม่ใช่คนรับข่าวสาร
+   * · `notification-policy.spec.ts` สแกนจุดเรียกจริงแล้วเทียบกับสองรายการนี้
+   * — ค่าที่พิมพ์ผิดจะทำให้เทสต์แดง ไม่ใช่หลุดไปเป็น "บทบาทที่ไม่รู้จัก"
+   */
+  reason: string;
 }
 
 export interface CreateResult {
   /** จำนวนแถวที่เขียนจริง */
   created: number;
+  /** จำนวนที่ถูกตัดเพราะผู้ดูแลปิด **บทบาท** นั้น — คนละเรื่องกับการปิดทั้งชนิด */
+  mutedByAudience: number;
   /** จำนวนที่ถูกปิดโดยผู้ดูแล — แยกจากที่ผู้ใช้ปิดเอง เพราะแก้กันคนละที่ */
   mutedByAdmin: number;
   /** จำนวนที่ผู้ใช้ปิดกระดิ่งเอง */
@@ -64,6 +85,24 @@ export interface CreateResult {
  * ต่อคนหนึ่งคน — รายชื่อผู้รับของความเห็นหนึ่งฉบับมีได้หลายสิบคน การถามทีละคน
  * คือคิวรีหลายสิบครั้งในทรานแซกชันที่ถือล็อกอยู่
  */
+/**
+ * บทบาทของใบนี้ยังถึงตัวคนไหม — รับ `reason` เป็น `string`
+ *
+ * ค่าที่ไม่ใช่บทบาทที่ตั้งค่าได้ (`approver` · `requester` · `group`) ผ่านเสมอ
+ * ตามเหตุผลใน `audience-policy.ts` · เอนจินมี `filterAudience` ที่ทำเรื่องเดียวกัน
+ * แต่รับทั้งรายการและใช้ `kind` เดียว จึงใช้ที่นี่ไม่ได้ — ใบในคำเรียกเดียว
+ * มีคนละชนิดได้
+ */
+function roleReaches2(
+  kind: string,
+  reason: string,
+  projectId: bigint,
+  rules: readonly AudienceRule[],
+): boolean {
+  if (!(AUDIENCE_ROLES as readonly string[]).includes(reason)) return true;
+  return roleReaches(kind, reason as AudienceRole, projectId, rules);
+}
+
 export async function createNotifications(
   ctx: TenantContext,
   tx: TxClient,
@@ -71,7 +110,7 @@ export async function createNotifications(
   drafts: readonly NotificationDraft[],
 ): Promise<CreateResult> {
   if (drafts.length === 0) {
-    return { created: 0, mutedByAdmin: 0, mutedByUser: 0, emailSuppressed: 0 };
+    return { created: 0, mutedByAudience: 0, mutedByAdmin: 0, mutedByUser: 0, emailSuppressed: 0 };
   }
 
   const kinds = [...new Set(drafts.map((d) => d.kind))];
@@ -79,7 +118,7 @@ export async function createNotifications(
     (id): id is bigint => id !== null,
   );
 
-  const [ruleRows, prefRows] = await Promise.all([
+  const [ruleRows, prefRows, audienceRows] = await Promise.all([
     tx.notificationRule.findMany({
       where: {
         tenantId: ctx.tenantId,
@@ -92,7 +131,22 @@ export async function createNotifications(
       where: { tenantId: ctx.tenantId, userId: { in: userIds }, kind: { in: kinds } },
       select: { userId: true, kind: true, channel: true, isEnabled: true },
     }),
+    tx.notificationAudienceRule.findMany({
+      where: {
+        tenantId: ctx.tenantId,
+        kind: { in: kinds },
+        OR: [{ projectId: null }, { projectId }],
+      },
+      select: { kind: true, role: true, projectId: true, isEnabled: true },
+    }),
   ]);
+
+  const audienceRules: AudienceRule[] = audienceRows.map((r) => ({
+    kind: r.kind,
+    role: r.role as AudienceRole,
+    projectId: r.projectId,
+    isEnabled: r.isEnabled,
+  }));
 
   const admin: AdminSwitch[] = ruleRows.map((r) => ({
     kind: r.kind,
@@ -112,7 +166,18 @@ export async function createNotifications(
   let mutedByAdmin = 0;
   let mutedByUser = 0;
 
-  for (const d of drafts) {
+  /*
+    กรองบทบาท **ก่อน** ตัดสินช่องทาง · คนที่ผู้ดูแลตัดออกไม่ควรถูกนับเป็น
+    "ถูกปิดโดยผู้ใช้" หรือ "ถูกปิดโดยสวิตช์ของชนิด" — สามอย่างนี้แก้กันคนละที่
+    และตัวเลขที่ปนกันทำให้ไล่ปัญหาไม่ได้
+
+    **ตรวจ `kind` ของแต่ละใบ ไม่ใช่ของใบแรก** — คำเรียกครั้งเดียวมีได้หลายชนิด
+    ปนกัน (`comment.added` กับ `comment.mention` มาจากการกรองรายชื่อชุดเดียว)
+  */
+  const reaching = drafts.filter((d) => roleReaches2(d.kind, d.reason, projectId, audienceRules));
+  const mutedByAudience = drafts.length - reaching.length;
+
+  for (const d of reaching) {
     const decision = decideNotification({
       kind: d.kind,
       projectId,
@@ -154,6 +219,7 @@ export async function createNotifications(
 
   return {
     created: created.count,
+    mutedByAudience,
     mutedByAdmin,
     mutedByUser,
     emailSuppressed: keep.filter((k) => k.emailSuppressed).length,

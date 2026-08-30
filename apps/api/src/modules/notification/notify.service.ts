@@ -145,6 +145,8 @@ export async function notifyGroup(
         userId,
         workItemId: notice.workItemId,
         kind: notice.kind,
+        // แจ้งทั้งกลุ่มตามที่ผู้เรียกระบุ — ปลายทางเป็นกลุ่ม ไม่ใช่บทบาทในตั๋ว
+        reason: 'group',
         title: notice.title,
         body: notice.body ?? null,
         // ไม่มีเวลาในคีย์ — ลองใหม่ต้องชนของเดิม ไม่ใช่สร้างแถวใหม่

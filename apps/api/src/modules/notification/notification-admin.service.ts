@@ -19,6 +19,14 @@ import { auditedTransaction } from '../../infrastructure/audit/audited-transacti
 import { tenantScoped } from '../../infrastructure/prisma/tenant-scope';
 import { assertTenantAdmin } from '../permission';
 import {
+  ALWAYS_REACHED,
+  AUDIENCE_ROLES,
+  ROLES_OF_KIND,
+  assertAudienceReachable,
+  type AudienceRole,
+  type AudienceRule,
+} from './audience-policy';
+import {
   ALWAYS_ON,
   CHANNELS,
   NOTIFICATION_KINDS,
@@ -224,4 +232,158 @@ export async function setMyPreference(
   }
 
   return { kind, channel, isEnabled: input.isEnabled };
+}
+
+// ============================================================
+// บทบาทผู้รับ — "ใครควรได้รับ" คนละเรื่องกับ "ส่งชนิดนี้ไหม"
+// ============================================================
+
+/** ป้ายภาษาคนของบทบาท — `Record` บังคับให้ครบเมื่อเพิ่มบทบาทใหม่ */
+export const ROLE_LABEL: Record<AudienceRole, string> = {
+  reporter: 'ผู้แจ้ง',
+  assignee: 'ผู้รับผิดชอบ',
+  team: 'ทีม (งานที่ยังไม่มีผู้รับผิดชอบ)',
+  watcher: 'ผู้เฝ้าดู',
+  mention: 'คนที่ถูกเรียกถึงด้วย @',
+};
+
+export interface RoleRow {
+  role: AudienceRole;
+  label: string;
+  /** ปิดไม่ได้ — หน้าจอต้องไม่แสดงสวิตช์ให้กด */
+  alwaysReached: boolean;
+  /** `null` = ไม่เคยตั้ง (เท่ากับได้รับ) */
+  tenantEnabled: boolean | null;
+  perProject: { projectKey: string; isEnabled: boolean }[];
+}
+
+export interface KindAudienceRow {
+  kind: string;
+  roles: RoleRow[];
+}
+
+export async function listAudienceRules(ctx: TenantContext): Promise<KindAudienceRow[]> {
+  await assertTenantAdmin(ctx);
+  const rows = await tenantScoped(ctx).notificationAudienceRule.findMany({
+    select: { kind: true, role: true, isEnabled: true, project: { select: { key: true } } },
+  });
+
+  return NOTIFICATION_KINDS.map((kind) => ({
+    kind,
+    roles: AUDIENCE_ROLES.map((role) => {
+      const mine = rows.filter((r) => r.kind === kind && r.role === role);
+      const global = mine.find((r) => r.project === null);
+      return {
+        role,
+        label: ROLE_LABEL[role],
+        alwaysReached: ALWAYS_REACHED.includes(role),
+        tenantEnabled: global?.isEnabled ?? null,
+        perProject: mine
+          .filter((r) => r.project !== null)
+          .map((r) => ({ projectKey: r.project?.key ?? '', isEnabled: r.isEnabled }))
+          .sort((a, b) => a.projectKey.localeCompare(b.projectKey)),
+      };
+    }),
+  }));
+}
+
+export class CannotMuteRoleError extends Error {
+  constructor(readonly role: string) {
+    super(`บทบาท "${role}" ปิดไม่ได้ — คนที่ถูกเรียกถึงด้วย @ ต้องรู้เสมอ`);
+    this.name = 'CannotMuteRoleError';
+  }
+}
+
+export class UnknownRoleError extends Error {
+  constructor(readonly given: string) {
+    super(`ไม่รู้จักบทบาท "${given}" — เลือกได้: ${AUDIENCE_ROLES.join(' · ')}`);
+    this.name = 'UnknownRoleError';
+  }
+}
+
+/**
+ * ตั้งว่าบทบาทหนึ่งของชนิดหนึ่งยังได้รับไหม
+ *
+ * **ตรวจก่อนบันทึกว่าจะไม่เหลือศูนย์บทบาท** — ปิดครบทุกบทบาทให้ผลเหมือน
+ * ปิดทั้งชนิด แต่มองไม่เห็นจากสวิตช์ของชนิดนั้น · ผู้ดูแลที่ตั้งใจปิดจริง
+ * ต้องไปปิดที่สวิตช์ของชนิด ซึ่งอ่านออกจากหน้าจอได้ว่าตั้งใจ
+ */
+export async function setAudienceRule(
+  ctx: TenantContext,
+  input: { kind: string; role: string; projectKey?: string | null; isEnabled: boolean },
+): Promise<{ kind: string; role: string; isEnabled: boolean }> {
+  await assertTenantAdmin(ctx);
+  const kind = assertKind(input.kind);
+  if (!(AUDIENCE_ROLES as readonly string[]).includes(input.role)) {
+    throw new UnknownRoleError(input.role);
+  }
+  const role = input.role as AudienceRole;
+  if (!input.isEnabled && ALWAYS_REACHED.includes(role)) throw new CannotMuteRoleError(role);
+
+  const db = tenantScoped(ctx);
+  let projectId: bigint | null = null;
+  const key = input.projectKey?.trim() ?? '';
+  if (key !== '') {
+    const p = await db.project.findFirst({ where: { key }, select: { id: true } });
+    if (p === null) throw new ProjectNotFoundForRuleError(key);
+    projectId = p.id;
+  }
+
+  /*
+    ตรวจกับ **ภาพหลังบันทึก** ไม่ใช่ภาพก่อน · การตรวจก่อนแล้วบันทึกทีหลัง
+    ตอบคำถามผิดข้อ — สิ่งที่ต้องรู้คือ "ถ้าบันทึกแล้วจะเหลือใครไหม"
+  */
+  const current = await db.notificationAudienceRule.findMany({
+    where: { kind, OR: [{ projectId: null }, { projectId }] },
+    select: { kind: true, role: true, projectId: true, isEnabled: true },
+  });
+  const after: AudienceRule[] = [
+    ...current.filter((r) => !(r.role === role && r.projectId === projectId)),
+    { kind, role, projectId, isEnabled: input.isEnabled },
+  ].map((r) => ({
+    kind: r.kind,
+    role: r.role as AudienceRole,
+    projectId: r.projectId,
+    isEnabled: r.isEnabled,
+  }));
+  /*
+    ส่ง **บทบาทของชนิดนั้นจริง ๆ** ไม่ใช่ทุกบทบาท · การส่งทั้งชุดทำให้
+    `mention` ซึ่งปิดไม่ได้ติดไปด้วยทุกชนิด แล้วด่านจะไม่มีวันทำงาน
+  */
+  assertAudienceReachable(
+    kind,
+    ROLES_OF_KIND[kind] ?? AUDIENCE_ROLES,
+    projectId ?? BigInt(0),
+    after,
+  );
+
+  return auditedTransaction(ctx, 'notification.audience', async (tx) => {
+    // `upsert` ไม่ได้ด้วยเหตุผลเดียวกับสวิตช์ของชนิด — NULL ไม่เท่ากับ NULL
+    const existing = await tx.notificationAudienceRule.findFirst({
+      where: { tenantId: ctx.tenantId, kind, role, projectId },
+      select: { id: true, isEnabled: true },
+    });
+    if (existing === null) {
+      await tx.notificationAudienceRule.create({
+        data: { tenantId: ctx.tenantId, kind, role, projectId, isEnabled: input.isEnabled },
+      });
+    } else {
+      await tx.notificationAudienceRule.update({
+        where: { id: existing.id },
+        data: { isEnabled: input.isEnabled },
+      });
+    }
+    return {
+      result: { kind, role, isEnabled: input.isEnabled },
+      audit: [
+        {
+          kind: 'system' as const,
+          action: input.isEnabled ? 'notification.audience.on' : 'notification.audience.off',
+          entityType: 'notification_audience_rule',
+          entityId: `${kind}:${role}:${key === '' ? 'ทุกโปรเจกต์' : key}`,
+          payload: { kind, role, projectKey: key === '' ? null : key, from: existing?.isEnabled ?? null },
+        },
+      ],
+    };
+  });
 }

@@ -19,6 +19,7 @@ import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
+import { AUDIENCE_ROLES, PASS_THROUGH_REASONS } from './audience-policy';
 import {
   ALWAYS_ON,
   CHANNELS,
@@ -221,6 +222,42 @@ describe('E · รายการชนิด เทียบกับที่�
       (k) => !(NOTIFICATION_KINDS as readonly string[]).includes(k),
     );
     expect(missing).toEqual([]);
+  });
+
+  /**
+   * เหตุผลผู้รับที่ซอร์สเขียนจริง ต้องเป็นค่าที่ระบบรู้จัก
+   *
+   * `reason` ถูกประกาศเป็น `string` เพราะมีทั้งบทบาทที่ตั้งค่าได้และบทบาท
+   * ที่ปิดไม่ได้ · ราคาที่จ่ายคือ **พิมพ์ผิดแล้วผ่าน typecheck** แล้วค่าที่ผิด
+   * จะตกไปเป็น "บทบาทที่ไม่รู้จัก" ซึ่งเอนจินปล่อยผ่านเสมอ — ผู้ดูแลจะปิด
+   * บทบาทนั้นไม่ได้ตลอดกาลโดยไม่มีอะไรฟ้อง · ด่านนี้คือสิ่งที่ทดแทน
+   */
+  function reasonsInSource(): Set<string> {
+    const found = new Set<string>();
+    const ENTRIES = ['createNotifications(', 'notifyGroup('];
+    for (const file of walk(join(ROOT, 'src'))) {
+      const text = readFileSync(file, 'utf8');
+      for (const block of ENTRIES.flatMap((e) => text.split(e).slice(1))) {
+        for (const m of block.slice(0, 1200).matchAll(/reason: '([a-z-]+)'/g)) {
+          if (m[1] !== undefined) found.add(m[1]);
+        }
+      }
+    }
+    return found;
+  }
+
+  it('ตัวสแกนเหตุผลหาเจอจริง — พิสูจน์ก่อนใช้', () => {
+    const found = reasonsInSource();
+    expect(found.size, 'หา reason ในซอร์สไม่เจอ — ตัวสแกนพัง').toBeGreaterThan(2);
+    // ต้องเจอทั้งบทบาทที่ตั้งค่าได้ และบทบาทที่ปิดไม่ได้
+    expect(found).toContain('assignee');
+    expect(found).toContain('approver');
+  });
+
+  it('**ทุกเหตุผลที่ซอร์สเขียนจริง ต้องเป็นบทบาทที่รู้จัก**', () => {
+    const known = [...AUDIENCE_ROLES, ...PASS_THROUGH_REASONS] as readonly string[];
+    const unknown = [...reasonsInSource()].filter((r) => !known.includes(r));
+    expect(unknown, 'เหตุผลที่ระบบไม่รู้จัก — พิมพ์ผิดหรือลืมเพิ่มในรายการ').toEqual([]);
   });
 });
 

@@ -378,6 +378,8 @@ async function notifyStepApprovers(
         userId: m.userId,
         workItemId: o.workItemId,
         kind: 'approval.requested',
+        // ผู้อนุมัติต้องลงมือ ไม่ใช่รับข่าวสาร — ปิดไม่ได้
+        reason: 'approver',
         title: `${o.itemKey} รออนุมัติจาก ${o.groupName}${where}`,
         body: o.summary,
         dedupeKey: `approval:${o.approvalId.toString()}:${m.userId.toString()}`,
@@ -501,6 +503,8 @@ export async function decideApproval(
           userId: row.requestedById,
           workItemId: item.id,
           kind: 'approval.decided',
+          // คนที่ขออนุมัติ รอผลอยู่เพื่อทำงานต่อ
+          reason: 'requester',
           title: `${itemKey} ${input.approve ? 'ได้รับอนุมัติแล้ว' : 'ถูกปฏิเสธ'}`,
           body: note,
           dedupeKey: `approval-decided:${row.id.toString()}`,

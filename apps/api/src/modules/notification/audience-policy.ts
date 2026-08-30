@@ -37,6 +37,17 @@ export type AudienceRole = (typeof AUDIENCE_ROLES)[number];
  */
 export const ALWAYS_REACHED: readonly AudienceRole[] = ['mention'];
 
+/**
+ * เหตุผลผู้รับที่ **ไม่เปิดให้ตั้งค่า** — คนที่ต้องลงมือ ไม่ใช่คนที่รับข่าวสาร
+ *
+ * ผู้อนุมัติที่ไม่รู้ว่ามีใบรออยู่ ไม่ได้แค่พลาดข่าว — **กระบวนการของคนอื่นหยุด**
+ * เกณฑ์เดียวกับ `ALWAYS_ON` ของชนิด · แยกเป็นรายการต่างหากแทนที่จะปล่อยให้
+ * ตกไปเป็น "บทบาทที่ไม่รู้จัก" เพราะอย่างหลังทำให้พิมพ์ผิดแล้วรอดไปด้วย
+ *
+ * `notification-policy.spec.ts` สแกนจุดเรียกจริงแล้วเทียบกับสองรายการนี้
+ */
+export const PASS_THROUGH_REASONS = ['approver', 'requester', 'group'] as const;
+
 export interface AudienceRule {
   kind: string;
   role: AudienceRole;
@@ -44,6 +55,27 @@ export interface AudienceRule {
   projectId: bigint | null;
   isEnabled: boolean;
 }
+
+/**
+ * ชนิดไหนแจ้งบทบาทไหนบ้าง
+ *
+ * จำเป็นเพราะด่าน "ห้ามปิดจนไม่เหลือใคร" ต้องรู้ว่าชนิดนั้นมีใครให้เหลือ ·
+ * **ตอนแรกส่ง `AUDIENCE_ROLES` ทั้งชุดเข้าไป ซึ่งรวม `mention` ที่ปิดไม่ได้
+ * ด่านจึงไม่มีวันทำงานเลย** — ด่านที่ไม่มีวันทำงาน คือด่านที่ไม่มี
+ *
+ * รายการนี้เป็นรายการที่คนดูแลด้วยมือ จึงมีเทสต์ที่สแกนจุดเรียกจริงแล้วเทียบ
+ * (`notification-policy.spec.ts`) · ชนิดที่ไม่อยู่ในรายการ = ไม่มีบทบาท
+ * ที่ตั้งค่าได้ เช่นการอนุมัติและการแจ้งกลุ่ม ซึ่งผู้รับต้องลงมือเสมอ
+ */
+export const ROLES_OF_KIND: Readonly<Record<string, readonly AudienceRole[]>> = {
+  'workitem.assigned': ['assignee'],
+  'workitem.rate': ['reporter'],
+  // การถูกเรียกถึงแยกเป็นชนิดของตัวเอง จึงไม่อยู่ในสองชนิดล่าง
+  'comment.added': ['reporter', 'assignee', 'team', 'watcher'],
+  // บันทึกภายในไม่ถึงผู้แจ้งเด็ดขาด — ไม่ใช่เรื่องที่ตั้งค่าได้
+  'comment.internal': ['assignee', 'team', 'watcher'],
+  'comment.mention': ['mention'],
+};
 
 export class EmptyAudienceError extends Error {
   constructor(readonly kind: string) {

@@ -250,6 +250,7 @@ export async function bulkEditWorkItems(
               userId: nextAssignee.id,
               workItemId: item.id,
               kind: 'workitem.assigned',
+              reason: 'assignee',
               title: `${item.itemKey} ถูกมอบหมายให้คุณ`,
               body: item.summary,
               dedupeKey: `assign:${item.id.toString()}:${nextAssignee.id.toString()}:${String(now.getTime())}`,

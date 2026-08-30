@@ -21,8 +21,12 @@ import { prismaClient } from '../src/infrastructure/prisma/client';
 import {
   CannotMuteError,
   UnknownKindError,
+  CannotMuteRoleError,
+  UnknownRoleError,
   createNotifications,
   listAdminSwitches,
+  listAudienceRules,
+  setAudienceRule,
   myPreferences,
   setAdminSwitch,
   setMyPreference,
@@ -38,6 +42,13 @@ let projectId: bigint;
 let otherProjectId: bigint;
 let workItemId: bigint;
 let ctx: TenantContext;
+/**
+ * ผู้ดูแลจริงจากข้อมูลตั้งต้น — **อ่านอย่างเดียว ไม่ย้าย grant ของใคร**
+ *
+ * ต้องใช้เพราะ `setAudienceRule` ผ่าน `assertTenantAdmin` · ส่วน `ctx`
+ * เป็นผู้ใช้ของเทสต์ที่ไม่อยู่กลุ่มไหนเลย เก็บไว้พิสูจน์ว่าด่านสิทธิ์ทำงาน
+ */
+let adminCtx: TenantContext;
 let userId: bigint | undefined;
 let schemeId: bigint | undefined;
 let workflowId: bigint | undefined;
@@ -53,9 +64,10 @@ async function step(what: string, run: () => Promise<unknown>): Promise<void> {
 
 /** เรียกจุดรวมในทรานแซกชันของตัวเอง แล้วคืนจำนวนแถวที่เกิดขึ้นจริง */
 async function send(
-  over: { kind?: string; userId?: bigint | null; seed?: string } = {},
+  over: { kind?: string; userId?: bigint | null; seed?: string; reason?: string } = {},
 ): Promise<{
   created: number;
+  mutedByAudience: number;
   mutedByAdmin: number;
   mutedByUser: number;
   emailSuppressed: number;
@@ -72,12 +84,15 @@ async function send(
         title: `เรื่องทดสอบสวิตช์ ${STAMP}`,
         body: null,
         dedupeKey: seed,
+        // ไฟล์นี้วัดสวิตช์ของ **ชนิด** จึงใช้บทบาทที่ไม่มีกฎปิดไว้
+        reason: over.reason ?? 'assignee',
       },
     ]),
   );
   const after = await prismaClient.notification.count({ where: { workItemId } });
   return {
     created: r.created,
+    mutedByAudience: r.mutedByAudience,
     mutedByAdmin: r.mutedByAdmin,
     mutedByUser: r.mutedByUser,
     emailSuppressed: r.emailSuppressed,
@@ -87,6 +102,16 @@ async function send(
 
 beforeAll(async () => {
   tenantId = (await prismaClient.tenant.findFirstOrThrow({ where: { key: 'default' } })).id;
+
+  const grant = await prismaClient.permissionGrant.findFirstOrThrow({
+    where: { tenantId, permission: 'ADMINISTER_TENANT', groupId: { not: null } },
+    select: { groupId: true },
+  });
+  const member = await prismaClient.groupMember.findFirstOrThrow({
+    where: { groupId: grant.groupId ?? 0n },
+    select: { userId: true },
+  });
+  adminCtx = { tenantId, actorId: member.userId };
 
   const scheme = await prismaClient.permissionScheme.create({
     data: { tenantId, name: `ชุดสิทธิ์สวิตช์ ${STAMP}` },
@@ -159,6 +184,19 @@ afterAll(async () => {
   await step('สวิตช์ผู้ดูแล', () =>
     prismaClient.notificationRule.deleteMany({
       where: { projectId: { in: [projectId, otherProjectId] } },
+    }),
+  );
+  /*
+    กฎบทบาทระดับ tenant ก็ไม่ผูกกับโปรเจกต์ของเทสต์เหมือนสวิตช์รวม —
+    ถ้าเก็บกวาดพลาด มันจะปิดผู้รับบทบาทนั้นค้างไว้ทั้งองค์กรอย่างเงียบ ๆ
+  */
+  await step('กฎบทบาทของเทสต์', () =>
+    prismaClient.notificationAudienceRule.deleteMany({
+      where: {
+        tenantId,
+        kind: KIND,
+        OR: [{ projectId: null }, { projectId: { in: [projectId, otherProjectId] } }],
+      },
     }),
   );
   await step('สวิตช์รวม', () =>
@@ -371,4 +409,92 @@ describe('D · ตั้งค่าจากหน้าจอ', () => {
     // ชนิดที่ปิดไม่ได้ ต้องบอกหน้าจอไว้ ไม่ใช่ให้กดแล้วเจอ error
     expect(rows.some((r) => r.alwaysOn)).toBe(true);
   }, 60_000);
+});
+
+// ============================================================
+
+describe('สวิตช์แจ้งเตือน(จริง) · ใครควรได้รับ', () => {
+  /**
+   * ด่านที่พิสูจน์ว่า **มีอะไรอ่านกฎบทบาทจากฐานข้อมูลมาให้เอนจินจริง**
+   *
+   * `audience-policy.spec.ts` พิสูจน์แค่ว่าตรรกะถูกเมื่อกฎถูกส่งเข้าไป ·
+   * ไฟล์นี้ตอบว่ามีใครส่งให้หรือเปล่า — คำถามที่เอนจินตอบเองไม่ได้
+   */
+  it('ไม่ตั้งกฎอะไรเลย = ได้รับ (ค่าปริยายไม่เปลี่ยนพฤติกรรมเดิม)', async () => {
+    const r = await send({ reason: 'watcher' });
+    expect(r.rows).toBe(1);
+    expect(r.mutedByAudience).toBe(0);
+  });
+
+  it('ปิดบทบาทแล้วไม่มีแถวเกิดขึ้น — ไม่ใช่เขียนแถวแล้วซ่อนบนหน้าจอ', async () => {
+    await setAudienceRule(adminCtx, { kind: KIND, role: 'watcher', isEnabled: false });
+    const r = await send({ reason: 'watcher' });
+    expect(r.rows).toBe(0);
+    expect(r.mutedByAudience).toBe(1);
+  });
+
+  it('ปิดบทบาทหนึ่ง ไม่กระทบบทบาทอื่นในชนิดเดียวกัน', async () => {
+    const r = await send({ reason: 'assignee' });
+    expect(r.rows).toBe(1);
+  });
+
+  it('เปิดคืนแล้วได้รับอีกครั้ง', async () => {
+    await setAudienceRule(adminCtx, { kind: KIND, role: 'watcher', isEnabled: true });
+    const r = await send({ reason: 'watcher' });
+    expect(r.rows).toBe(1);
+  });
+
+  it('บทบาทที่ปิดไม่ได้ ถูกปฏิเสธตั้งแต่ตอนตั้งค่า', async () => {
+    await expect(
+      setAudienceRule(adminCtx, { kind: KIND, role: 'mention', isEnabled: false }),
+    ).rejects.toThrow(CannotMuteRoleError);
+  });
+
+  it('บทบาทที่ไม่รู้จัก ถูกปฏิเสธ ไม่ใช่เขียนแถวขยะ', async () => {
+    await expect(
+      setAudienceRule(adminCtx, { kind: KIND, role: 'ไม่มีจริง', isEnabled: false }),
+    ).rejects.toThrow(UnknownRoleError);
+    expect(
+      await prismaClient.notificationAudienceRule.count({ where: { role: 'ไม่มีจริง' } }),
+    ).toBe(0);
+  });
+
+  /**
+   * ปิดครบทุกบทบาทที่ปิดได้ **ของชนิดที่ไม่มีบทบาทซึ่งปิดไม่ได้**
+   *
+   * `comment.added` มี `mention` อยู่ด้วยจึงไม่มีวันว่าง · ใช้ชนิดอื่นแทน
+   */
+  it('ปิดครบทุกบทบาทของชนิดหนึ่ง ถูกปฏิเสธพร้อมบอกทางออก', async () => {
+    const K = 'workitem.assigned';
+    const closable = ['reporter', 'assignee', 'team', 'watcher'];
+    try {
+      for (const role of closable) {
+        await setAudienceRule(adminCtx, { kind: K, role, isEnabled: false });
+      }
+      throw new Error('ควรถูกปฏิเสธก่อนถึงบทบาทสุดท้าย');
+    } catch (e) {
+      expect((e as Error).message).toContain('ปิดทั้งชนิด');
+    } finally {
+      await prismaClient.notificationAudienceRule.deleteMany({
+        where: { tenantId, kind: K },
+      });
+    }
+  });
+
+  it('ทุกการตั้งค่าเขียน audit', async () => {
+    await setAudienceRule(adminCtx, { kind: KIND, role: 'team', isEnabled: false });
+    const rows = await prismaClient.auditLog.findMany({
+      where: { entityType: 'notification_audience_rule' },
+      select: { action: true },
+    });
+    expect(rows.map((r) => r.action)).toContain('notification.audience.off');
+    await setAudienceRule(adminCtx, { kind: KIND, role: 'team', isEnabled: true });
+  });
+
+  it('รายการที่หน้าจอใช้ บอกบทบาทที่ปิดไม่ได้ให้ด้วย', async () => {
+    const rows = await listAudienceRules(adminCtx);
+    const comment = rows.find((r) => r.kind === KIND);
+    expect(comment?.roles.find((r) => r.role === 'mention')?.alwaysReached).toBe(true);
+    expect(comment?.roles.find((r) => r.role === 'watcher')?.alwaysReached).toBe(false);
+  });
 });

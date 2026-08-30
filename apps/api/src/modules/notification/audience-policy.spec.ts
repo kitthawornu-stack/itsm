@@ -23,6 +23,7 @@ import {
   ALWAYS_REACHED,
   AUDIENCE_ROLES,
   EmptyAudienceError,
+  ROLES_OF_KIND,
   assertAudienceReachable,
   filterAudience,
   roleReaches,
@@ -250,6 +251,52 @@ describe('ผู้รับ · E · รายการบทบาทตรง�
   it('ทุกบทบาทที่ปิดไม่ได้ ต้องอยู่ใน AUDIENCE_ROLES ด้วย', () => {
     for (const r of ALWAYS_REACHED) {
       expect(AUDIENCE_ROLES).toContain(r);
+    }
+  });
+});
+
+// ============================================================
+
+describe('ผู้รับ · F · ชนิดไหนแจ้งบทบาทไหน', () => {
+  /**
+   * ด่านที่จับ "ด่านที่ไม่มีวันทำงาน"
+   *
+   * ตอนแรกส่ง `AUDIENCE_ROLES` ทั้งชุดเข้า `assertAudienceReachable` ซึ่งรวม
+   * `mention` ที่ปิดไม่ได้ — ด่าน "ห้ามปิดจนไม่เหลือใคร" จึงผ่านตลอดกาล
+   * และเทสต์ต่อฐานข้อมูลเป็นตัวจับได้ ไม่ใช่เทสต์บริสุทธิ์
+   */
+  it('ทุกบทบาทในแผนที่ต้องอยู่ใน AUDIENCE_ROLES', () => {
+    for (const [kind, roles] of Object.entries(ROLES_OF_KIND)) {
+      for (const r of roles) {
+        expect(AUDIENCE_ROLES, `${kind} อ้างบทบาทที่ไม่มีจริง`).toContain(r);
+      }
+    }
+  });
+
+  it('อย่างน้อยหนึ่งชนิดต้องปิดได้จนหมด มิฉะนั้นด่านไม่มีวันทำงาน', () => {
+    const canRunOut = Object.entries(ROLES_OF_KIND).filter(([, roles]) =>
+      roles.every((r) => !ALWAYS_REACHED.includes(r)),
+    );
+    expect(canRunOut.length).toBeGreaterThan(0);
+  });
+
+  it('ชนิดที่ปิดได้จนหมด ถูกปฏิเสธจริงเมื่อปิดครบ', () => {
+    for (const [kind, roles] of Object.entries(ROLES_OF_KIND)) {
+      if (roles.some((r) => ALWAYS_REACHED.includes(r))) continue;
+      const rules = roles.map((role) => rule(role, false, { kind }));
+      expect(() => {
+        assertAudienceReachable(kind, roles, P1, rules);
+      }, kind).toThrow(EmptyAudienceError);
+    }
+  });
+
+  it('ชนิดที่มีบทบาทปิดไม่ได้ ไม่ถูกปฏิเสธ', () => {
+    for (const [kind, roles] of Object.entries(ROLES_OF_KIND)) {
+      if (!roles.some((r) => ALWAYS_REACHED.includes(r))) continue;
+      const rules = roles.map((role) => rule(role, false, { kind }));
+      expect(() => {
+        assertAudienceReachable(kind, roles, P1, rules);
+      }, kind).not.toThrow();
     }
   });
 });

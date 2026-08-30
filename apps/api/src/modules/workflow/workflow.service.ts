@@ -400,6 +400,7 @@ export async function applyTransition(
             userId: item.reporterId,
             workItemId: item.id,
             kind: 'workitem.rate',
+            reason: 'reporter',
             title: `${item.itemKey} เสร็จแล้ว — ให้คะแนนหน่อยได้ไหม`,
             body: item.summary,
             dedupeKey: `rate:${item.id.toString()}:${item.reporterId.toString()}`,

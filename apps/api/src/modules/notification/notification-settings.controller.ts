@@ -18,20 +18,43 @@ import type { TenantContext } from '@itsm/types';
 
 import { Ctx } from '../../infrastructure/http/session.guard';
 import { PermissionDeniedError } from '../permission';
+import { EmptyAudienceError } from './audience-policy';
 import {
   CannotMuteError,
+  CannotMuteRoleError,
   ProjectNotFoundForRuleError,
+  UnknownRoleError,
   UnknownChannelError,
   UnknownKindError,
   listAdminSwitches,
+  listAudienceRules,
   myPreferences,
   setAdminSwitch,
+  setAudienceRule,
   setMyPreference,
+  type KindAudienceRow,
   type KindRow,
   type MyPreference,
 } from './notification-admin.service';
 
 function mapError(e: unknown): never {
+  if (e instanceof CannotMuteRoleError || e instanceof UnknownRoleError) {
+    throw new HttpException(
+      { error: 'invalid_state', message: e.message },
+      HttpStatus.UNPROCESSABLE_ENTITY,
+    );
+  }
+  if (e instanceof EmptyAudienceError) {
+    /*
+      422 พร้อมข้อความที่บอกทางออก — ผู้ดูแลกำลังทำสิ่งที่ให้ผลเหมือนปิดทั้งชนิด
+      แต่มองไม่เห็นจากหน้าจอ · การปฏิเสธเฉย ๆ โดยไม่บอกว่าให้ไปทำอะไรแทน
+      จะทำให้เขาคิดว่าระบบพัง
+    */
+    throw new HttpException(
+      { error: 'empty_audience', message: e.message },
+      HttpStatus.UNPROCESSABLE_ENTITY,
+    );
+  }
   if (e instanceof CannotMuteError) {
     /*
       422 ไม่ใช่ 403 — ผู้ใช้มีสิทธิ์ตั้งค่า แต่ **ชนิดนี้ปิดไม่ได้เลย**
@@ -83,6 +106,34 @@ export class NotificationSettingsController {
     try {
       return await setAdminSwitch(ctx, {
         kind: str(body.kind),
+        projectKey: str(body.projectKey),
+        isEnabled: bool(body.isEnabled),
+      });
+    } catch (e) {
+      mapError(e);
+    }
+  }
+
+  /** ใครควรได้รับ — บทบาทผู้รับของแต่ละชนิด */
+  @Get('admin/audience')
+  async audience(@Ctx() ctx: TenantContext): Promise<KindAudienceRow[]> {
+    try {
+      return await listAudienceRules(ctx);
+    } catch (e) {
+      mapError(e);
+    }
+  }
+
+  @Post('admin/audience')
+  @HttpCode(HttpStatus.OK)
+  async setAudience(
+    @Ctx() ctx: TenantContext,
+    @Body() body: { kind?: unknown; role?: unknown; projectKey?: unknown; isEnabled?: unknown },
+  ): Promise<{ kind: string; role: string; isEnabled: boolean }> {
+    try {
+      return await setAudienceRule(ctx, {
+        kind: str(body.kind),
+        role: str(body.role),
         projectKey: str(body.projectKey),
         isEnabled: bool(body.isEnabled),
       });

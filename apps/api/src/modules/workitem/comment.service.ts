@@ -207,6 +207,8 @@ export async function addComment(
               เห็นทุกวันจนเลิกอ่าน · และเป็นชนิดที่ผู้ใช้ปิดแยกกันได้
             */
             kind: mentioned ? 'comment.mention' : isInternal ? 'comment.internal' : 'comment.added',
+            // เหตุผลมาจากเอนจินรายชื่อ ไม่ได้เดาที่นี่
+            reason: r.reason,
             title: text.title,
             body: text.body,
             dedupeKey: commentDedupeKey(row.id, r.userId),
