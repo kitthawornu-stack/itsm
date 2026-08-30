@@ -44,6 +44,7 @@ export default function AppLayout({ children }: { children: ReactNode }): ReactN
             <a href="/admin/resolutions">ผลการแก้ไข</a>
             <a href="/admin/calendars">วันหยุด</a>
             <a href="/admin/change-freezes">ช่วงห้ามเปลี่ยนแปลง</a>
+            <a href="/admin/config-items">สิ่งที่ทีมดูแล</a>
             <a href="/admin/automation">กฎอัตโนมัติ</a>
             <a href="/settings/notifications">การแจ้งเตือน</a>
             <a href="/components">คลังคอมโพเนนต์</a>

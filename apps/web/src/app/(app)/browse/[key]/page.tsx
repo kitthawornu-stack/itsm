@@ -21,6 +21,7 @@ import { toSlaBar, type SlaSnapshotView } from '@/lib/sla-label';
 import { ArticlePanel, type AttachedArticle } from '@/components/article-panel';
 import { HierarchyPanel, type ChildRow, type ParentRow } from '@/components/hierarchy-panel';
 import { LinkPanel, type LinkRow } from '@/components/link-panel';
+import { ItemCiPanel } from '@/components/item-ci-panel';
 import { ProblemImpactPanel } from '@/components/problem-impact-panel';
 import { TimePanel } from '@/components/time-panel';
 import { WatchButton } from '@/components/watch-button';
@@ -236,6 +237,12 @@ export default async function WorkItemDetail({
             แผงนี้ **ไม่ขึ้นเลย** เมื่อใบนี้ไม่ได้เป็นสาเหตุของอะไร จึงไม่รบกวน
             หน้ารายละเอียดของเรื่องทั่วไป
           */}
+          {/*
+            สิ่งที่เรื่องนี้กระทบอยู่ติดกับความสัมพันธ์และผลกระทบของปัญหา
+            เพราะทั้งสามตอบคำถามเดียวกันจากคนละมุม: เรื่องนี้เกี่ยวกับอะไรอีก
+          */}
+          <ItemCiPanel apiBase={API} itemKey={detail.itemKey} />
+
           <ProblemImpactPanel apiBase={API} itemKey={detail.itemKey} />
 
           <TimePanel apiBase={API} itemKey={detail.itemKey} />
