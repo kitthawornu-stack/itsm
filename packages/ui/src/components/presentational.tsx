@@ -504,3 +504,165 @@ export function FormInput({
     />
   );
 }
+
+// ============================================================
+
+export interface StatProps {
+  label: string;
+  /** จัดรูปแบบมาแล้ว — คอมโพเนนต์ไม่ตัดสินใจเรื่องคั่นหลักพันหรือหน่วย */
+  value: string;
+  hint?: string;
+  /**
+   * สีสถานะสงวนไว้สำหรับ "สถานะ" ไม่ใช่สีของชุดข้อมูล
+   *
+   * และมาคู่กับป้ายเสมอ — ตัวเลขที่แดงเฉย ๆ โดยไม่มีคำว่า "หลุด SLA"
+   * อ่านไม่ออกสำหรับคนตาบอดสี และอ่านไม่ออกเลยบนกระดาษขาวดำ
+   */
+  tone?: 'critical';
+}
+
+/** ตัวเลขเดียวพร้อมป้าย — ใช้ทั้งหน้ารายงานและการ์ดบนแดชบอร์ด */
+export function Stat({ label, value, hint, tone }: StatProps): ReactNode {
+  return (
+    <div className="ui-stat" {...(tone === undefined ? {} : { 'data-tone': tone })}>
+      <span className="ui-stat-label">{label}</span>
+      <b className="ui-stat-value">{value}</b>
+      {hint === undefined ? null : <span className="ui-stat-hint">{hint}</span>}
+    </div>
+  );
+}
+
+// ============================================================
+
+export interface DailyPointView {
+  /** `2026-08-28` ตามปฏิทินไทย */
+  day: string;
+  opened: number;
+  resolved: number;
+}
+
+const SHORT_MONTH = [
+  'ม.ค.',
+  'ก.พ.',
+  'มี.ค.',
+  'เม.ย.',
+  'พ.ค.',
+  'มิ.ย.',
+  'ก.ค.',
+  'ส.ค.',
+  'ก.ย.',
+  'ต.ค.',
+  'พ.ย.',
+  'ธ.ค.',
+];
+
+function shortDay(key: string): string {
+  const [, m, d] = key.split('-');
+  return `${String(Number(d))} ${SHORT_MONTH[Number(m) - 1] ?? ''}`;
+}
+
+const nf = (n: number): string => n.toLocaleString('th-TH');
+
+/**
+ * แผนภูมิแท่งรายวัน — เปิด กับ ปิด
+ *
+ * SVG ล้วน ไม่มี JavaScript ฝั่งเบราว์เซอร์เลย จึงใช้ในเซิร์ฟเวอร์คอมโพเนนต์ได้ ·
+ * คำอธิบายรายแท่งใช้ `<title>` ซึ่งเบราว์เซอร์และ screen reader อ่านได้ทั้งคู่
+ * โดยไม่ต้องเขียน tooltip เอง
+ *
+ * **สีมาจาก semantic token เท่านั้น** (INVARIANT 4) — `--accent-service`
+ * กับ `--accent-delivery` เป็นคู่เย็น/อุ่นของระบบ วัดแล้วแยกออกจากกันได้
+ * ทั้งสายตาปกติและตาบอดสี ทั้งธีมสว่างและมืด · และมี legend ถาวรเป็นทางที่สอง
+ * ไม่ให้พึ่งสีอย่างเดียว
+ */
+export function DailyChart({ daily }: { daily: DailyPointView[] }): ReactNode {
+  const H = 120;
+  const STEP = 22;
+  const BAR = 9;
+  // เผื่อที่ขวาให้ป้ายวันสุดท้าย — text-anchor เป็น middle จึงล้นออกไปครึ่งป้าย
+  const W = Math.max(daily.length * STEP, STEP) + 16;
+  const peak = Math.max(1, ...daily.map((d) => Math.max(d.opened, d.resolved)));
+
+  /*
+    ศูนย์ต้องไม่มีแท่ง และค่าที่มากกว่าศูนย์ต้องมองเห็น
+
+    รอบแรกวาด `rect` ทุกค่ารวมทั้งศูนย์ · `rx` ทำให้แท่งสูงไม่ถึงพิกเซล
+    กลายเป็นก้อนกลม ๆ ลอยอยู่บนเส้นฐาน — วันที่ไม่มีงานเลยจึงดูเหมือนมีงาน
+    และแยกจากวันที่มีจริงหนึ่งใบไม่ออก
+  */
+  const h = (v: number): number => (v === 0 ? 0 : Math.max(2, (v / peak) * H));
+
+  /*
+    ป้ายแกนนอนทุกแท่งจะทับกันเมื่อช่วงยาว 30 วัน — เว้นระยะให้เหลือราว 6 ป้าย
+    การหมุนป้ายเป็นแนวตั้งอ่านยากกว่าสำหรับภาษาไทย เพราะสระอยู่คนละชั้น
+  */
+  const labelEvery = Math.max(1, Math.ceil(daily.length / 6));
+
+  return (
+    <figure className="ui-chart">
+      <figcaption className="ui-chart-legend">
+        <span>
+          <span className="ui-chart-key" data-series="opened" aria-hidden="true" />
+          แจ้งเข้ามา
+        </span>
+        <span>
+          <span className="ui-chart-key" data-series="resolved" aria-hidden="true" />
+          ปิดได้
+        </span>
+        <span className="ui-chart-peak">สูงสุด {nf(peak)} เรื่องต่อวัน</span>
+      </figcaption>
+
+      <div className="ui-chart-box">
+        <svg
+          viewBox={`0 0 ${String(W)} ${String(H + 22)}`}
+          className="ui-chart-svg"
+          role="img"
+          aria-label={`จำนวนเรื่องที่แจ้งเข้ามาและปิดได้ รายวัน ${String(daily.length)} วัน`}
+        >
+          {/* เส้นฐาน — จาง ๆ ไม่แย่งสายตาไปจากแท่ง */}
+          <line x1="0" y1={H} x2={W} y2={H} className="ui-chart-axis" />
+          {daily.map((d, i) => {
+            const x = i * STEP;
+            return (
+              <g key={d.day}>
+                {d.opened === 0 ? null : (
+                  <rect
+                    x={x + 1}
+                    y={H - h(d.opened)}
+                    width={BAR}
+                    height={h(d.opened)}
+                    // มุมมนเฉพาะแท่งที่สูงพอ — แท่งเตี้ยกว่ารัศมีจะกลายเป็นก้อนกลม
+                    rx={h(d.opened) >= 6 ? 2 : 0}
+                    className="ui-chart-bar"
+                    data-series="opened"
+                  >
+                    <title>{`${shortDay(d.day)} · แจ้งเข้ามา ${nf(d.opened)}`}</title>
+                  </rect>
+                )}
+                {/* ช่องว่าง 2px ระหว่างสองแท่ง — ขอบที่ชนกันทำให้อ่านเป็นแท่งเดียว */}
+                {d.resolved === 0 ? null : (
+                  <rect
+                    x={x + BAR + 3}
+                    y={H - h(d.resolved)}
+                    width={BAR}
+                    height={h(d.resolved)}
+                    rx={h(d.resolved) >= 6 ? 2 : 0}
+                    className="ui-chart-bar"
+                    data-series="resolved"
+                  >
+                    <title>{`${shortDay(d.day)} · ปิดได้ ${nf(d.resolved)}`}</title>
+                  </rect>
+                )}
+                {i % labelEvery === 0 ? (
+                  <text x={x + BAR + 1} y={H + 16} className="ui-chart-tick">
+                    {shortDay(d.day)}
+                  </text>
+                ) : null}
+              </g>
+            );
+          })}
+        </svg>
+      </div>
+    </figure>
+  );
+}
