@@ -110,8 +110,23 @@ describe('เอกสารสถานะ · ตัวเลขที่นั
     const dir = join(REPO, 'packages', 'ui', 'src', 'components');
     const files = readdirSync(dir).filter((f) => f.endsWith('.stories.tsx'));
     expect(files.length, 'หาไฟล์ story ไม่เจอ — ตัวสแกนพัง').toBeGreaterThan(2);
+    /*
+      `\w` ไม่ตรงกับอักษรไทย และที่สำคัญกว่านั้น **สระกับวรรณยุกต์ไทยเป็น
+      Unicode Mark ไม่ใช่ Letter** — `\p{L}` อย่างเดียวจึงยังไม่พอ
+      ต้องมี `\p{M}` ด้วย มิฉะนั้น `export const ตัวเลข` ไม่ถูกนับ
+
+      วัดจริง: story ชื่อไทย 8 ตัวหายไปจากยอดทั้งหมด **โดยเทสต์ยังเขียว**
+      เพราะเอกสารก็บอกเลขเดิม — ตัวสแกนที่ตาบอดทำให้ทั้งสองฝั่งตรงกันที่ค่าผิด
+
+      กับดักเดียวกับ `token_chars: ['letter','digit']` บน ngram tokenizer
+      ที่ทำให้คำค้น "รีเซ็ต" ได้ token ว่างเปล่า (CLAUDE.md §3)
+    */
     const actual = files
-      .map((f) => (readFileSync(join(dir, f), 'utf8').match(/^export const \w+\s*[:=]/gm) ?? []).length)
+      .map(
+        (f) =>
+          (readFileSync(join(dir, f), 'utf8').match(/^export const [\p{L}\p{M}\p{N}_$]+\s*[:=]/gmu) ?? [])
+            .length,
+      )
       .reduce((a, b) => a + b, 0);
     for (const m of [...DOC.matchAll(/(\d+) ตัว · (\d+) story/g)]) {
       expect(Number(m[2])).toBe(actual);
@@ -171,6 +186,27 @@ describe('เอกสารสถานะ · ตัวเลขที่นั
       sum += Number((m as RegExpExecArray)[1]);
     }
     expect(sum).toBe(Number((total as RegExpExecArray)[1]?.replace(/,/g, '')));
+  });
+
+  /**
+   * ด่านที่พิสูจน์ว่าตัวสแกนด้านบนหาชื่อไทยเจอจริง
+   *
+   * ตัวสแกนที่ตาบอดทำให้ทุกอย่างเขียว เพราะเซ็ตว่างเท่ากับเซ็ตว่าง —
+   * ยอดที่นับไม่เห็น story ชื่อไทยจะตรงกับเอกสารที่ก็ไม่ได้นับมันเหมือนกัน
+   * · เคสนี้จับตอนที่มีคนย้อน `\p{M}` ออกไป
+   */
+  it('**ตัวสแกน story อ่านชื่อภาษาไทยได้** — สระไทยเป็น Mark ไม่ใช่ Letter', () => {
+    const rx = /^export const [\p{L}\p{M}\p{N}_$]+\s*[:=]/gmu;
+    const sample = ['export const ตัวเลข: Story = {}', 'export const มีวันที่ไม่มีงานเลย = {}'].join('\n');
+    expect(sample.match(rx)).toHaveLength(2);
+
+    // และมีของจริงในโปรเจกต์ให้หาอย่างน้อยหนึ่งตัว ไม่ใช่ตรวจแค่ข้อความตัวอย่าง
+    const dir = join(REPO, 'packages', 'ui', 'src', 'components');
+    const thai = readdirSync(dir)
+      .filter((f) => f.endsWith('.stories.tsx'))
+      .flatMap((f) => readFileSync(join(dir, f), 'utf8').match(rx) ?? [])
+      .filter((m) => !/^export const \w+\s*[:=]/.test(m));
+    expect(thai.length, 'ไม่มี story ชื่อไทยให้ตรวจ — ด่านนี้ไม่ได้พิสูจน์อะไร').toBeGreaterThan(0);
   });
 
   it('**จำนวนไฟล์เทสต์**', () => {

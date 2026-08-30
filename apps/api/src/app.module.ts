@@ -36,6 +36,7 @@ import {
 } from './modules/workitem/change-window.controller';
 import { CmdbController, WorkItemCiController } from './modules/cmdb/cmdb.controller';
 import { AuditController } from './modules/audit/audit.controller';
+import { DashboardController } from './modules/reporting/dashboard.controller';
 import { ReportController } from './modules/reporting/report.controller';
 import { KnowledgeController } from './modules/knowledge/knowledge.controller';
 import { BoardController } from './modules/board/board.controller';
@@ -73,6 +74,7 @@ import { WorkItemController } from './modules/workitem/workitem.controller';
     WorkItemCiController,
     AuditController,
     ReportController,
+    DashboardController,
     KnowledgeController,
     BoardController,
     NotificationController,

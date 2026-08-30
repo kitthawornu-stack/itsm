@@ -27,11 +27,28 @@ import {
   moveGadget,
   resolveLayout,
   type DroppedGadget,
+  type GadgetKind,
   type GadgetSpec,
   type Layout,
 } from './dashboard-layout';
 import { reportSummary, reportableProjectIds, type ReportSummary } from './report.service';
 import { windowFor, type RangeKey } from './report-window';
+
+/**
+ * ป้ายภาษาคนของการ์ดแต่ละชนิด
+ *
+ * ประกาศเป็น `Record<GadgetKind, string>` **โดยตั้งใจ** — เพิ่มชนิดใหม่ในเอนจิน
+ * แล้วลืมตั้งชื่อ จะเป็น type error ไม่ใช่การ์ดที่ขึ้นหน้าจอโดยไม่มีชื่อ
+ *
+ * อยู่ที่นี่ไม่ใช่ในเอนจิน เพราะเอนจินไม่ควรรู้จักภาษาที่คนอ่าน
+ */
+export const GADGET_LABEL: Record<GadgetKind, string> = {
+  summary: 'ยอดรวมของช่วง',
+  daily: 'เปิดเทียบปิด รายวัน',
+  'by-priority': 'แยกตามความสำคัญ',
+  'by-assignee': 'แยกตามผู้รับผิดชอบ',
+  breached: 'หลุด SLA ในช่วงนี้',
+};
 
 const NAME_MAX = 128;
 /** จำนวนหน้าต่อคน — กันคนสร้างทิ้งไว้จนตัวเลือกยาวเกินอ่าน */
