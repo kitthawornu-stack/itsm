@@ -4,4 +4,5 @@
 // ห้าม export repository, Prisma entity หรือ Prisma client
 // ESLint import/no-restricted-paths บังคับให้โมดูลอื่นเข้าถึงได้เฉพาะผ่านไฟล์นี้
 
-export {};
+export * from './impact-graph';
+export * from './cmdb.service';

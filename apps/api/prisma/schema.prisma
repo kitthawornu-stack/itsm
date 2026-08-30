@@ -57,6 +57,8 @@ model Tenant {
   notifications     Notification[]
   changeWindows     ChangeWindow[]
   changeFreezes     ChangeFreeze[]
+  configItems       ConfigurationItem[]
+  ciDependencies    CiDependency[]
 
   @@map("tenant")
 }
@@ -174,6 +176,7 @@ model UserGroup {
   grants         PermissionGrant[]
   notifyProjects Project[]         @relation("ProjectNotifyGroup")
   approvals      Approval[]
+  ownedCis       ConfigurationItem[]
 
   @@unique([tenantId, name])
   @@map("user_group")
@@ -956,6 +959,78 @@ model SlaGoal {
  * `sla_event`** คำนวณใหม่จากเหตุการณ์ได้เสมอ ซึ่งจำเป็นเมื่อต้องแก้ปฏิทิน
  * ย้อนหลังหรือแก้เป้าที่ตั้งผิด
  */
+/// ชนิดของสิ่งที่ดูแล — หยาบพอที่คนกรอกได้เร็ว ละเอียดพอที่กรองมีความหมาย
+enum CiKind {
+  SERVICE
+  APPLICATION
+  SERVER
+  DATABASE
+  NETWORK
+  OTHER
+}
+
+enum CiStatus {
+  PLANNED
+  ACTIVE
+  RETIRED
+}
+
+/// สิ่งที่ทีมไอทีดูแล — เครื่อง ระบบ บริการ
+///
+/// **มีเพื่อตอบคำถามเดียว: "ถ้าตัวนี้ล่ม อะไรพังตามบ้าง"** · CMDB ที่เก็บทุก
+/// รายละเอียดของทุกเครื่องกลายเป็นทะเบียนที่ไม่มีใครอัปเดต · ที่นี่จึงเก็บ
+/// เท่าที่ตอบคำถามนั้นได้ แล้วให้รายละเอียดอื่นอยู่ในที่ที่มันอยู่แล้ว
+model ConfigurationItem {
+  id       BigInt @id @default(autoincrement())
+  tenantId BigInt @map("tenant_id")
+
+  /// รหัสสั้นที่คนพูดถึงกันได้ เช่น `DB-PROD-01`
+  key  String   @db.VarChar(64)
+  name String   @db.VarChar(255)
+  kind CiKind
+  /// `PLANNED` = ยังไม่ขึ้นใช้จริง · `RETIRED` = เลิกใช้แล้วแต่เก็บประวัติไว้
+  status CiStatus @default(ACTIVE)
+
+  /// ทีมที่ดูแล — ปลายทางของการแจ้งเมื่อมีเรื่องกระทบตัวนี้
+  ownerGroupId BigInt? @map("owner_group_id")
+  notes        String? @db.Text
+
+  createdAt DateTime @default(now()) @map("created_at") @db.DateTime(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.DateTime(3)
+
+  tenant     Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  ownerGroup UserGroup? @relation(fields: [ownerGroupId], references: [id], onDelete: SetNull)
+
+  dependsOn CiDependency[] @relation("CiDependent")
+  usedBy    CiDependency[] @relation("CiDependsOn")
+
+  @@unique([tenantId, key])
+  @@index([tenantId, kind, status])
+  @@map("configuration_item")
+}
+
+/// "ตัวที่พึ่งพา" พึ่ง "ตัวที่ถูกพึ่งพา" — ตัวหลังล่ม ตัวแรกพัง
+///
+/// **เก็บทิศเดียว** เหมือน `work_item_link` · คำถามผลกระทบไล่กลับทิศตอนอ่าน
+/// การเก็บสองแถวจะทำให้วันหนึ่งมีคนลบไปข้างเดียว แล้วกราฟตอบสองอย่างขัดกัน
+model CiDependency {
+  id       BigInt @id @default(autoincrement())
+  tenantId BigInt @map("tenant_id")
+
+  dependentId BigInt @map("dependent_id")
+  dependsOnId BigInt @map("depends_on_id")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.DateTime(3)
+
+  tenant    Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  dependent ConfigurationItem @relation("CiDependent", fields: [dependentId], references: [id], onDelete: Cascade)
+  dependsOn ConfigurationItem @relation("CiDependsOn", fields: [dependsOnId], references: [id], onDelete: Cascade)
+
+  @@unique([dependentId, dependsOnId])
+  @@index([tenantId, dependsOnId])
+  @@map("ci_dependency")
+}
+
 /// หน้าต่างเวลาดำเนินการของการเปลี่ยนแปลงหนึ่งใบ
 ///
 /// เป็นตารางบริวารของ `work_item` แบบเดียวกับ `work_item_sla` — ไม่ใช่คอลัมน์
