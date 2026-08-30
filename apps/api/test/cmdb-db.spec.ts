@@ -18,6 +18,7 @@ import type { TenantContext } from '@itsm/types';
 
 import { prismaClient } from '../src/infrastructure/prisma/client';
 import {
+  AlreadyAttachedError,
   CiKeyRequiredError,
   CiNotFoundError,
   DependencyCycleError,
@@ -28,6 +29,10 @@ import {
   deleteCi,
   impactOfCi,
   listCis,
+  attachCi,
+  cisOfItem,
+  detachCi,
+  openItemsInImpact,
   removeDependency,
   updateCi,
 } from '../src/modules/cmdb';
@@ -108,6 +113,19 @@ afterAll(async () => {
     ซึ่งไม่มี stamp จึงรอดจากตัวกรอง แล้วค้างอยู่ในฐานข้อมูลพัฒนา
     (เกิดขึ้นแล้วหนึ่งครั้ง — บทเรียนเดียวกับช่วงห้ามเปลี่ยนแปลงที่ชื่อว่าง)
   */
+  await step('เส้นผูกเรื่องของเทสต์', () =>
+    prismaClient.workItemCi.deleteMany({
+      where: { workItem: { itemKey: { startsWith: `SD-CI${STAMP}` } } },
+    }),
+  );
+  await step('ประวัติของงานเทสต์', () =>
+    prismaClient.workItemHistory.deleteMany({
+      where: { workItem: { itemKey: { startsWith: `SD-CI${STAMP}` } } },
+    }),
+  );
+  await step('งานของเทสต์', () =>
+    prismaClient.workItem.deleteMany({ where: { itemKey: { startsWith: `SD-CI${STAMP}` } } }),
+  );
   await step('รายการของเทสต์', () =>
     prismaClient.configurationItem.deleteMany({
       where: { OR: [{ key: { contains: STAMP } }, { createdAt: { gte: STARTED_AT } }] },
@@ -278,7 +296,139 @@ describe('D · ลบ', () => {
   });
 });
 
-describe('E · สิทธิ์', () => {
+describe('E · ผูกเรื่องกับสิ่งที่ดูแล', () => {
+  let itemKey = '';
+  let downstreamKey = '';
+
+  beforeAll(async () => {
+    const project = await prismaClient.project.findFirstOrThrow({ where: { key: 'SD' } });
+    const template = await prismaClient.workItem.findFirstOrThrow({
+      where: { projectId: project.id },
+      select: { issueTypeId: true },
+    });
+    const todo = await prismaClient.workflowStatus.findFirstOrThrow({
+      where: { category: 'TODO', workflow: { schemes: { some: { tenantId } } } },
+      select: { id: true },
+    });
+    const mk = async (tag: string): Promise<string> => {
+      const w = await prismaClient.workItem.create({
+        data: {
+          tenantId,
+          projectId: project.id,
+          itemKey: `SD-CI${STAMP}${tag}`,
+          issueTypeId: template.issueTypeId,
+          statusId: todo.id,
+          reporterId: adminId,
+          summary: `[CMDB] ${tag} ${STAMP}`,
+          rank: `zzm${STAMP}${tag}`,
+        },
+        select: { itemKey: true },
+      });
+      return w.itemKey;
+    };
+    itemKey = await mk('A');
+    downstreamKey = await mk('B');
+
+    /*
+      สร้างเส้น เว็บ → ฐานข้อมูล ขึ้นใหม่ที่นี่ **ไม่พึ่งเส้นจากหมวด B**
+
+      หมวด D ลบ "แอป" ทิ้ง ซึ่ง cascade เอาเส้นทั้งสองที่ผ่านมันไปด้วย ·
+      เทสต์ที่พึ่งสถานะที่หมวดก่อนหน้าทิ้งไว้ จะแดงด้วยเหตุผลที่ไม่เกี่ยวกับ
+      สิ่งที่มันวัด ในวันที่มีคนสลับลำดับหมวด
+    */
+    await addDependency(ctx, ids.get('เว็บ') ?? BigInt(0), ids.get('ฐานข้อมูล') ?? BigInt(0));
+  });
+
+  it('ผูกแล้วอ่านกลับได้ · ผูกซ้ำถูกปฏิเสธ', async () => {
+    await attachCi(ctx, itemKey, ids.get('เว็บ') ?? BigInt(0));
+    const rows = await cisOfItem(ctx, itemKey);
+    expect(rows.map((r) => r.key)).toEqual([k('เว็บ')]);
+    await expect(attachCi(ctx, itemKey, ids.get('เว็บ') ?? BigInt(0))).rejects.toThrow(
+      AlreadyAttachedError,
+    );
+  });
+
+  it('**การผูกถูกบันทึกในไทม์ไลน์ของเรื่อง ไม่ใช่ audit ระดับระบบ**', async () => {
+    /*
+      คนอ่านไทม์ไลน์ของตั๋วต้องเห็นว่าใครผูกเครื่องไหนเข้ามาเมื่อไร ·
+      ร่องรอยที่อยู่คนละที่กับเรื่อง ไม่มีใครไปเปิดดู
+    */
+    const rows = await prismaClient.workItemHistory.findMany({
+      where: { workItem: { itemKey }, field: 'configItem' },
+      select: { oldValue: true, newValue: true },
+    });
+    expect(rows.some((r) => r.newValue === k('เว็บ'))).toBe(true);
+  });
+
+  it('ถอดออกได้ · ถอดตัวที่ไม่ได้ผูก = `CiNotFoundError`', async () => {
+    await attachCi(ctx, itemKey, ids.get('ฐานข้อมูล') ?? BigInt(0));
+    await detachCi(ctx, itemKey, ids.get('ฐานข้อมูล') ?? BigInt(0));
+    expect((await cisOfItem(ctx, itemKey)).map((r) => r.key)).toEqual([k('เว็บ')]);
+    await expect(detachCi(ctx, itemKey, ids.get('ฐานข้อมูล') ?? BigInt(0))).rejects.toThrow(
+      CiNotFoundError,
+    );
+  });
+
+  it('**เรื่องของระบบปลายทางถูกนับเป็นผลกระทบด้วย**', async () => {
+    /*
+      นี่คือคำตอบที่ ITIL เรียกว่า impact analysis · ไม่ใช่ "เครื่องนี้มีเรื่องกี่ใบ"
+      แต่คือ "เหตุการณ์นี้กระทบเรื่องที่ค้างอยู่ทั้งหมดกี่ใบ" ซึ่งรวมเรื่องของ
+      ระบบปลายทางที่คนแจ้งไม่รู้ด้วยซ้ำว่าต้นเหตุอยู่ที่ไหน
+
+      เว็บ พึ่ง ฐานข้อมูล (ผูกไว้ในหมวด B) · เรื่อง A อยู่บนเว็บ
+      ถามผลกระทบของฐานข้อมูล ต้องเห็นเรื่อง A ด้วย
+    */
+    await attachCi(ctx, downstreamKey, ids.get('ฐานข้อมูล') ?? BigInt(0));
+    const r = await openItemsInImpact(ctx, ids.get('ฐานข้อมูล') ?? BigInt(0));
+    const keys = r.items.map((i) => i.itemKey);
+    expect(keys).toContain(downstreamKey);
+    expect(keys).toContain(itemKey);
+    // เรื่องที่อยู่บนตัวต้นเหตุเองมาก่อน แล้วค่อยไล่ออกไป
+    expect(r.items[0]?.distance).toBe(0);
+    expect(r.items.find((i) => i.itemKey === itemKey)?.viaCiKey).toBe(k('เว็บ'));
+  });
+
+  it('**คนที่แก้เรื่องนั้นไม่ได้ ผูกสิ่งที่ดูแลเข้าไปไม่ได้**', async () => {
+    /*
+      การผูกใช้สิทธิ์ **แก้เรื่องนั้น** ไม่ใช่สิทธิ์ผู้ดูแล — คนที่ทำงานกับตั๋ว
+      ต้องบอกได้ว่าเรื่องนี้กระทบเครื่องไหน มิฉะนั้นข้อมูลจะไม่มีวันถูกกรอก ·
+      แต่คนที่แตะเรื่องนั้นไม่ได้เลย ก็ต้องผูกไม่ได้เช่นกัน
+    */
+    const outsider = await prismaClient.user.create({
+      data: { tenantId, email: `cmdb-ผูก-${STAMP}@example.test`, displayName: `คนนอกผูก ${STAMP}` },
+      select: { id: true },
+    });
+    try {
+      const before = await prismaClient.workItemCi.count({
+        where: { workItem: { itemKey } },
+      });
+      await expect(
+        attachCi({ tenantId, actorId: outsider.id }, itemKey, ids.get('ฐานข้อมูล') ?? BigInt(0)),
+      ).rejects.toThrow();
+      // ไม่มีแถวถูกสร้างจากคำสั่งที่ถูกปฏิเสธ
+      expect(await prismaClient.workItemCi.count({ where: { workItem: { itemKey } } })).toBe(before);
+    } finally {
+      await prismaClient.user.deleteMany({ where: { id: outsider.id } });
+    }
+  });
+
+  it('**เรื่องที่ปิดแล้วไม่นับเป็นผลกระทบ**', async () => {
+    // ผลกระทบคือสิ่งที่ต้องจัดการตอนนี้ · เรื่องที่จบแล้วไม่ใช่
+    const done = await prismaClient.workflowStatus.findFirstOrThrow({
+      where: { category: 'DONE', workflow: { schemes: { some: { tenantId } } } },
+      select: { id: true },
+    });
+    await prismaClient.workItem.updateMany({
+      where: { itemKey: downstreamKey },
+      data: { statusId: done.id },
+    });
+    const r = await openItemsInImpact(ctx, ids.get('ฐานข้อมูล') ?? BigInt(0));
+    expect(r.items.map((i) => i.itemKey)).not.toContain(downstreamKey);
+    expect(r.items.map((i) => i.itemKey)).toContain(itemKey);
+  });
+});
+
+describe('F · สิทธิ์', () => {
   it('**คนที่ไม่ใช่ผู้ดูแลแก้ไม่ได้ แต่ยังอ่านได้**', async () => {
     /*
       สร้างผู้ใช้ของตัวเองแล้วลบทิ้ง — ไม่ย้ายสมาชิกออกจากกลุ่มของ seed

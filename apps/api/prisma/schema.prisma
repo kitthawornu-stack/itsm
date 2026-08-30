@@ -59,6 +59,7 @@ model Tenant {
   changeFreezes     ChangeFreeze[]
   configItems       ConfigurationItem[]
   ciDependencies    CiDependency[]
+  workItemCis       WorkItemCi[]
 
   @@map("tenant")
 }
@@ -651,6 +652,7 @@ model WorkItem {
   inboundMails   InboundMail[]
   notifications  Notification[]
   changeWindow   ChangeWindow?
+  configItems    WorkItemCi[]
 
   @@unique([tenantId, itemKey])
   @@index([tenantId, projectId, statusId])
@@ -1003,6 +1005,7 @@ model ConfigurationItem {
 
   dependsOn CiDependency[] @relation("CiDependent")
   usedBy    CiDependency[] @relation("CiDependsOn")
+  workItems WorkItemCi[]
 
   @@unique([tenantId, key])
   @@index([tenantId, kind, status])
@@ -1029,6 +1032,29 @@ model CiDependency {
   @@unique([dependentId, dependsOnId])
   @@index([tenantId, dependsOnId])
   @@map("ci_dependency")
+}
+
+/// เรื่องหนึ่งกระทบสิ่งที่ดูแลตัวไหนบ้าง
+///
+/// **นี่คือเส้นที่ทำให้ CMDB มีประโยชน์จริง** · ทะเบียนที่ไม่ได้ผูกกับเรื่อง
+/// ตอบได้แค่ "มีอะไรอยู่บ้าง" ซึ่งไม่มีใครเปิดดู · พอผูกแล้วมันตอบได้ว่า
+/// "เครื่องนี้มีเรื่องค้างกี่ใบ" และ "เรื่องนี้กระทบอะไรต่อบ้าง"
+model WorkItemCi {
+  id       BigInt @id @default(autoincrement())
+  tenantId BigInt @map("tenant_id")
+
+  workItemId BigInt @map("work_item_id")
+  ciId       BigInt @map("ci_id")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.DateTime(3)
+
+  tenant   Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  workItem WorkItem          @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+  ci       ConfigurationItem @relation(fields: [ciId], references: [id], onDelete: Cascade)
+
+  @@unique([workItemId, ciId])
+  @@index([tenantId, ciId])
+  @@map("work_item_ci")
 }
 
 /// หน้าต่างเวลาดำเนินการของการเปลี่ยนแปลงหนึ่งใบ

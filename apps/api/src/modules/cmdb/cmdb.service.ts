@@ -16,9 +16,9 @@
  */
 import type { TenantContext } from '@itsm/types';
 
-import { auditedTransaction } from '../../infrastructure/audit/audited-transaction';
+import { auditedTransaction, change } from '../../infrastructure/audit/audited-transaction';
 import { tenantScoped } from '../../infrastructure/prisma/tenant-scope';
-import { assertTenantAdmin } from '../permission';
+import { assertCan, assertTenantAdmin, browsableProjectIds } from '../permission';
 import { impactOf, type CiEdge, type ImpactResult } from './impact-graph';
 
 export type CiKindKey = 'SERVICE' | 'APPLICATION' | 'SERVER' | 'DATABASE' | 'NETWORK' | 'OTHER';
@@ -428,4 +428,176 @@ export async function impactOfCi(ctx: TenantContext, id: bigint): Promise<Impact
     truncated: result.truncated,
     hasCycle: result.hasCycle,
   };
+}
+
+// ============================================================
+// เรื่องที่ผูกกับสิ่งที่ดูแล
+// ============================================================
+
+export class WorkItemNotFoundForCiError extends Error {
+  constructor(readonly itemKey: string) {
+    super(`ไม่พบงาน ${itemKey}`);
+    this.name = 'WorkItemNotFoundForCiError';
+  }
+}
+
+export class AlreadyAttachedError extends Error {
+  constructor(readonly ciKey: string) {
+    super(`เรื่องนี้ผูกกับ "${ciKey}" ไว้แล้ว`);
+    this.name = 'AlreadyAttachedError';
+  }
+}
+
+export interface AttachedCi {
+  id: string;
+  key: string;
+  name: string;
+  kindLabel: string;
+  statusLabel: string;
+}
+
+/**
+ * งานที่มองเห็นได้ — ผูก CI ต้องมีสิทธิ์แก้เรื่องนั้น ไม่ใช่สิทธิ์ผู้ดูแล
+ *
+ * **ต่างจากการแก้ทะเบียน CI โดยตั้งใจ** · คนที่ทำงานกับตั๋วต้องบอกได้ว่า
+ * เรื่องนี้กระทบเครื่องไหน มิฉะนั้นข้อมูลจะไม่มีวันถูกกรอก และ CMDB
+ * จะกลายเป็นทะเบียนที่ไม่ผูกกับอะไรเลย
+ */
+async function itemFor(
+  ctx: TenantContext,
+  itemKey: string,
+): Promise<{ id: bigint; projectId: bigint }> {
+  const item = await tenantScoped(ctx).workItem.findFirst({
+    where: { itemKey },
+    select: { id: true, projectId: true },
+  });
+  if (item === null) throw new WorkItemNotFoundForCiError(itemKey);
+  await assertCan(ctx, item.projectId, 'EDIT_ITEM');
+  return item;
+}
+
+/** สิ่งที่ดูแลที่เรื่องนี้กระทบ — เรียงตามรหัส */
+export async function cisOfItem(ctx: TenantContext, itemKey: string): Promise<AttachedCi[]> {
+  const item = await tenantScoped(ctx).workItem.findFirst({
+    where: { itemKey },
+    select: { id: true, projectId: true },
+  });
+  if (item === null) throw new WorkItemNotFoundForCiError(itemKey);
+  // การอ่านใช้สิทธิ์เปิดดูโปรเจกต์ ไม่ใช่สิทธิ์แก้ไข
+  await assertCan(ctx, item.projectId, 'BROWSE_PROJECT');
+
+  const rows = await tenantScoped(ctx).workItemCi.findMany({
+    where: { workItemId: item.id },
+    select: { ci: { select: { id: true, key: true, name: true, kind: true, status: true } } },
+    orderBy: { ci: { key: 'asc' } },
+  });
+  return rows.map((r) => ({
+    id: r.ci.id.toString(),
+    key: r.ci.key,
+    name: r.ci.name,
+    kindLabel: CI_KIND_LABEL[r.ci.kind],
+    statusLabel: CI_STATUS_LABEL[r.ci.status],
+  }));
+}
+
+export async function attachCi(ctx: TenantContext, itemKey: string, ciId: bigint): Promise<void> {
+  const item = await itemFor(ctx, itemKey);
+  const db = tenantScoped(ctx);
+  const ci = await db.configurationItem.findFirst({ where: { id: ciId }, select: { key: true } });
+  if (ci === null) throw new CiNotFoundError();
+
+  const already = await db.workItemCi.findFirst({
+    where: { workItemId: item.id, ciId },
+    select: { id: true },
+  });
+  if (already !== null) throw new AlreadyAttachedError(ci.key);
+
+  await auditedTransaction(ctx, 'cmdb.item.attach', async (tx) => {
+    await tx.workItemCi.create({ data: { tenantId: ctx.tenantId, workItemId: item.id, ciId } });
+    return {
+      result: undefined,
+      // เขียนเป็นประวัติของงาน ไม่ใช่ audit ระดับระบบ — คนอ่านไทม์ไลน์ของตั๋ว
+      // ต้องเห็นว่าใครผูกเครื่องไหนเข้ามาเมื่อไร
+      audit: [change(item.id, 'configItem', null, ci.key)],
+    };
+  });
+}
+
+export async function detachCi(ctx: TenantContext, itemKey: string, ciId: bigint): Promise<void> {
+  const item = await itemFor(ctx, itemKey);
+  const db = tenantScoped(ctx);
+  const existing = await db.workItemCi.findFirst({
+    where: { workItemId: item.id, ciId },
+    select: { ci: { select: { key: true } } },
+  });
+  if (existing === null) throw new CiNotFoundError();
+
+  await auditedTransaction(ctx, 'cmdb.item.detach', async (tx) => {
+    await tx.workItemCi.deleteMany({ where: { workItemId: item.id, ciId } });
+    return {
+      result: undefined,
+      audit: [change(item.id, 'configItem', existing.ci.key, null)],
+    };
+  });
+}
+
+export interface CiWorkItem {
+  itemKey: string;
+  summary: string;
+  statusCategory: string;
+  /** รหัสของสิ่งที่ดูแลที่เรื่องนี้ผูกอยู่ — บอกว่ามาจากตัวไหนในสายผลกระทบ */
+  viaCiKey: string;
+  distance: number;
+}
+
+/**
+ * เรื่องที่ค้างอยู่บนตัวนี้และทุกตัวที่พังตาม
+ *
+ * **นี่คือคำตอบที่ ITIL เรียกว่า impact analysis** — ไม่ใช่ "เครื่องนี้มี
+ * เรื่องกี่ใบ" แต่คือ "เหตุการณ์นี้กระทบเรื่องที่ค้างอยู่ทั้งหมดกี่ใบ"
+ * ซึ่งรวมเรื่องของระบบปลายทางที่คนแจ้งไม่รู้ด้วยซ้ำว่าต้นเหตุอยู่ที่ไหน
+ */
+export async function openItemsInImpact(
+  ctx: TenantContext,
+  ciId: bigint,
+): Promise<{ impact: ImpactView; items: CiWorkItem[] }> {
+  const impact = await impactOfCi(ctx, ciId);
+  const inScope = [
+    { id: impact.root.id, key: impact.root.key, distance: 0 },
+    ...impact.affected.map((a) => ({ id: a.id, key: a.key, distance: a.distance })),
+  ];
+  const byCiId = new Map(inScope.map((c) => [c.id, c]));
+
+  const allowed = await browsableProjectIds(ctx);
+  if (allowed.length === 0) return { impact, items: [] };
+
+  const rows = await tenantScoped(ctx).workItemCi.findMany({
+    where: {
+      ciId: { in: inScope.map((c) => BigInt(c.id)) },
+      // เฉพาะเรื่องที่ยังไม่จบ — เรื่องที่ปิดแล้วไม่ใช่ผลกระทบที่ต้องจัดการตอนนี้
+      workItem: { status: { category: { not: 'DONE' } }, projectId: { in: allowed } },
+    },
+    select: {
+      ciId: true,
+      workItem: {
+        select: { itemKey: true, summary: true, status: { select: { category: true } } },
+      },
+    },
+  });
+
+  const items = rows
+    .map((r) => {
+      const via = byCiId.get(r.ciId.toString());
+      return {
+        itemKey: r.workItem.itemKey,
+        summary: r.workItem.summary,
+        statusCategory: r.workItem.status.category,
+        viaCiKey: via?.key ?? '',
+        distance: via?.distance ?? 0,
+      };
+    })
+    // ใกล้ต้นเหตุก่อน แล้วตามรหัสเรื่อง — ลำดับต้องคงที่ระหว่างการเรียกสองครั้ง
+    .sort((a, b) => a.distance - b.distance || a.itemKey.localeCompare(b.itemKey));
+
+  return { impact, items };
 }
