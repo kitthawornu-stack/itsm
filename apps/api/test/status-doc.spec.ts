@@ -133,6 +133,35 @@ describe('เอกสารสถานะ · ตัวเลขที่นั
     }
   });
 
+  /**
+   * จำนวนโมดูล **และจำนวนที่มีโค้ดจริง**
+   *
+   * เอกสารเคยเขียนว่า "23 โมดูล (มีโค้ดจริง 22)" ทั้งที่มีโฟลเดอร์ 22 และในนั้น
+   * `sprint` กับ `version` มีแค่ `export {}` — เป็นเปลือกที่ ADR-004 กำหนดไว้
+   * ล่วงหน้า ยังไม่มีโค้ดสักบรรทัด · ตัวเลขที่พิมพ์มือทั้งคู่จึงเพี้ยนคนละทาง
+   *
+   * "มีโค้ดจริง" นับจาก **มีไฟล์อื่นนอกจาก `index.ts`** หรือ `index.ts`
+   * ที่ export อะไรจริง ๆ ไม่ใช่ `export {}`
+   */
+  it('**จำนวนโมดูลและจำนวนที่มีโค้ดจริง**', () => {
+    const dir = join(REPO, 'apps', 'api', 'src', 'modules');
+    const mods = readdirSync(dir).filter((m) => statSync(join(dir, m)).isDirectory());
+    expect(mods.length, 'หาโมดูลไม่เจอ — ตัวสแกนพัง').toBeGreaterThan(10);
+
+    const withCode = mods.filter((m) => {
+      const files = readdirSync(join(dir, m));
+      if (files.some((f) => f !== 'index.ts')) return true;
+      return !/export\s*\{\s*\}/.test(readFileSync(join(dir, m, 'index.ts'), 'utf8'));
+    });
+    expect(withCode.length, 'ทุกโมดูลมีโค้ดหมด — ด่านนี้ไม่ได้พิสูจน์อะไร').toBeLessThan(mods.length);
+
+    const m = /(\d+) โมดูล \(มีโค้ดจริง (\d+)\)/.exec(DOC);
+    expect(m, 'หาข้อความจำนวนโมดูลในเอกสารไม่เจอ').not.toBeNull();
+    const [, total, real] = m as RegExpExecArray;
+    expect(Number(total)).toBe(mods.length);
+    expect(Number(real)).toBe(withCode.length);
+  });
+
   it('**จำนวนคีย์สิทธิ์ที่บังคับใช้จริง**', () => {
     const enforced = ALL_PERMISSION_KEYS.length - UNENFORCED_PERMISSIONS.length;
     const m = /\*\*(\d+) จาก (\d+) คีย์บังคับใช้จริง\*\* อีก (\d+) คีย์/.exec(DOC);
@@ -175,17 +204,54 @@ describe('เอกสารสถานะ · ตัวเลขที่นั
         const t = pkg.scripts?.test ?? '';
         return t.includes('vitest') && !t.includes('passWithNoTests');
       })
-      .map((w) => w.name);
 
     expect(workspaces.length, 'หา workspace ที่มีเทสต์ไม่เจอ — ตัวสแกนพัง').toBeGreaterThan(3);
 
     let sum = 0;
-    for (const name of workspaces) {
-      const m = new RegExp(String.raw`\b${name}\s+(\d+)`).exec(DOC);
-      expect(m, `เอกสารไม่ได้บอกยอดเทสต์ของ workspace "${name}"`).not.toBeNull();
-      sum += Number((m as RegExpExecArray)[1]);
+    for (const w of workspaces) {
+      const m = new RegExp(String.raw`\b${w.name}\s+(\d+)`).exec(DOC);
+      expect(m, `เอกสารไม่ได้บอกยอดเทสต์ของ workspace "${w.name}"`).not.toBeNull();
+      const claimed = Number((m as RegExpExecArray)[1]);
+      sum += claimed;
+
+      /*
+        **เทียบรายโครงการกับซอร์สจริง ไม่ใช่แค่บวกกันให้ลงตัว**
+
+        ด่านเดิมตรวจแค่ว่า "ผลบวกของตัวเลขในเอกสาร = ยอดรวมในเอกสาร" ซึ่งเป็น
+        การเทียบเอกสารกับตัวมันเอง · ตัวเลขทั้งหกตัวผิดพร้อมกันได้โดยยังเขียว
+        ขอแค่บวกกันลงตัว — และมันผิดจริง: `web 34` ค้างอยู่ทั้งที่มี 28 เคส
+
+        นับ `it(` / `test(` จากซอร์สมาเทียบ · workspace ที่ไม่มี `.each`
+        นับได้ **ตรงเป๊ะ** ส่วนที่มี `.each` หนึ่ง `it` ขยายเป็นหลายเคส
+        จึงตรวจได้แค่ว่ายอดในเอกสารต้องไม่ต่ำกว่าที่นับได้
+      */
+      const specs = walk(w.dir, (f) => /\.spec\.tsx?$/.test(f)).map((f) => readFileSync(f, 'utf8'));
+      const statically = specs
+        .map((src) => (src.match(/^\s*(?:it|test)\(/gm) ?? []).length)
+        .reduce((a, b) => a + b, 0);
+      const expands = specs.some((src) => /\b(?:it|test|describe)\.each\b/.test(src));
+
+      if (expands) {
+        expect(
+          claimed,
+          `ยอดเทสต์ของ "${w.name}" ต่ำกว่าจำนวน it() ที่นับได้จากซอร์ส`,
+        ).toBeGreaterThanOrEqual(statically);
+      } else {
+        expect(claimed, `ยอดเทสต์ของ "${w.name}" ไม่ตรงกับจำนวน it() ในซอร์ส`).toBe(statically);
+      }
     }
     expect(sum).toBe(Number((total as RegExpExecArray)[1]?.replace(/,/g, '')));
+  });
+
+  /**
+   * ด่านพิสูจน์ว่าตัวนับ `it(` ด้านบนหาเจอจริง
+   *
+   * ตัวนับที่คืนศูนย์เสมอจะทำให้เงื่อนไข `toBeGreaterThanOrEqual` ผ่านหมด
+   * — เซ็ตว่างเท่ากับเซ็ตว่างอีกครั้ง
+   */
+  it('**ตัวนับ it() หาเจอจริง**', () => {
+    const here = readFileSync(join(REPO, 'apps', 'api', 'test', 'status-doc.spec.ts'), 'utf8');
+    expect((here.match(/^\s*(?:it|test)\(/gm) ?? []).length).toBeGreaterThan(5);
   });
 
   /**
