@@ -1,3 +1,5 @@
 export * from './report-window';
+export * from './dashboard-layout';
+export * from './dashboard.service';
 export * from './report.service';
 export * from './time-report.service';

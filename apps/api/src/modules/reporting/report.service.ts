@@ -49,7 +49,7 @@ export interface ReportSummary {
 }
 
 /** โปรเจกต์ที่ผู้ใช้ทั้งเปิดดูได้ **และ** มีสิทธิ์ดูรายงาน */
-async function reportableProjectIds(ctx: TenantContext): Promise<bigint[]> {
+export async function reportableProjectIds(ctx: TenantContext): Promise<bigint[]> {
   const browsable = await browsableProjectIds(ctx);
   const out: bigint[] = [];
   for (const id of browsable) {
