@@ -21,6 +21,7 @@ import { toSlaBar, type SlaSnapshotView } from '@/lib/sla-label';
 import { ArticlePanel, type AttachedArticle } from '@/components/article-panel';
 import { HierarchyPanel, type ChildRow, type ParentRow } from '@/components/hierarchy-panel';
 import { LinkPanel, type LinkRow } from '@/components/link-panel';
+import { ProblemImpactPanel } from '@/components/problem-impact-panel';
 import { TimePanel } from '@/components/time-panel';
 import { WatchButton } from '@/components/watch-button';
 import { TransitionButtons } from '@/components/transition-buttons';
@@ -230,6 +231,13 @@ export default async function WorkItemDetail({
             เพราะรายการบันทึกยาวได้เรื่อย ๆ และคนส่วนใหญ่เปิดหน้านี้เพื่ออ่าน
             เรื่อง ไม่ใช่เพื่อดูเวลา
           */}
+          {/*
+            ผลกระทบอยู่ใต้ความสัมพันธ์ เพราะมันคือการสรุปของความสัมพันธ์ชนิดหนึ่ง ·
+            แผงนี้ **ไม่ขึ้นเลย** เมื่อใบนี้ไม่ได้เป็นสาเหตุของอะไร จึงไม่รบกวน
+            หน้ารายละเอียดของเรื่องทั่วไป
+          */}
+          <ProblemImpactPanel apiBase={API} itemKey={detail.itemKey} />
+
           <TimePanel apiBase={API} itemKey={detail.itemKey} />
 
           {detail.fields === undefined || detail.fields.length === 0 ? null : (

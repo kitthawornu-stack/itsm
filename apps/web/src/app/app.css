@@ -1506,6 +1506,94 @@
   line-height: var(--line-height-body);
 }
 
+/* ---------- ผลกระทบของปัญหา ---------- */
+
+.pim {
+  margin-top: var(--space-6);
+}
+
+.pim-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-6);
+  margin: var(--space-3) 0 0;
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+  font-size: 12.5px;
+  line-height: var(--line-height-body);
+}
+
+.pim-stats div {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.pim-stats dt {
+  color: var(--text-muted);
+}
+
+.pim-stats dd {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* จำนวนที่ยังค้างเป็นตัวเลขที่ต้องทำอะไรต่อ — ตัวอื่นเป็นแค่ข้อมูล */
+.pim-stats dd[data-open='true'] {
+  color: var(--status-warning);
+}
+
+.pim-when,
+.pim-quiet {
+  margin: var(--space-2) 0 0;
+  color: var(--text-muted);
+  font-size: 12.5px;
+  line-height: var(--line-height-body);
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.pim-list {
+  list-style: none;
+  margin: var(--space-3) 0 var(--space-2);
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.pim-list li {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-3);
+  border-inline-start: 3px solid var(--status-warning);
+  background: var(--surface);
+  font-size: 12.5px;
+  line-height: var(--line-height-body);
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+/* เรื่องที่แก้แล้วจางลง — แต่ข้อความ "แก้แล้ว" ก็บอกอยู่ ไม่ได้พึ่งสีอย่างเดียว */
+.pim-list li[data-done='true'] {
+  border-inline-start-color: var(--border);
+}
+
+.pim-summary {
+  flex: 1 1 12rem;
+}
+
+.pim-meta {
+  flex-shrink: 0;
+  color: var(--text-muted);
+}
+
 /* ---------- ปฏิทินการเปลี่ยนแปลง ---------- */
 
 .cal-controls {
