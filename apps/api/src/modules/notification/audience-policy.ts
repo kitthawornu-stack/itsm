@@ -78,9 +78,19 @@ export const ROLES_OF_KIND: Readonly<Record<string, readonly AudienceRole[]>> = 
 };
 
 export class EmptyAudienceError extends Error {
-  constructor(readonly kind: string) {
+  /**
+   * `label` คือชื่อที่ผู้ใช้เห็น — ไม่ใส่จะใช้คีย์ของระบบแทน
+   *
+   * เอนจินไม่รู้จักภาษาที่คนอ่าน (ชั้นบริการเป็นคนรู้) แต่ข้อความนี้ไปถึงหน้าจอ
+   * โดยตรง · ถ้าไม่เปิดช่องไว้ ผู้ใช้จะเห็น `comment.added` ซึ่งเป็นศัพท์ระบบ
+   * ที่ §5 ห้ามไว้ — เห็นตอนกดจริงในเบราว์เซอร์เท่านั้น
+   */
+  constructor(
+    readonly kind: string,
+    label?: string,
+  ) {
     super(
-      `ปิดทุกบทบาทของ "${kind}" ไม่ได้ — ถ้าไม่ต้องการให้ใครได้รับเลย ` +
+      `ปิดทุกบทบาทของ "${label ?? kind}" ไม่ได้ — ถ้าไม่ต้องการให้ใครได้รับเลย ` +
         'ให้ปิดทั้งชนิดที่สวิตช์ของชนิดนั้นแทน จะได้เห็นจากหน้าจอว่าตั้งใจปิด',
     );
     this.name = 'EmptyAudienceError';
@@ -142,7 +152,8 @@ export function assertAudienceReachable(
   rolesOfKind: readonly AudienceRole[],
   projectId: bigint,
   rules: readonly AudienceRule[],
+  label?: string,
 ): void {
   const anyReaches = rolesOfKind.some((role) => roleReaches(kind, role, projectId, rules));
-  if (!anyReaches) throw new EmptyAudienceError(kind);
+  if (!anyReaches) throw new EmptyAudienceError(kind, label);
 }

@@ -238,6 +238,22 @@ export async function setMyPreference(
 // บทบาทผู้รับ — "ใครควรได้รับ" คนละเรื่องกับ "ส่งชนิดนี้ไหม"
 // ============================================================
 
+/**
+ * ป้ายภาษาคนของชนิด — ใช้ในข้อความที่ผู้ใช้เห็น
+ *
+ * ซ้ำกับ `KIND_TH` ในฝั่งเว็บโดยรู้ตัว · ทางที่ถูกกว่าคือให้เซิร์ฟเวอร์ส่ง
+ * ป้ายมาพร้อมรายการเหมือนชนิดของ CMDB แล้วเว็บเลิกมีรายการของตัวเอง —
+ * **จดไว้เป็นหนี้ ไม่ใช่ทำเงียบ ๆ** เพราะรายการที่ซ้ำกันสองที่จะเพี้ยนคนละทาง
+ * ในวันที่มีคนแก้ที่เดียว
+ */
+const KIND_LABEL: Record<string, string> = {
+  'workitem.assigned': 'มีคนมอบหมายงานให้ฉัน',
+  'workitem.rate': 'ขอให้ให้คะแนนหลังงานเสร็จ',
+  'comment.added': 'มีความเห็นใหม่ในเรื่องที่ฉันเกี่ยวข้อง',
+  'comment.mention': 'มีคนเรียกชื่อฉันในความเห็น',
+  'comment.internal': 'มีบันทึกภายในใหม่',
+};
+
 /** ป้ายภาษาคนของบทบาท — `Record` บังคับให้ครบเมื่อเพิ่มบทบาทใหม่ */
 export const ROLE_LABEL: Record<AudienceRole, string> = {
   reporter: 'ผู้แจ้ง',
@@ -268,9 +284,20 @@ export async function listAudienceRules(ctx: TenantContext): Promise<KindAudienc
     select: { kind: true, role: true, isEnabled: true, project: { select: { key: true } } },
   });
 
+  /*
+    **แสดงเฉพาะบทบาทที่ชนิดนั้นแจ้งจริง**
+
+    ตอนแรกคืน `AUDIENCE_ROLES` ทั้งชุดให้ทุกชนิด · หน้าจอจึงมีสวิตช์
+    "ผู้เฝ้าดูได้รับ — ใกล้เลยกำหนด SLA" ให้กด ทั้งที่การแจ้ง SLA ส่งถึงกลุ่ม
+    ไม่ได้ส่งตามบทบาทในตั๋วเลย · **กดแล้วไม่มีผล และไม่มีอะไรบอก** —
+    ความเชื่อที่หน้าจอสร้างขึ้นเอง แบบเดียวกับที่หน้าตั้งค่าเคยบอกว่า
+    IT Support "แก้ไขหลายเรื่องพร้อมกัน" ได้ (CLAUDE.md §8)
+
+    ชนิดที่ไม่มีบทบาทให้ตั้ง คืนรายการว่าง แล้วหน้าจอไม่แสดงมันเลย
+  */
   return NOTIFICATION_KINDS.map((kind) => ({
     kind,
-    roles: AUDIENCE_ROLES.map((role) => {
+    roles: (ROLES_OF_KIND[kind] ?? []).map((role) => {
       const mine = rows.filter((r) => r.kind === kind && r.role === role);
       const global = mine.find((r) => r.project === null);
       return {
@@ -355,6 +382,7 @@ export async function setAudienceRule(
     ROLES_OF_KIND[kind] ?? AUDIENCE_ROLES,
     projectId ?? BigInt(0),
     after,
+    KIND_LABEL[kind],
   );
 
   return auditedTransaction(ctx, 'notification.audience', async (tx) => {

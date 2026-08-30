@@ -34,6 +34,8 @@ import {
 import { PermissionDeniedError } from '../src/modules/permission';
 
 const STAMP = String(Date.now()).slice(-6);
+/** เวลาเริ่มของไฟล์ — ใช้เก็บกวาด `audit_log` ที่ไม่มีคีย์ของเทสต์ให้กรอง */
+const STARTED_AT = new Date();
 const PKEY = `NSC${STAMP}`;
 const KIND = 'comment.added';
 
@@ -190,6 +192,22 @@ afterAll(async () => {
     กฎบทบาทระดับ tenant ก็ไม่ผูกกับโปรเจกต์ของเทสต์เหมือนสวิตช์รวม —
     ถ้าเก็บกวาดพลาด มันจะปิดผู้รับบทบาทนั้นค้างไว้ทั้งองค์กรอย่างเงียบ ๆ
   */
+  /*
+    **audit ของสวิตช์และกฎบทบาทไม่เคยถูกเก็บกวาดเลย**
+
+    เจอตอนเทียบลายนิ้วมือหลังทำ QA: ยอด `audit_log` หลังล้างเหลือน้อยกว่า
+    ตอนเริ่ม แปลว่ามีแถวที่เทสต์รอบก่อน ๆ ทิ้งไว้ · แถวเหล่านี้ไม่โผล่ที่ไหน
+    เพราะหน้าร่องรอยกรองตามเวลา — สะสมทุกครั้งที่รัน `pnpm ci`
+    (รูปแบบเดียวกับ 170 แถวกำพร้าใน `notification`)
+  */
+  await step('audit ของเทสต์', () =>
+    prismaClient.auditLog.deleteMany({
+      where: {
+        entityType: { in: ['notification_rule', 'notification_audience_rule'] },
+        createdAt: { gte: STARTED_AT },
+      },
+    }),
+  );
   await step('กฎบทบาทของเทสต์', () =>
     prismaClient.notificationAudienceRule.deleteMany({
       where: {
@@ -491,10 +509,36 @@ describe('สวิตช์แจ้งเตือน(จริง) · ใค�
     await setAudienceRule(adminCtx, { kind: KIND, role: 'team', isEnabled: true });
   });
 
+  /**
+   * ด่านที่จับ "สวิตช์ที่กดแล้วไม่มีผล"
+   *
+   * เจอจากการกดจริงในเบราว์เซอร์: หน้าจอแสดงสวิตช์ครบห้าบทบาทกับทุกชนิด
+   * รวม `sla.threshold` ที่ส่งถึงกลุ่ม ไม่ได้ส่งตามบทบาทในตั๋วเลย ·
+   * ผู้ดูแลกดปิด "ผู้เฝ้าดู" แล้วไม่มีอะไรเปลี่ยน และไม่มีอะไรบอก
+   */
+  it('ชนิดที่ไม่ได้แจ้งตามบทบาทในตั๋ว ต้องไม่มีสวิตช์ให้กดเลย', async () => {
+    const rows = await listAudienceRules(adminCtx);
+    for (const k of ['sla.threshold', 'automation.notice', 'approval.requested']) {
+      expect(rows.find((r) => r.kind === k)?.roles, k).toEqual([]);
+    }
+  });
+
+  it('ชนิดที่แจ้งตามบทบาทจริง ต้องมีเฉพาะบทบาทของมัน', async () => {
+    const rows = await listAudienceRules(adminCtx);
+    expect(rows.find((r) => r.kind === 'workitem.assigned')?.roles.map((r) => r.role)).toEqual([
+      'assignee',
+    ]);
+  });
+
   it('รายการที่หน้าจอใช้ บอกบทบาทที่ปิดไม่ได้ให้ด้วย', async () => {
     const rows = await listAudienceRules(adminCtx);
-    const comment = rows.find((r) => r.kind === KIND);
-    expect(comment?.roles.find((r) => r.role === 'mention')?.alwaysReached).toBe(true);
-    expect(comment?.roles.find((r) => r.role === 'watcher')?.alwaysReached).toBe(false);
+    /*
+      การถูกเรียกถึงเป็น **ชนิดของตัวเอง** ไม่ใช่บทบาทหนึ่งของ `comment.added`
+      — กล่องแจ้งเตือนจัดลำดับจากชนิด และผู้ใช้ปิดสองอย่างนี้แยกกันได้
+    */
+    const mention = rows.find((r) => r.kind === 'comment.mention');
+    expect(mention?.roles.find((r) => r.role === 'mention')?.alwaysReached).toBe(true);
+    const added = rows.find((r) => r.kind === KIND);
+    expect(added?.roles.find((r) => r.role === 'watcher')?.alwaysReached).toBe(false);
   });
 });

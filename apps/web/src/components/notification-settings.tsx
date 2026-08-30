@@ -10,6 +10,21 @@ interface MyPreference {
   email: boolean;
 }
 
+interface RoleRow {
+  role: string;
+  label: string;
+  /** ปิดไม่ได้ — ไม่แสดงสวิตช์ให้กด */
+  alwaysReached: boolean;
+  /** `null` = ไม่เคยตั้ง (เท่ากับได้รับ) */
+  tenantEnabled: boolean | null;
+  perProject: { projectKey: string; isEnabled: boolean }[];
+}
+
+interface KindAudienceRow {
+  kind: string;
+  roles: RoleRow[];
+}
+
 interface KindRow {
   kind: string;
   alwaysOn: boolean;
@@ -55,18 +70,23 @@ function th(kind: string): string {
 export function NotificationSettings({ apiBase }: { apiBase: string }): ReactNode {
   const [mine, setMine] = useState<MyPreference[] | null>(null);
   const [switches, setSwitches] = useState<KindRow[] | null>(null);
+  const [audience, setAudience] = useState<KindAudienceRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async (): Promise<void> => {
     try {
-      const [mineRes, adminRes] = await Promise.all([
+      const [mineRes, adminRes, audienceRes] = await Promise.all([
         fetch(`${apiBase}/api/v1/notification-settings/me/preferences`, {
           credentials: 'include',
           cache: 'no-store',
         }),
         fetch(`${apiBase}/api/v1/notification-settings/admin/switches`, {
+          credentials: 'include',
+          cache: 'no-store',
+        }),
+        fetch(`${apiBase}/api/v1/notification-settings/admin/audience`, {
           credentials: 'include',
           cache: 'no-store',
         }),
@@ -80,6 +100,7 @@ export function NotificationSettings({ apiBase }: { apiBase: string }): ReactNod
       }
       // 403 = ไม่ใช่ผู้ดูแล · ซ่อนทั้งส่วน ไม่ใช่แสดงสวิตช์ที่กดไม่ได้
       setSwitches(adminRes.ok ? ((await adminRes.json()) as KindRow[]) : null);
+      setAudience(audienceRes.ok ? ((await audienceRes.json()) as KindAudienceRow[]) : null);
     } catch {
       setError('เชื่อมต่อเซิร์ฟเวอร์ไม่ได้');
       setMine([]);
@@ -241,6 +262,68 @@ export function NotificationSettings({ apiBase }: { apiBase: string }): ReactNod
               </tr>
             ))}
           </Table>
+        </>
+      )}
+
+      {audience === null ? null : (
+        <>
+          <h2 className="section-title">ใครควรได้รับ</h2>
+          <p className="muted">
+            คนละเรื่องกับสวิตช์ข้างบน · ที่นี่เลือกว่า <strong>ในบรรดาคนที่เกี่ยวข้อง
+            ใครยังควรได้รับ</strong> — เช่นให้ผู้เฝ้าดูหยุดได้รับความเห็นใหม่
+            โดยผู้แจ้งกับผู้รับผิดชอบยังได้อยู่ ·{' '}
+            <strong>ปิดครบทุกบทบาทไม่ได้</strong> เพราะให้ผลเหมือนปิดทั้งชนิด
+            แต่มองไม่เห็นจากหน้าจอ — ถ้าตั้งใจแบบนั้น ให้ปิดที่สวิตช์ข้างบนแทน
+          </p>
+
+          {audience
+            .filter((k) => k.roles.length > 0)
+            .map((k) => (
+              <section key={k.kind} className="aud">
+                <h3 className="aud-kind">{th(k.kind)}</h3>
+                <ul className="aud-roles">
+                  {k.roles.map((r) => (
+                    <li key={r.role}>
+                      {r.alwaysReached ? (
+                        <span className="muted">
+                          {r.label} — ได้รับเสมอ ปิดไม่ได้
+                        </span>
+                      ) : (
+                        <span className="switch-cell">
+                          {/*
+                            ชื่อของสวิตช์ต้องบอกทั้งบทบาทและชนิด — ทั้งหน้ามีสวิตช์
+                            ชื่อ "ผู้เฝ้าดู" อยู่หลายอัน คนละชนิดกัน
+                          */}
+                          <Checkbox
+                            checked={r.tenantEnabled ?? true}
+                            disabled={busy}
+                            label={`${r.label} ได้รับ — ${th(k.kind)}`}
+                            onChange={(next) => {
+                              void send(
+                                '/admin/audience',
+                                { kind: k.kind, role: r.role, isEnabled: next },
+                                next
+                                  ? `${r.label} จะได้รับ: ${th(k.kind)}`
+                                  : `${r.label} จะไม่ได้รับ: ${th(k.kind)}`,
+                              );
+                            }}
+                          />
+                          <span>{r.label}</span>
+                          {/* "ยังไม่เคยตั้ง" ต่างจาก "ตั้งให้เปิด" */}
+                          <span className="muted">
+                            {r.tenantEnabled === null
+                              ? 'ตามค่าปริยาย (ได้รับ)'
+                              : r.tenantEnabled
+                                ? 'ได้รับ'
+                                : 'ไม่ได้รับ'}
+                          </span>
+                        </span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ))}
         </>
       )}
     </>

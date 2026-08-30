@@ -3007,3 +3007,38 @@ tr[data-current='true'] td {
   clip-path: inset(50%);
   white-space: nowrap;
 }
+
+/* ============================================================
+   ใครควรได้รับ — บทบาทผู้รับรายชนิด
+   ============================================================ */
+
+.aud {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+  padding: var(--space-3);
+  margin-bottom: var(--space-2);
+}
+
+.aud-kind {
+  margin: 0 0 var(--space-2);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  line-height: 1.6;
+}
+
+.aud-roles {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: var(--space-2);
+}
+
+.aud-roles li {
+  line-height: 1.6;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
