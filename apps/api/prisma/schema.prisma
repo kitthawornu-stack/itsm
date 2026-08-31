@@ -63,6 +63,8 @@ model Tenant {
   dashboards                Dashboard[]
   dashboardGadgets          DashboardGadget[]
   notificationAudienceRules NotificationAudienceRule[]
+  webhooks                  Webhook[]
+  webhookDeliveries         WebhookDelivery[]
 
   @@map("tenant")
 }
@@ -1761,4 +1763,70 @@ model NotificationAudienceRule {
   @@unique([tenantId, projectId, kind, role])
   @@index([tenantId, kind])
   @@map("notification_audience_rule")
+}
+
+/// ปลายทางที่รับเหตุการณ์ออกไป
+///
+/// **ความลับเก็บเป็นข้อความธรรมดาโดยตั้งใจ** — ต่างจากรหัสผ่านผู้ใช้
+/// ที่เก็บเป็นแฮชได้เพราะเราแค่ต้อง "เทียบ" · ความลับของ webhook ต้องเอาไป
+/// **เซ็นทุกครั้งที่ส่ง** จึงต้องอ่านค่าเดิมกลับมาได้ · สิ่งที่ทำได้คือ
+/// ไม่ส่งมันออกทาง API และให้ผู้ดูแลตั้งใหม่ได้เมื่อสงสัยว่ารั่ว
+model Webhook {
+  id       BigInt  @id @default(autoincrement())
+  tenantId BigInt  @map("tenant_id")
+  name     String  @db.VarChar(128)
+  url      String  @db.VarChar(1000)
+  /// ความลับสำหรับเซ็นคำขอ — **ห้าม serialize ออกไปนอกเซิร์ฟเวอร์**
+  secret   String  @db.VarChar(128)
+  /// ชนิดเหตุการณ์ที่สนใจ คั่นด้วยจุลภาค — **ว่าง = ไม่รับอะไรเลย**
+  events   String  @db.VarChar(500)
+  isActive Boolean @default(true) @map("is_active")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.DateTime(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.DateTime(3)
+
+  tenant     Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  deliveries WebhookDelivery[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId, isActive])
+  @@map("webhook")
+}
+
+/// การส่งหนึ่งครั้งไปหาปลายทางหนึ่ง
+///
+/// **แถวนี้เกิดก่อนการยิง HTTP เสมอ** (กติกา "จองก่อนทำ" ใน CLAUDE.md) ·
+/// เครื่องที่ดับระหว่างรอปลายทางตอบ จะกลับมาเห็นแถวที่ค้างเป็น `pending`
+/// แล้วรู้ว่าเคยพยายามแล้ว · ถ้าสร้างแถวหลังส่งสำเร็จ มันจะส่งซ้ำทั้งชุด
+/// โดยไม่มีอะไรจำได้
+model WebhookDelivery {
+  id        BigInt @id @default(autoincrement())
+  tenantId  BigInt @map("tenant_id")
+  webhookId BigInt @map("webhook_id")
+
+  /// ตรงกับ TriggerKind ของ automation — คำศัพท์ชุดเดียวกัน
+  event         String    @db.VarChar(64)
+  /// เนื้อหาที่ส่งจริง เก็บไว้เพราะต้องเซ็นค่าเดิมตอนลองใหม่
+  payload       String    @db.Text
+  /// "pending" | "sent" | "failed" | "giving-up"
+  state         String    @db.VarChar(16)
+  attempts      Int       @default(0)
+  /// รหัสสถานะครั้งล่าสุด — `null` เมื่อต่อไม่ติดเลย ซึ่งคนละเรื่องกับถูกปฏิเสธ
+  lastStatus    Int?      @map("last_status")
+  /// เหตุผลที่ล้ม ต้องอ่านเข้าใจโดยไม่ต้องเปิด log
+  lastError     String?   @map("last_error") @db.VarChar(500)
+  /// ครั้งต่อไปจะลองเมื่อไร — `null` เมื่อจบแล้วไม่ว่าจะสำเร็จหรือเลิกลอง
+  nextAttemptAt DateTime? @map("next_attempt_at") @db.DateTime(3)
+  sentAt        DateTime? @map("sent_at") @db.DateTime(3)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.DateTime(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.DateTime(3)
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  webhook Webhook @relation(fields: [webhookId], references: [id], onDelete: Cascade)
+
+  /// ตัวกวาดหาที่ค้าง ใช้ดัชนีนี้ — ต้องหาเจอเร็วแม้ตารางโต
+  @@index([tenantId, state, nextAttemptAt])
+  @@index([tenantId, webhookId, createdAt])
+  @@map("webhook_delivery")
 }

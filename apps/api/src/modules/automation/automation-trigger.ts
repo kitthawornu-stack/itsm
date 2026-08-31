@@ -14,7 +14,8 @@
  */
 import { systemClock, type TenantContext, type UtcDate } from '@itsm/types';
 
-import { tenantScoped } from '../../infrastructure/prisma/tenant-scope';
+import { tenantScoped, tenantTransaction } from '../../infrastructure/prisma/tenant-scope';
+import { queueWebhooks } from '../integration';
 import { type AutomationEvent, type TriggerKind } from './automation-engine';
 import { runAutomation, type AutomationResult } from './automation.service';
 
@@ -112,6 +113,34 @@ export async function fireAutomation(
       actorId: bot?.id ?? null,
       ...(ctx.traceId === undefined ? {} : { traceId: ctx.traceId }),
     };
+
+    /*
+      ส่งเหตุการณ์เดียวกันออกไปหา webhook ด้วย
+
+      **ที่นี่คือจุดที่เหตุการณ์ของงานฟุ้งออก** — ทั้งกฎอัตโนมัติและ webhook
+      อ่านจากเหตุการณ์ชุดเดียวกัน · การเพิ่มจุดยิงที่สอง (เรียก webhook เอง
+      ตามจุดที่เรียก `fireAutomation`) จะกลายเป็นสองรายการที่คนต้องจำให้ครบ
+      แล้ววันหนึ่งจะมีจุดที่เรียกอันเดียว
+
+      เรียก **หลังการเปลี่ยนแปลงคอมมิตแล้ว** ไม่ใช่ในทรานแซกชันของมัน —
+      เหตุการณ์ของสิ่งที่ถูกย้อนกลับต้องไม่ถูกส่งออกไป เพราะปลายทางเรียกคืนไม่ได้
+      · และ `queueWebhooks` เขียนแถวจองอย่างเดียว ไม่ยิง HTTP จึงไม่ถือล็อกนาน
+
+      ล้มแล้วไม่ดังออกไปหาผู้เรียก ด้วยเหตุผลเดียวกับกฎอัตโนมัติ
+    */
+    try {
+      await tenantTransaction(ctx, async (tx) => {
+        await queueWebhooks(ctx, tx, kind, {
+          event: kind,
+          at: now.toISOString(),
+          item: event.item,
+          actorId: ctx.actorId?.toString() ?? null,
+        });
+      });
+    } catch {
+      // ตั้งใจกลืน — ดูเหตุผลข้างบน · แถวที่ไม่ถูกจองจะไม่ถูกส่ง ซึ่งเห็นได้
+      // จากหน้าปลายทางว่าไม่มีใบใหม่เลย
+    }
 
     return await runAutomation(botCtx, item.projectId, event, now);
   } catch (err) {
