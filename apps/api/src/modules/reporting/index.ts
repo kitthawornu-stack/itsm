@@ -3,3 +3,4 @@ export * from './dashboard-layout';
 export * from './dashboard.service';
 export * from './report.service';
 export * from './time-report.service';
+export * from './latency-stats';
