@@ -67,6 +67,8 @@ model Tenant {
   webhooks                  Webhook[]
   webhookDeliveries         WebhookDelivery[]
   sprints                   Sprint[]
+  projectVersions           ProjectVersion[]
+  workItemVersions          WorkItemVersion[]
 
   @@map("tenant")
 }
@@ -108,6 +110,7 @@ model User {
   notificationPreferences NotificationPreference[]
   notifications           Notification[]
   changeWindows           ChangeWindow[]
+  createdVersions         ProjectVersion[]
   changeReviews           ChangeReview[]
   workLogs                WorkLog[]
 
@@ -330,6 +333,7 @@ model Project {
   dashboardGadgets          DashboardGadget[]
   notificationAudienceRules NotificationAudienceRule[]
   sprints                   Sprint[]
+  versions                ProjectVersion[]
 
   @@unique([tenantId, key])
   @@index([tenantId, isArchived])
@@ -672,6 +676,7 @@ model WorkItem {
   changeReview   ChangeReview?
   configItems    WorkItemCi[]
   sprint         Sprint?              @relation(fields: [sprintId], references: [id], onDelete: SetNull)
+  versions       WorkItemVersion[]
 
   @@unique([tenantId, itemKey])
   @@index([tenantId, projectId, statusId])
@@ -1904,6 +1909,74 @@ model WebhookDelivery {
 ///
 /// **ภาพตอนเริ่มถูกเก็บไว้ถาวร** (`committed*`) เพราะรายการงานเปลี่ยนได้ตลอด
 /// สปรินต์ · ถ้าไม่เก็บ คำถาม "ทำได้ตามที่รับปากไหม" จะตอบไม่ได้ตลอดกาล
+/// รุ่นของโปรเจกต์ (Version / Release)
+///
+/// **`ProjectVersion` ไม่ใช่ `Version`** — `Version` เป็นคำที่ชนกับอะไรได้ง่าย
+/// ทั้งในโค้ดและในหัวคนอ่าน · ชื่อเต็มบอกได้เองว่ามันเป็นของโปรเจกต์
+///
+/// สถานะ "เลยกำหนดปล่อย" **ไม่ใช่คอลัมน์** — มันคือ "ยังไม่ปล่อย" ที่เลยวันนัด
+/// แล้ว · เก็บเป็นคอลัมน์แปลว่าต้องมีอะไรคอยอัปเดตทุกเที่ยงคืน และวันที่ลืมรัน
+/// ทุกรุ่นจะดูเหมือนยังตรงกำหนด
+model ProjectVersion {
+  id        BigInt @id @default(autoincrement())
+  tenantId  BigInt @map("tenant_id")
+  projectId BigInt @map("project_id")
+
+  name        String  @db.VarChar(128)
+  description String? @db.VarChar(1000)
+
+  /// วันที่ตั้งใจจะปล่อย · `null` = ยังไม่ได้ตั้ง — ต่างจาก "เลยกำหนด"
+  startDate   DateTime? @map("start_date") @db.DateTime(3)
+  releaseDate DateTime? @map("release_date") @db.DateTime(3)
+
+  /// เวลาที่ปล่อยจริง · `null` = ยังไม่ปล่อย
+  ///
+  /// **เก็บเวลาที่เกิดขึ้นจริง ไม่ใช่ boolean "ปล่อยแล้ว"** — บทเรียนเดียวกับ
+  /// `breachedAt`: ค่าที่บอกว่าเกิดขึ้นแล้วแต่ตอบไม่ได้ว่าเมื่อไร ทำให้บันทึก
+  /// การปล่อยและรายงานตอบคำถามที่สำคัญที่สุดไม่ได้
+  releasedAt DateTime? @map("released_at") @db.DateTime(3)
+
+  /// เก็บเข้าคลัง — รุ่นเก่าที่ไม่อยากให้โผล่ในตัวเลือก แต่ยังต้องอ่านย้อนหลังได้
+  archived Boolean @default(false)
+
+  createdById BigInt   @map("created_by_id")
+  createdAt   DateTime @default(now()) @map("created_at") @db.DateTime(3)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.DateTime(3)
+
+  tenant    Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  project   Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdBy User              @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  items     WorkItemVersion[]
+
+  /// ชื่อซ้ำในโปรเจกต์เดียวใช้ไม่ได้ — "1.0" สองใบทำให้เลือกผิดใบทุกครั้ง
+  @@unique([projectId, name])
+  @@index([tenantId, projectId, releaseDate])
+  @@map("project_version")
+}
+
+/// งานอยู่ในรุ่นไหนบ้าง — **ตารางเชื่อม ไม่ใช่คอลัมน์เดียว**
+///
+/// งานหนึ่งใบอยู่ได้หลายรุ่น (แก้ใน 1.0 แล้ว backport เข้า 0.9) · MySQL ไม่มี
+/// array type และ JSON ที่ query ไม่ลง index ก็ตอบคำถาม "รุ่นนี้มีอะไรบ้าง"
+/// ไม่ได้ — ตารางเชื่อมคือทางเดียวที่ index ได้ (CLAUDE.md §3)
+model WorkItemVersion {
+  id       BigInt @id @default(autoincrement())
+  tenantId BigInt @map("tenant_id")
+
+  workItemId BigInt @map("work_item_id")
+  versionId  BigInt @map("version_id")
+
+  addedAt DateTime @default(now()) @map("added_at") @db.DateTime(3)
+
+  tenant   Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  workItem WorkItem       @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+  version  ProjectVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
+
+  @@unique([workItemId, versionId])
+  @@index([tenantId, versionId])
+  @@map("work_item_version")
+}
+
 model Sprint {
   id        BigInt  @id @default(autoincrement())
   tenantId  BigInt  @map("tenant_id")
