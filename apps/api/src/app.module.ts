@@ -37,6 +37,8 @@ import {
 import { CmdbController, WorkItemCiController } from './modules/cmdb/cmdb.controller';
 import { AuditController } from './modules/audit/audit.controller';
 import { DashboardController } from './modules/reporting/dashboard.controller';
+import { WebhookController } from './modules/integration/webhook.controller';
+import { WebhookScheduler } from './modules/integration/webhook.scheduler';
 import { ReportController } from './modules/reporting/report.controller';
 import { KnowledgeController } from './modules/knowledge/knowledge.controller';
 import { BoardController } from './modules/board/board.controller';
@@ -75,6 +77,7 @@ import { WorkItemController } from './modules/workitem/workitem.controller';
     AuditController,
     ReportController,
     DashboardController,
+    WebhookController,
     KnowledgeController,
     BoardController,
     NotificationController,
@@ -100,6 +103,7 @@ import { WorkItemController } from './modules/workitem/workitem.controller';
       เพราะอีเมลขาเข้าที่ปิดเงียบ ๆ แปลว่าคำขอของคนหายไปทุกฉบับ
     */
     EmailIntakeScheduler,
+    WebhookScheduler,
     { provide: APP_GUARD, useClass: SessionGuard },
     // 403 ที่เดียวสำหรับทั้งแอป — handler ใหม่ไม่ต้องจำที่จะดักเอง
     { provide: APP_FILTER, useClass: PermissionDeniedFilter },

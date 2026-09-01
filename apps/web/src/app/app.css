@@ -3042,3 +3042,74 @@ tr[data-current='true'] td {
   word-break: break-word;
   overflow-wrap: anywhere;
 }
+
+/* ============================================================
+   ส่งเหตุการณ์ออก (webhook)
+   ============================================================ */
+
+.whk-url {
+  /* ที่อยู่ยาวไม่มีช่องว่าง ต้องตัดได้ทุกตำแหน่ง เหมือนข้อความไทย */
+  word-break: break-all;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+}
+
+.whk-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* ปลายทางที่ปิดอยู่ ต้องดูต่างจากที่เปิด ไม่ใช่ต่างแค่ที่ช่องติ๊ก */
+tr[data-off='true'] td {
+  color: var(--text-muted);
+}
+
+.whk-secret {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  word-break: break-all;
+  overflow-wrap: anywhere;
+  background: var(--surface-3);
+  padding: var(--space-2);
+  border-radius: var(--radius-sm);
+  line-height: 1.6;
+  margin: var(--space-2) 0;
+}
+
+.whk-add {
+  margin-top: var(--space-4);
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  align-items: start;
+}
+
+.whk-add-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  line-height: 1.6;
+}
+
+.whk-events {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-3);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin: 0;
+}
+
+.whk-events legend {
+  font-size: 12px;
+  color: var(--text-muted);
+  padding: 0 var(--space-1);
+  line-height: 1.6;
+}
