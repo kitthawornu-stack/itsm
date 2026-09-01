@@ -3113,3 +3113,57 @@ tr[data-off='true'] td {
   padding: 0 var(--space-1);
   line-height: 1.6;
 }
+
+/* ============================================================
+   Backlog และรอบการทำงาน
+   ============================================================ */
+
+.bkl-velocity {
+  font-weight: 400;
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-inline-start: var(--space-3);
+  line-height: 1.6;
+}
+
+.bkl-goal,
+.bkl-meta {
+  display: block;
+  font-size: 11.5px;
+  color: var(--text-muted);
+  line-height: 1.6;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.bkl-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: var(--space-2);
+}
+
+.bkl-complete {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: var(--space-2);
+}
+
+/* ช่องแต้มแคบและชิดขวา — ตัวเลขที่เรียงหลักตรงกันเทียบด้วยตาได้ */
+.bkl-points {
+  width: 72px;
+  text-align: end;
+  font-variant-numeric: tabular-nums;
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  line-height: 1.6;
+}
+
+/* รอบที่ปิดแล้วต้องดูต่างจากรอบที่ยังเดินอยู่ ไม่ใช่ต่างแค่ที่ข้อความ */
+tr[data-state='completed'] td {
+  color: var(--text-muted);
+}

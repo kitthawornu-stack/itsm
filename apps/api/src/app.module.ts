@@ -37,6 +37,12 @@ import {
 import { CmdbController, WorkItemCiController } from './modules/cmdb/cmdb.controller';
 import { AuditController } from './modules/audit/audit.controller';
 import { DashboardController } from './modules/reporting/dashboard.controller';
+import {
+  BacklogController,
+  ProjectSprintController,
+  SprintController,
+  StoryPointController,
+} from './modules/sprint/sprint.controller';
 import { OpenApiController } from './infrastructure/openapi/openapi.controller';
 import { WebhookController } from './modules/integration/webhook.controller';
 import { WebhookScheduler } from './modules/integration/webhook.scheduler';
@@ -80,6 +86,10 @@ import { WorkItemController } from './modules/workitem/workitem.controller';
     DashboardController,
     WebhookController,
     OpenApiController,
+    ProjectSprintController,
+    BacklogController,
+    SprintController,
+    StoryPointController,
     KnowledgeController,
     BoardController,
     NotificationController,

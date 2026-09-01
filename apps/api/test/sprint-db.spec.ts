@@ -205,15 +205,27 @@ describe('สปรินต์(จริง) · A · ทะเบียนแ�
   it('งานที่สร้างใหม่อยู่ใน backlog โดยอัตโนมัติ', async () => {
     await item('A', 3);
     await item('B', 5);
-    const b = await backlogOf(ctx, PKEY);
+    const { rows: b } = await backlogOf(ctx, PKEY);
     expect(b.map((r) => r.itemKey)).toEqual([`${PKEY}-A`, `${PKEY}-B`]);
   });
 
   /** backlog คือ "สิ่งที่ยังต้องทำ" ไม่ใช่ประวัติทั้งหมดของโปรเจกต์ */
   it('งานที่ปิดแล้วไม่อยู่ใน backlog', async () => {
     await item('ปิดแล้ว', 2, true);
-    const b = await backlogOf(ctx, PKEY);
+    const { rows: b } = await backlogOf(ctx, PKEY);
     expect(b.map((r) => r.itemKey)).not.toContain(`${PKEY}-ปิดแล้ว`);
+  });
+
+  /**
+   * ขีดจำกัดที่ตัดเงียบ ๆ ทำให้คนเห็น 200 แถวแล้วเชื่อว่านั่นคือทั้งหมด
+   *
+   * เจอตอนกดจริงในเบราว์เซอร์: โปรเจกต์ PLAT มี 1,100 ใบใน backlog
+   * แต่หน้าจอแสดง 200 โดยไม่มีอะไรบอกว่ายังมีอีก
+   */
+  it('บอกยอดรวมมาด้วย ไม่ใช่แค่แถวที่ตัดมาแล้ว', async () => {
+    const r = await backlogOf(ctx, PKEY, 1);
+    expect(r.rows).toHaveLength(1);
+    expect(r.total).toBeGreaterThan(1);
   });
 
   it('คนที่ไม่มีสิทธิ์จัดรอบ สร้างสปรินต์ไม่ได้', async () => {
@@ -226,7 +238,7 @@ describe('สปรินต์(จริง) · A · ทะเบียนแ�
 describe('สปรินต์(จริง) · B · แต้มของงาน', () => {
   it('ตั้งแต้มแล้วอ่านกลับได้', async () => {
     await setStoryPoints(ctx, `${PKEY}-A`, 8);
-    const b = await backlogOf(ctx, PKEY);
+    const { rows: b } = await backlogOf(ctx, PKEY);
     expect(b.find((r) => r.itemKey === `${PKEY}-A`)?.storyPoints).toBe(8);
   });
 
@@ -238,7 +250,7 @@ describe('สปรินต์(จริง) · B · แต้มของง�
    */
   it('ล้างแต้มได้ และไม่กลายเป็นศูนย์', async () => {
     await setStoryPoints(ctx, `${PKEY}-A`, null);
-    const b = await backlogOf(ctx, PKEY);
+    const { rows: b } = await backlogOf(ctx, PKEY);
     expect(b.find((r) => r.itemKey === `${PKEY}-A`)?.storyPoints).toBeNull();
     await setStoryPoints(ctx, `${PKEY}-A`, 3);
   });
@@ -264,7 +276,7 @@ describe('สปรินต์(จริง) · C · เริ่มและ�
     s1 = (await createSprint(ctx, { projectKey: PKEY, name: `รอบวิ่ง ${STAMP}` })).id;
     await moveItemToSprint(ctx, `${PKEY}-A`, s1);
     await moveItemToSprint(ctx, `${PKEY}-B`, s1);
-    const b = await backlogOf(ctx, PKEY);
+    const { rows: b } = await backlogOf(ctx, PKEY);
     expect(b.map((r) => r.itemKey)).not.toContain(`${PKEY}-A`);
   });
 
@@ -312,7 +324,7 @@ describe('สปรินต์(จริง) · C · เริ่มและ�
     expect(r.undoneCount).toBe(1);
     expect(r.completedPoints).toBe(3);
 
-    const b = await backlogOf(ctx, PKEY);
+    const { rows: b } = await backlogOf(ctx, PKEY);
     expect(b.map((x) => x.itemKey)).toContain(`${PKEY}-B`);
   });
 

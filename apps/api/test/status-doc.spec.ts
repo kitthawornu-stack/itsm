@@ -155,6 +155,25 @@ describe('เอกสารสถานะ · ตัวเลขที่นั
    * "มีโค้ดจริง" นับจาก **มีไฟล์อื่นนอกจาก `index.ts`** หรือ `index.ts`
    * ที่ export อะไรจริง ๆ ไม่ใช่ `export {}`
    */
+  /**
+   * จำนวนหน้าจอ
+   *
+   * ตัวเลขนี้ **ไม่มีอะไรคุมมาเลย** จนถึงคอมมิตนี้ — เอกสารเขียน 28
+   * ทั้งที่มี 29 ไฟล์ · ตัวเลขที่พิมพ์มือและไม่มีใครตรวจ จะเพี้ยนเสมอ
+   * ในวันที่มีคนเพิ่มหน้าใหม่แล้วลืมแก้เอกสาร
+   *
+   * นับ `page.tsx` ใต้ `apps/web/src/app` ทั้งหมด — Next.js App Router
+   * ใช้ชื่อไฟล์นี้เป็นหน้าเสมอ จึงเป็นการนับจากสภาพจริง
+   */
+  it('**จำนวนหน้าจอ**', () => {
+    const pages = walk(
+      join(REPO, 'apps', 'web', 'src', 'app'),
+      (f) => f.endsWith(`page.tsx`),
+    ).length;
+    expect(pages, 'หาไฟล์หน้าจอไม่เจอ — ตัวสแกนพัง').toBeGreaterThan(5);
+    expect(numberBefore('หน้าจอ')).toBe(pages);
+  });
+
   it('**จำนวนโมดูลและจำนวนที่มีโค้ดจริง**', () => {
     const dir = join(REPO, 'apps', 'api', 'src', 'modules');
     const mods = readdirSync(dir).filter((m) => statSync(join(dir, m)).isDirectory());

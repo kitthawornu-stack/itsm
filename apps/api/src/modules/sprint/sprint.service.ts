@@ -187,12 +187,23 @@ export async function backlogOf(
   ctx: TenantContext,
   projectKey: string,
   limit = 200,
-): Promise<BacklogRow[]> {
+): Promise<{ rows: BacklogRow[]; total: number }> {
   const projectId = await projectOf(ctx, projectKey);
   await assertCan(ctx, projectId, 'BROWSE_PROJECT');
 
+  const where = {
+    projectId,
+    sprintId: null,
+    status: { category: { not: 'DONE' as const } },
+  };
+  /*
+    **คืนยอดรวมมาด้วยเสมอ** — ขีดจำกัดที่ตัดเงียบ ๆ ทำให้คนเห็น 200 แถว
+    แล้วเชื่อว่านั่นคือทั้งหมด · เจอตอนกดจริง: PLAT มี 1,100 ใบใน backlog
+    แต่หน้าจอไม่มีอะไรบอกเลยว่ายังมีอีก
+  */
+  const total = await tenantScoped(ctx).workItem.count({ where });
   const rows = await tenantScoped(ctx).workItem.findMany({
-    where: { projectId, sprintId: null, status: { category: { not: 'DONE' } } },
+    where,
     orderBy: { rank: 'asc' },
     take: limit,
     select: {
@@ -205,15 +216,18 @@ export async function backlogOf(
     },
   });
 
-  return rows.map((r) => ({
-    itemKey: r.itemKey,
-    summary: r.summary,
-    statusName: r.status.name,
-    statusCategory: r.status.category,
-    priorityName: r.priority?.name ?? null,
-    storyPoints: num(r.storyPoints),
-    sprintId: r.sprintId?.toString() ?? null,
-  }));
+  return {
+    rows: rows.map((r) => ({
+      itemKey: r.itemKey,
+      summary: r.summary,
+      statusName: r.status.name,
+      statusCategory: r.status.category,
+      priorityName: r.priority?.name ?? null,
+      storyPoints: num(r.storyPoints),
+      sprintId: r.sprintId?.toString() ?? null,
+    })),
+    total,
+  };
 }
 
 export async function createSprint(
