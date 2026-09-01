@@ -266,6 +266,16 @@ async function main(): Promise<void> {
       { tenantId, schemeId: schemeSw.id, permission: 'EDIT_ITEM', groupId: groupDev.id },
       { tenantId, schemeId: schemeSw.id, permission: 'TRANSITION_ITEM', groupId: groupDev.id },
       { tenantId, schemeId: schemeSw.id, permission: 'MANAGE_SPRINT', groupId: groupDev.id },
+      /*
+        จัดการรุ่นของโปรเจกต์ (สร้าง แก้ ปล่อย) — ให้ทีมพัฒนา
+
+        `MANAGE_PROJECT` เพิ่งถูกบังคับใช้จริงพร้อมกับฟีเจอร์รุ่น · ก่อนหน้านี้
+        มันอยู่ใน `UNENFORCED_PERMISSIONS` และไม่มีใครถืออยู่เลย · **สิทธิ์ที่
+        ไม่มีใครถือ = ฟีเจอร์ที่ไม่มีใครใช้ได้** ซึ่งเป็นด้านกลับของบทเรียน
+        "สิทธิ์ที่ให้แล้วไม่มีผล" — ทั้งสองอย่างทำให้หน้าตั้งค่ากับความจริงไม่ตรงกัน
+      */
+      { tenantId, schemeId: schemeSw.id, permission: 'MANAGE_PROJECT', groupId: groupDev.id },
+      { tenantId, schemeId: schemeSd.id, permission: 'MANAGE_PROJECT', groupId: groupIt.id },
       { tenantId, schemeId: schemeSw.id, permission: 'LINK_ITEM', groupId: groupDev.id },
       { tenantId, schemeId: schemeSw.id, permission: 'VIEW_REPORT', groupId: groupDev.id },
       { tenantId, schemeId: schemeSw.id, permission: 'VIEW_INTERNAL_COMMENT', groupId: groupDev.id },

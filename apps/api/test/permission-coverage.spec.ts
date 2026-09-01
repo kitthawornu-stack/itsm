@@ -45,10 +45,24 @@ function sourceFiles(dir: string): string[] {
  * ไม่ใช่การ **ตรวจ** — สองอย่างนี้ต่างกัน และการนับรวมกันจะทำให้คีย์ที่ไม่มีใคร
  * ตรวจเลย ดูเหมือนมีผลบังคับ
  */
+/**
+ * ตัดคอมเมนต์ออกก่อนสแกน
+ *
+ * คอมเมนต์ที่อธิบายวิธีเรียกด่านตรวจ มักยกตัวอย่างที่หน้าตาเหมือนโค้ดจริง
+ * แล้วตัวสแกนก็นับมันเป็นการบังคับใช้ · **เกิดขึ้นจริงตอนเขียน
+ * `version.service.ts`** — คอมเมนต์ที่ยกตัวอย่างการเรียกด่านตรวจ ทำให้ชื่อคีย์
+ * สมมติกลายเป็นคีย์ที่ "บังคับใช้แล้ว" และเทสต์แดงโดยชี้ไปผิดที่
+ *
+ * เป็นกับดักตัวเดียวกับตัวนับ endpoint ที่เคยนับ `@Get` ในคอมเมนต์
+ */
+export function stripComments(text: string): string {
+  return text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|\s)\/\/[^\n]*/g, '$1');
+}
+
 function scan(text: string): string[] {
   const pattern = /(?:assertCan|\bcan|permissionsFor|PermissionDeniedError)\s*\([^)]*?'([A-Z_]+)'/g;
   const out: string[] = [];
-  for (const m of text.matchAll(pattern)) if (m[1] !== undefined) out.push(m[1]);
+  for (const m of stripComments(text).matchAll(pattern)) if (m[1] !== undefined) out.push(m[1]);
   return out;
 }
 
@@ -89,6 +103,26 @@ describe('คีย์สิทธิ์ที่บังคับใช้จ�
     expect(actual.has('BROWSE_PROJECT')).toBe(true);
     expect(actual.has('VIEW_INTERNAL_COMMENT')).toBe(true);
     expect(actual.size).toBeGreaterThan(5);
+  });
+
+  /**
+   * **คีย์ที่โผล่เฉพาะในคอมเมนต์ ต้องไม่ถูกนับว่าบังคับใช้แล้ว**
+   *
+   * เจอกับตัวเองตอนเขียน `version.service.ts` — คอมเมนต์ที่ยกตัวอย่างการเรียก
+   * ด่านตรวจ ทำให้ชื่อคีย์สมมติกลายเป็นคีย์ที่ "บังคับใช้แล้ว" แล้วเทสต์ก็แดง
+   * โดยชี้ไปผิดที่ · เป็นกับดักตัวเดียวกับตัวนับ endpoint ที่เคยนับ decorator
+   * ในคอมเมนต์
+   */
+  it('**ตัวสแกนไม่นับคีย์ที่อยู่ในคอมเมนต์**', () => {
+    const sample = [
+      '/* ตัวอย่าง: assertCan(ctx, id, ' + String.raw`'ZZ_FAKE_BLOCK'` + ') */',
+      '// assertCan(ctx, id, ' + String.raw`'ZZ_FAKE_LINE'` + ')',
+      "await assertCan(ctx, id, 'ZZ_REAL');",
+    ].join('\n');
+    expect(scan(sample)).toEqual(['ZZ_REAL']);
+
+    // และต้องไม่กินโค้ดจริงทิ้งไปด้วย — ตัวตัดที่ตัดมากเกินจะทำให้ทุกอย่างเขียว
+    expect(stripComments("assertCan(ctx, id, 'A');").trim()).toBe("assertCan(ctx, id, 'A');");
   });
 
   it('**การให้สิทธิ์ไม่นับเป็นการบังคับใช้** — สองอย่างนี้ต่างกัน', () => {

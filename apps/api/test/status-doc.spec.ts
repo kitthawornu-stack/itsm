@@ -149,8 +149,10 @@ describe('เอกสารสถานะ · ตัวเลขที่นั
    * จำนวนโมดูล **และจำนวนที่มีโค้ดจริง**
    *
    * เอกสารเคยเขียนว่า "23 โมดูล (มีโค้ดจริง 22)" ทั้งที่มีโฟลเดอร์ 22 และในนั้น
-   * `sprint` กับ `version` มีแค่ `export {}` — เป็นเปลือกที่ ADR-004 กำหนดไว้
-   * ล่วงหน้า ยังไม่มีโค้ดสักบรรทัด · ตัวเลขที่พิมพ์มือทั้งคู่จึงเพี้ยนคนละทาง
+   * `sprint` กับ `version` ยังมีแค่ `export {}` ในตอนนั้น — เป็นเปลือกที่
+   * ADR-004 กำหนดไว้ล่วงหน้า · ตัวเลขที่พิมพ์มือทั้งคู่จึงเพี้ยนคนละทาง ·
+   * ทั้งสองโมดูลมีโค้ดครบแล้ว ด่านจึงพิสูจน์ตัวเองด้วยตัวอย่างที่ประกอบเอง
+   * ไม่ใช่พึ่งพาการที่ยังมีเปลือกเปล่าเหลืออยู่จริง
    *
    * "มีโค้ดจริง" นับจาก **มีไฟล์อื่นนอกจาก `index.ts`** หรือ `index.ts`
    * ที่ export อะไรจริง ๆ ไม่ใช่ `export {}`
@@ -179,12 +181,39 @@ describe('เอกสารสถานะ · ตัวเลขที่นั
     const mods = readdirSync(dir).filter((m) => statSync(join(dir, m)).isDirectory());
     expect(mods.length, 'หาโมดูลไม่เจอ — ตัวสแกนพัง').toBeGreaterThan(10);
 
-    const withCode = mods.filter((m) => {
-      const files = readdirSync(join(dir, m));
-      if (files.some((f) => f !== 'index.ts')) return true;
-      return !/export\s*\{\s*\}/.test(readFileSync(join(dir, m, 'index.ts'), 'utf8'));
-    });
-    expect(withCode.length, 'ทุกโมดูลมีโค้ดหมด — ด่านนี้ไม่ได้พิสูจน์อะไร').toBeLessThan(mods.length);
+    /**
+     * โมดูลที่มีโค้ดจริง — เปลือกเปล่าคือมีแค่ `index.ts` ที่ `export {}`
+     *
+     * `readIndex` เป็นฟังก์ชัน ไม่ใช่ข้อความ · `health` **ไม่มี `index.ts` เลย**
+     * (controller อย่างเดียว ไม่มีอะไรให้โมดูลอื่นเรียก) การอ่านไฟล์ล่วงหน้า
+     * จึงระเบิดด้วย ENOENT — เจอตอนแก้ด่านนี้เอง
+     */
+    const hasCode = (files: readonly string[], readIndex: () => string): boolean =>
+      files.some((f) => f !== 'index.ts') || !/export\s*\{\s*\}/.test(readIndex());
+
+    const withCode = mods.filter((m) =>
+      hasCode(readdirSync(join(dir, m)), () => readFileSync(join(dir, m, 'index.ts'), 'utf8')),
+    );
+
+    /*
+      **ด่านพิสูจน์ว่าตัวสแกนแยกเปลือกเปล่าออกจริง**
+
+      เดิมเขียนว่า `withCode.length < mods.length` ซึ่งพึ่งพาการที่ยัง **มี**
+      โมดูลเปลือกเปล่าเหลืออยู่จริง ๆ · วันที่ `version` มีโค้ดครบ ด่านนี้ก็แดง
+      ทั้งที่ไม่มีอะไรผิด — ด่านที่ต้องให้ของเสียคงอยู่ถึงจะทำงานได้ ไม่ใช่ด่าน
+
+      ตรวจกับตัวอย่างที่ประกอบเอง ตัวสแกนจึงพิสูจน์ตัวเองได้เสมอ
+      ไม่ว่าโปรเจกต์จะเดินไปถึงไหน
+    */
+    expect(hasCode(['index.ts'], () => 'export {};')).toBe(false);
+    expect(hasCode(['index.ts'], () => "export * from './x';")).toBe(true);
+    // โมดูลที่ไม่มี `index.ts` เลย (เช่น `health`) ต้องไม่ทำให้ตัวสแกนพัง
+    expect(
+      hasCode(['health.controller.ts'], () => {
+        throw new Error('ต้องไม่อ่าน index.ts ที่ไม่มีอยู่');
+      }),
+    ).toBe(true);
+    expect(withCode.length, 'ตัวสแกนหาโมดูลที่มีโค้ดไม่เจอเลย').toBeGreaterThan(10);
 
     const m = /(\d+) โมดูล \(มีโค้ดจริง (\d+)\)/.exec(DOC);
     expect(m, 'หาข้อความจำนวนโมดูลในเอกสารไม่เจอ').not.toBeNull();

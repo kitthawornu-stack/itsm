@@ -307,6 +307,8 @@ async function ensureStarterProject(
     ['TRANSITION_ITEM', adminGroupId],
     ['MANAGE_ATTACHMENT', adminGroupId],
     ['VIEW_INTERNAL_COMMENT', adminGroupId],
+    // จัดการรุ่นของโปรเจกต์ — ถ้าไม่ให้ ติดตั้งเสร็จแล้วจะสร้างรุ่นไม่ได้เลย
+    ['MANAGE_PROJECT', adminGroupId],
   ];
   for (const [permission, groupId] of grants) {
     const already = await prismaClient.permissionGrant.findFirst({

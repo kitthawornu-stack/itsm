@@ -60,10 +60,7 @@ export type PermissionKey = (typeof ALL_PERMISSION_KEYS)[number];
  * แล้วเทียบ ถ้าวันไหนมีคนเขียนโค้ดบังคับใช้คีย์เหล่านี้ เทสต์จะแดงทันที
  * และบังคับให้มาลบชื่อออกจากที่นี่
  */
-export const UNENFORCED_PERMISSIONS: readonly PermissionKey[] = [
-  'DELETE_ITEM',
-  'MANAGE_PROJECT',
-] as const;
+export const UNENFORCED_PERMISSIONS: readonly PermissionKey[] = ['DELETE_ITEM'] as const;
 
 /** คีย์นี้มีผลจริงหรือยัง */
 export function isEnforced(key: PermissionKey): boolean {
