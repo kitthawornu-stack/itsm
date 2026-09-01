@@ -25,6 +25,8 @@ import type { TenantContext } from '@itsm/types';
 
 import { Ctx } from '../../infrastructure/http/session.guard';
 import { assertTenantAdmin } from '../permission';
+import { riskOf } from './change-risk.service';
+import { RISK_LABEL, type RiskAssessment } from './change-risk';
 import {
   BackwardWindowError as FreezeBackwardError,
   DuplicateFreezeError,
@@ -131,6 +133,36 @@ export class ChangeWindowController {
     try {
       await clearWindow(ctx, key);
       return { ok: true };
+    } catch (e) {
+      return toHttp(e);
+    }
+  }
+}
+
+/**
+ * ระดับความเสี่ยงของการเปลี่ยนแปลง
+ *
+ * **แยก path จาก `change-window` โดยตั้งใจ** — ความเสี่ยงไม่ใช่คุณสมบัติของ
+ * หน้าต่างเวลา มันเป็นคุณสมบัติของการเปลี่ยนแปลง ซึ่งหน้าต่างเวลาเป็นแค่
+ * หนึ่งในสัญญาณที่ใช้ · path ที่อ่านผิดความหมายจะพาให้คนเพิ่มของผิดที่ทีหลัง
+ */
+@Controller('work-items/:key/change-risk')
+export class ChangeRiskController {
+  /**
+   * คำนวณสดทุกครั้ง ไม่เก็บผลไว้ — CI ถูกผูกเพิ่มทีหลังได้ และใบอื่น
+   * เลื่อนมาชนทีหลังได้
+   *
+   * **`label` มาจากเซิร์ฟเวอร์** ไม่ให้หน้าจอแปล `level` เอง — คำแปลที่อยู่
+   * สองที่จะเพี้ยนจากกันในวันที่มีคนเพิ่มระดับใหม่ แล้วหน้าจอจะแสดงรหัสดิบ
+   */
+  @Get()
+  async risk(
+    @Ctx() ctx: TenantContext,
+    @Param('key') key: string,
+  ): Promise<RiskAssessment & { label: string }> {
+    try {
+      const r = await riskOf(ctx, key);
+      return { ...r, label: RISK_LABEL[r.level] };
     } catch (e) {
       return toHttp(e);
     }

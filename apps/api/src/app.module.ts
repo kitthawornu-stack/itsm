@@ -32,6 +32,7 @@ import { ApprovalController } from './modules/approval/approval.controller';
 import {
   ChangeCalendarController,
   ChangeFreezeController,
+  ChangeRiskController,
   ChangeWindowController,
 } from './modules/workitem/change-window.controller';
 import { CmdbController, WorkItemCiController } from './modules/cmdb/cmdb.controller';
@@ -76,7 +77,8 @@ import { WorkItemController } from './modules/workitem/workitem.controller';
     CatalogController,
     CatalogAdminController,
     ApprovalController,
-    ChangeWindowController,
+    ChangeRiskController,
+  ChangeWindowController,
     ChangeCalendarController,
     ChangeFreezeController,
     CmdbController,

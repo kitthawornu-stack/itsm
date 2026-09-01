@@ -448,6 +448,43 @@ export class AlreadyAttachedError extends Error {
   }
 }
 
+/**
+ * จำนวนสิ่งที่พึ่งพา CI แต่ละตัว — "ถ้าตัวนี้ล่ม อีกกี่รายการพังตาม"
+ *
+ * โหลดเส้นเชื่อม **ครั้งเดียว** แล้วไล่ให้ทุกตัวที่ถาม · การเรียก `impactOfCi`
+ * ทีละตัวจะโหลดกราฟทั้งใบใหม่ทุกครั้ง ซึ่งเป็น N คิวรีสำหรับคำตอบที่ใช้
+ * กราฟใบเดียวกันหมด
+ *
+ * นับ **ทางอ้อมด้วย** เพราะ `impactOf` ไล่ทั้งสาย — ระบบที่พังเพราะพึ่งพา
+ * ผ่านสองชั้น ก็พังจริงเท่ากับที่พึ่งพาโดยตรง
+ *
+ * คืนเป็น Map จาก id (สตริง) → จำนวน · id ที่ไม่มีในทะเบียนจะไม่อยู่ใน Map
+ * ผู้เรียกต้องตีความว่า "ไม่รู้" ไม่ใช่ "ศูนย์"
+ */
+export async function dependentCountsOf(
+  ctx: TenantContext,
+  ids: readonly bigint[],
+): Promise<Map<string, number>> {
+  if (ids.length === 0) return new Map();
+  const edges = await allEdges(ctx);
+  const known = new Set(
+    (
+      await tenantScoped(ctx).configurationItem.findMany({
+        where: { id: { in: [...ids] } },
+        select: { id: true },
+      })
+    ).map((r) => r.id.toString()),
+  );
+
+  const out = new Map<string, number>();
+  for (const id of ids) {
+    const key = id.toString();
+    if (!known.has(key)) continue;
+    out.set(key, impactOf(key, edges).affected.length);
+  }
+  return out;
+}
+
 export interface AttachedCi {
   id: string;
   key: string;
