@@ -105,7 +105,7 @@ export interface InputProps {
    * `<input className="ui-input" type="password">` เองเพราะคอมโพเนนต์ไม่รับ
    * ซึ่งแปลว่ามีสองที่ที่ต้องแก้ทุกครั้งที่สไตล์ของช่องกรอกเปลี่ยน
    */
-  type?: 'text' | 'password' | 'email' | 'datetime-local';
+  type?: 'text' | 'password' | 'email' | 'date' | 'datetime-local';
   /**
    * บังคับกรอก — ส่งต่อให้เบราว์เซอร์ตรวจเอง
    *

@@ -3420,3 +3420,192 @@ tr[data-state='completed'] td {
   width: 100%;
   max-width: 32rem;
 }
+
+/* ---------- รุ่นของโปรเจกต์ ---------- */
+
+.ver-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  align-items: flex-start;
+  margin: var(--space-3) 0;
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+}
+
+.ver-form .ui-field {
+  width: 100%;
+  max-width: 28rem;
+}
+
+.ver-list {
+  list-style: none;
+  margin: var(--space-4) 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.ver-list li {
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--status-neutral);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+
+/*
+  สีของแถบซ้ายบอกสถานะ — แต่ป้ายข้อความข้างชื่อรุ่นก็บอกอยู่แล้ว
+  สีจึงเป็นตัวช่วยกวาดสายตา ไม่ใช่ตัวเดียวที่บอกความหมาย
+*/
+.ver-list li[data-state='OVERDUE'] {
+  border-left-color: var(--status-warning);
+}
+
+.ver-list li[data-state='RELEASED'] {
+  border-left-color: var(--status-success);
+}
+
+.ver-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2) var(--space-3);
+  line-height: var(--line-height-body);
+}
+
+.ver-name {
+  font-size: 15px;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.ver-state {
+  padding: 2px var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  line-height: var(--line-height-body);
+}
+
+.ver-list li[data-state='OVERDUE'] .ver-state {
+  color: var(--status-warning);
+  border-color: var(--status-warning);
+}
+
+.ver-list li[data-state='RELEASED'] .ver-state {
+  color: var(--status-success);
+  border-color: var(--status-success);
+}
+
+/* ตัวเลขที่คนกดปุ่มปล่อยต้องอ่าน — ตัวเลขเรียงกันจึงใช้ตัวเลขความกว้างเท่ากัน */
+.ver-count {
+  margin-left: auto;
+  color: var(--text-muted);
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.ver-desc,
+.ver-when,
+.ver-quiet {
+  margin: var(--space-2) 0 0;
+  color: var(--text-muted);
+  font-size: 12.5px;
+  line-height: var(--line-height-body);
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.ver-desc {
+  color: var(--text);
+}
+
+.ver-note {
+  margin-top: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+}
+
+.ver-note-title {
+  margin: 0;
+  font-size: 14px;
+  line-height: var(--line-height-body);
+}
+
+.ver-note-group {
+  margin: var(--space-3) 0 var(--space-1);
+  font-size: 12.5px;
+  color: var(--text-muted);
+  line-height: var(--line-height-body);
+}
+
+.ver-note-items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-size: 12.5px;
+}
+
+.ver-note-items li {
+  line-height: var(--line-height-body);
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+/* ---------- รุ่นบนหน้ารายละเอียด ---------- */
+
+.ivp {
+  margin-top: var(--space-6);
+}
+
+.ivp-list {
+  list-style: none;
+  margin: var(--space-2) 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.ivp-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2);
+  font-size: 12.5px;
+  line-height: var(--line-height-body);
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.ivp-state {
+  color: var(--text-muted);
+}
+
+.ivp-quiet {
+  margin: var(--space-2) 0 0;
+  color: var(--text-muted);
+  font-size: 12.5px;
+  line-height: var(--line-height-body);
+}
+
+.ivp-add {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+.ivp-add .ui-select {
+  max-width: 16rem;
+}

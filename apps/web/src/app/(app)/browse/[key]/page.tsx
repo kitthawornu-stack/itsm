@@ -25,6 +25,7 @@ import { ArticlePanel, type AttachedArticle } from '@/components/article-panel';
 import { HierarchyPanel, type ChildRow, type ParentRow } from '@/components/hierarchy-panel';
 import { LinkPanel, type LinkRow } from '@/components/link-panel';
 import { ItemCiPanel } from '@/components/item-ci-panel';
+import { ItemVersionPanel } from '@/components/item-version-panel';
 import { ProblemImpactPanel } from '@/components/problem-impact-panel';
 import { WorkaroundPanel } from '@/components/workaround-panel';
 import { TimePanel } from '@/components/time-panel';
@@ -253,6 +254,17 @@ export default async function WorkItemDetail({
             เพราะทั้งสามตอบคำถามเดียวกันจากคนละมุม: เรื่องนี้เกี่ยวกับอะไรอีก
           */}
           <ItemCiPanel apiBase={API} itemKey={detail.itemKey} />
+
+          {/*
+            รุ่นอยู่ติดกับความสัมพันธ์และสิ่งที่กระทบ เพราะทั้งสามตอบคำถามเดียวกัน
+            จากคนละมุม: เรื่องนี้เกี่ยวกับอะไรอีก · แผงไม่ขึ้นเลยเมื่อโปรเจกต์
+            ยังไม่มีรุ่น
+          */}
+          <ItemVersionPanel
+            apiBase={API}
+            itemKey={detail.itemKey}
+            projectKey={detail.projectKey}
+          />
 
           <ProblemImpactPanel apiBase={API} itemKey={detail.itemKey} />
 

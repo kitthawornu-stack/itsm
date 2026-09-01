@@ -266,3 +266,37 @@ export const RepeatedRowsNamedForScreenReader: StoryObj = {
     },
   },
 };
+
+/*
+  ชนิดของช่องกรอกที่ **ไม่ใช่ข้อความล้วน**
+
+  `date` กับ `datetime-local` เปลี่ยนทั้งหน้าตาและวิธีกรอกของเบราว์เซอร์ ·
+  เดิม `date` ยังไม่มีในชนิดที่คอมโพเนนต์รับ ผลคือหน้าจอที่ต้องการมันจะเขียน
+  `<input type="date">` เองนอก packages/ui แล้วสไตล์จะแยกกันเดินทันที
+  (เหตุผลเดียวกับที่ `password` ถูกเพิ่มเข้ามาก่อนหน้านี้)
+
+  **สถานะที่ไม่มี story คือสถานะที่ไม่มีใครเคยดูในธีมมืด** — ปุ่มปฏิทินของ
+  เบราว์เซอร์เป็นของมันเอง ต้องเปิดดูจริงว่ายังอ่านออกทั้งสองธีม
+*/
+export const InputDate: StoryObj = {
+  name: 'Input / วันที่',
+  render: () => (
+    <Live>{(v, set) => <Input type="date" value={v} onChange={set} id="story-date" />}</Live>
+  ),
+  parameters: {
+    docs: {
+      description: {
+        story: 'ช่อง `date` ให้วันล้วนไม่มีเขตเวลา — ผู้เรียกต้องเติมเวลาเองก่อนส่งเป็น UTC',
+      },
+    },
+  },
+};
+
+export const InputDateTime: StoryObj = {
+  name: 'Input / วันและเวลา',
+  render: () => (
+    <Live>
+      {(v, set) => <Input type="datetime-local" value={v} onChange={set} id="story-datetime" />}
+    </Live>
+  ),
+};
