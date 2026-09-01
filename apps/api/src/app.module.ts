@@ -48,6 +48,7 @@ import {
 import {
   ItemVersionController,
   ProjectVersionController,
+  RoadmapController,
   VersionController,
 } from './modules/version/version.controller';
 import { OpenApiController } from './infrastructure/openapi/openapi.controller';
@@ -102,6 +103,7 @@ import { WorkItemController } from './modules/workitem/workitem.controller';
     ProjectVersionController,
     VersionController,
     ItemVersionController,
+    RoadmapController,
     KnowledgeController,
     BoardController,
     NotificationController,

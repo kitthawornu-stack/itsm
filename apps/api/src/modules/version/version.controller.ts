@@ -17,11 +17,13 @@ import {
   HttpStatus,
   Param,
   Post,
+  Query,
 } from '@nestjs/common';
 import type { TenantContext } from '@itsm/types';
 
 import { Ctx } from '../../infrastructure/http/session.guard';
 import { AlreadyReleasedError, NotReleasedYetError, UnfinishedItemsError } from './release-plan';
+import { roadmapOf, type RoadmapView } from './roadmap.service';
 import {
   DuplicateVersionNameError,
   ItemFromOtherProjectError,
@@ -109,6 +111,33 @@ export class ProjectVersionController {
         releaseDate: str(body.releaseDate),
       });
       return { id: v.id.toString() };
+    } catch (e) {
+      return toHttp(e);
+    }
+  }
+}
+
+/**
+ * แผนงานบนเส้นเวลา
+ *
+ * **แยกจาก `/projects/:key/versions` โดยตั้งใจ** — รายการรุ่นตอบว่า
+ * "มีรุ่นอะไรบ้าง" ส่วนแผนงานตอบว่า "ลำดับเวลาเป็นยังไง และมีอะไรขัดกันไหม"
+ * ซึ่งต้องอ่านทั้งรอบการทำงานและลิงก์การขวางเพิ่ม
+ *
+ * ไม่ระบุกรอบเวลา = ครึ่งปีย้อนหลังถึงครึ่งปีข้างหน้า · **ไม่ใช่ทั้งหมด**
+ * เพราะแผนที่ยาวสิบปีอ่านไม่ออก และคิวรีที่คืนทุกแถวคือคิวรีที่ช้าโดยเงียบ
+ */
+@Controller('projects/:key/roadmap')
+export class RoadmapController {
+  @Get()
+  async get(
+    @Ctx() ctx: TenantContext,
+    @Param('key') key: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+  ): Promise<RoadmapView> {
+    try {
+      return await roadmapOf(ctx, key, { from, to });
     } catch (e) {
       return toHttp(e);
     }
