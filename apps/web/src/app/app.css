@@ -3332,3 +3332,91 @@ tr[data-state='completed'] td {
   word-break: break-word;
   overflow-wrap: anywhere;
 }
+
+/* ---------- การทบทวนหลังทำ ---------- */
+
+.pir {
+  margin-top: var(--space-6);
+}
+
+.pir-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-3);
+}
+
+.pir-head .detail-section-title {
+  margin-top: 0;
+}
+
+.pir-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-6);
+  margin: var(--space-3) 0 0;
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+  font-size: 12.5px;
+  line-height: var(--line-height-body);
+}
+
+.pir-summary div {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.pir-summary dt {
+  color: var(--text-muted);
+}
+
+.pir-summary dd {
+  margin: 0;
+  font-weight: 600;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+/*
+  ผลที่ไม่สำเร็จใช้สีเตือน — แต่ข้อความก็บอกอยู่แล้วว่าคืออะไร
+  สีจึงเป็นตัวช่วยอ่านเร็ว ไม่ใช่ตัวเดียวที่บอกความหมาย
+*/
+.pir-summary dd[data-outcome='PARTIAL'] {
+  color: var(--status-warning);
+}
+
+.pir-summary dd[data-outcome='FAILED'] {
+  color: var(--status-critical);
+}
+
+.pir-notes {
+  margin: var(--space-3) 0 0;
+  white-space: pre-wrap;
+  line-height: var(--line-height-body);
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.pir-quiet {
+  margin: var(--space-2) 0 0;
+  color: var(--text-muted);
+  font-size: 12.5px;
+  line-height: var(--line-height-body);
+}
+
+.pir-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  align-items: flex-start;
+  margin-top: var(--space-3);
+}
+
+.pir-form .ui-field {
+  width: 100%;
+  max-width: 32rem;
+}

@@ -15,6 +15,7 @@ import { EditItem } from '@/components/edit-item';
 import { CommentThread } from '@/components/comment-thread';
 import { ApprovalPanel } from '@/components/approval-panel';
 import { AttachmentPanel } from '@/components/attachment-panel';
+import { ChangeReviewPanel } from '@/components/change-review-panel';
 import { ChangeRiskPanel } from '@/components/change-risk-panel';
 import { ChangeWindowPanel } from '@/components/change-window-panel';
 import { RatingForm, type Satisfaction } from '@/components/rating-form';
@@ -306,6 +307,12 @@ export default async function WorkItemDetail({
           <ChangeRiskPanel apiBase={API} itemKey={detail.itemKey} />
 
           <ChangeWindowPanel apiBase={API} itemKey={detail.itemKey} />
+
+          {/*
+            การทบทวนอยู่**ใต้**หน้าต่างเวลา เพราะมันเกิดขึ้นทีหลังตามลำดับเวลา
+            — วางแผน แล้วทำ แล้วทบทวน · แผงไม่ขึ้นเลยจนกว่าจะมีช่วงเวลา
+          */}
+          <ChangeReviewPanel apiBase={API} itemKey={detail.itemKey} />
 
           <h2 className="detail-section-title detail-section-gap">บทสนทนา</h2>
           <CommentThread apiBase={API} itemKey={detail.itemKey} />
