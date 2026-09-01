@@ -30,6 +30,7 @@ export default function AppLayout({ children }: { children: ReactNode }): ReactN
             <a href="/board/SD">กระดาน</a>
             <a href="/backlog/PLAT">Backlog</a>
             <a href="/versions/PLAT">รุ่น</a>
+            <a href="/roadmap/PLAT">แผนงาน</a>
             <a href="/catalog">แจ้งเรื่อง</a>
             <a href="/new">แจ้งปัญหา</a>
             <a href="/admin/projects">โปรเจกต์</a>

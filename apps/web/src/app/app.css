@@ -3609,3 +3609,115 @@ tr[data-state='completed'] td {
 .ivp-add .ui-select {
   max-width: 16rem;
 }
+
+/* ---------- แผนงานบนเส้นเวลา ---------- */
+
+.rmp-window {
+  margin: 0 0 var(--space-3);
+  color: var(--text-muted);
+  font-size: 12.5px;
+  line-height: var(--line-height-body);
+}
+
+.rmp-rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.rmp-rows li {
+  display: grid;
+  grid-template-columns: minmax(8rem, 16rem) 1fr;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+/*
+  ชื่ออยู่ในตารางเดียวกับแท่งเสมอ — แผนภาพเป็นตัวช่วยกวาดสายตา
+  ไม่ใช่ที่เดียวที่ข้อมูลอยู่ · คนที่อ่านด้วย screen reader ได้ครบจากข้อความ
+*/
+.rmp-label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-size: 12.5px;
+  line-height: var(--line-height-body);
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.rmp-kind {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.rmp-track {
+  position: relative;
+  display: block;
+  height: 18px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+
+.rmp-bar {
+  position: absolute;
+  top: 3px;
+  height: 12px;
+  min-width: 3px;
+  border-radius: var(--radius-sm);
+  background: var(--accent-service);
+}
+
+.rmp-rows li[data-kind='sprint'] .rmp-bar {
+  background: var(--accent-delivery);
+}
+
+.rmp-rows li[data-done='true'] .rmp-bar,
+.rmp-rows li[data-done='true'] .rmp-pin {
+  background: var(--status-success);
+}
+
+/* หมุด = จุดเดียว · รูปทรงต่างจากแท่งชัดเจน ไม่ใช่แค่สั้นกว่า */
+.rmp-pin {
+  position: absolute;
+  top: 2px;
+  width: 14px;
+  height: 14px;
+  margin-left: -7px;
+  border-radius: 2px;
+  background: var(--accent-service);
+  transform: rotate(45deg);
+}
+
+.rmp-block {
+  margin-top: var(--space-6);
+}
+
+.rmp-title {
+  margin: 0 0 var(--space-2);
+  font-size: 15px;
+  line-height: var(--line-height-body);
+}
+
+.rmp-list {
+  list-style: none;
+  margin: var(--space-2) 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  font-size: 12.5px;
+}
+
+.rmp-list li {
+  line-height: var(--line-height-body);
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.rmp-quiet {
+  color: var(--text-muted);
+}
