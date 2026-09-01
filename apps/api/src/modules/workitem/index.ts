@@ -22,5 +22,7 @@ export * from './worklog.service';
 export * from './change-window';
 export * from './change-window.service';
 export * from './change-freeze.service';
+export * from './change-review';
+export * from './change-review.service';
 export * from './change-risk';
 export * from './change-risk.service';

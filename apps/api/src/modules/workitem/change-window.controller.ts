@@ -25,6 +25,21 @@ import type { TenantContext } from '@itsm/types';
 
 import { Ctx } from '../../infrastructure/http/session.guard';
 import { assertTenantAdmin } from '../permission';
+import {
+  ContradictoryReviewError,
+  NotImplementedYetError,
+  REVIEW_OUTCOMES,
+  ReviewNotesRequiredError,
+  ReviewNotesTooLongError,
+  RollbackAnswerRequiredError,
+} from './change-review';
+import {
+  WorkItemNotFoundForReviewError,
+  reviewOf,
+  saveReview,
+  type ReviewState,
+  type ReviewView,
+} from './change-review.service';
 import { riskOf } from './change-risk.service';
 import { RISK_LABEL, type RiskAssessment } from './change-risk';
 import {
@@ -167,6 +182,82 @@ export class ChangeRiskController {
       return toHttp(e);
     }
   }
+}
+
+/**
+ * การทบทวนหลังทำ (Post-Implementation Review)
+ *
+ * `PUT` เพราะหนึ่งการเปลี่ยนแปลงมีการทบทวนได้ใบเดียว · กดซ้ำด้วยค่าเดิม
+ * ต้องได้ผลเดิม ไม่ใช่สร้างเพิ่ม
+ *
+ * **ทุก error ของเอนจินตอบ 422 พร้อมข้อความภาษาคน** — คำขอถูกต้องตามรูปแบบ
+ * แต่สิ่งที่กรอกขัดกันเองหรือยังไม่ถึงเวลา · ข้อความบอกเหตุผลอยู่แล้ว
+ * หน้าจอจึงแสดงตรง ๆ ได้โดยไม่ต้องแปลรหัส
+ */
+@Controller('work-items/:key/change-review')
+export class ChangeReviewController {
+  @Get()
+  async get(
+    @Ctx() ctx: TenantContext,
+    @Param('key') key: string,
+  ): Promise<ReviewState> {
+    try {
+      return await reviewOf(ctx, key);
+    } catch (e) {
+      return toReviewHttp(e);
+    }
+  }
+
+  @Put()
+  async save(
+    @Ctx() ctx: TenantContext,
+    @Param('key') key: string,
+    @Body() body: { outcome?: unknown; rolledBack?: unknown; notes?: unknown },
+  ): Promise<{ review: ReviewView }> {
+    const outcome = REVIEW_OUTCOMES.find((o) => o === body.outcome);
+    if (outcome === undefined) {
+      throw new HttpException(
+        { error: 'invalid_input', message: 'ต้องเลือกผลของการเปลี่ยนแปลง' },
+        HttpStatus.UNPROCESSABLE_ENTITY,
+      );
+    }
+    /*
+      **`undefined` และ `null` ต่างจาก `false`** — ทั้งสองแปลว่ายังไม่ตอบ
+      ซึ่งเอนจินปฏิเสธเมื่อผลไม่ใช่ "สำเร็จ" · ถ้าแปลงเป็น `false` ตรงนี้
+      ฟอร์มที่ยังไม่ได้ติ๊กจะกลายเป็นคำตอบ "ไม่ได้ย้อนกลับ" ที่ระบบแต่งขึ้นเอง
+    */
+    const rolledBack = typeof body.rolledBack === 'boolean' ? body.rolledBack : null;
+    try {
+      return {
+        review: await saveReview(ctx, key, {
+          outcome,
+          rolledBack,
+          notes: typeof body.notes === 'string' ? body.notes : '',
+        }),
+      };
+    } catch (e) {
+      return toReviewHttp(e);
+    }
+  }
+}
+
+function toReviewHttp(e: unknown): never {
+  if (e instanceof WorkItemNotFoundForReviewError) {
+    throw new HttpException({ error: 'not_found', message: e.message }, HttpStatus.NOT_FOUND);
+  }
+  if (
+    e instanceof NotImplementedYetError ||
+    e instanceof ContradictoryReviewError ||
+    e instanceof RollbackAnswerRequiredError ||
+    e instanceof ReviewNotesRequiredError ||
+    e instanceof ReviewNotesTooLongError
+  ) {
+    throw new HttpException(
+      { error: 'invalid_state', message: e.message },
+      HttpStatus.UNPROCESSABLE_ENTITY,
+    );
+  }
+  throw e;
 }
 
 /** ปฏิทินการเปลี่ยนแปลง — แยก path เพราะไม่ผูกกับงานใบเดียว */

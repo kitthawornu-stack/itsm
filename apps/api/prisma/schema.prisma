@@ -56,6 +56,7 @@ model Tenant {
   notificationPrefs         NotificationPreference[]
   notifications             Notification[]
   changeWindows             ChangeWindow[]
+  changeReviews             ChangeReview[]
   changeFreezes             ChangeFreeze[]
   configItems               ConfigurationItem[]
   ciDependencies            CiDependency[]
@@ -107,6 +108,7 @@ model User {
   notificationPreferences NotificationPreference[]
   notifications           Notification[]
   changeWindows           ChangeWindow[]
+  changeReviews           ChangeReview[]
   workLogs                WorkLog[]
 
   @@unique([tenantId, email])
@@ -667,6 +669,7 @@ model WorkItem {
   inboundMails   InboundMail[]
   notifications  Notification[]
   changeWindow   ChangeWindow?
+  changeReview   ChangeReview?
   configItems    WorkItemCi[]
   sprint         Sprint?              @relation(fields: [sprintId], references: [id], onDelete: SetNull)
 
@@ -1106,6 +1109,58 @@ model ChangeWindow {
   /// — MySQL ใช้ index ได้แค่คอลัมน์เดียวของช่วง จึงเลือกอันที่คัดทิ้งได้มากกว่า
   @@index([tenantId, plannedStart])
   @@map("change_window")
+}
+
+/// การทบทวนหลังทำ (Post-Implementation Review)
+///
+/// ตอบสามคำถามหลังการเปลี่ยนแปลงจบลง: **ได้ผลไหม · ตอนนี้ระบบอยู่ในสภาพไหน ·
+/// ครั้งหน้าต้องทำอะไรต่างไป**
+///
+/// หนึ่งการเปลี่ยนแปลงมีการทบทวนได้ใบเดียว (`@unique` บน `work_item_id`)
+/// เหมือน `change_window` · แก้ได้ แต่ทุกครั้งเขียน `work_item_history`
+///
+/// **ทุกคอลัมน์ที่เก็บ id ของตารางอื่น มี relation พร้อม `onDelete` ที่ตั้งใจ**
+/// — บทเรียนจาก `notification` ที่ไม่มี FK สักตัวแล้วรั่ว 170 แถวโดยไม่มีใครเห็น
+model ChangeReview {
+  id         BigInt @id @default(autoincrement())
+  tenantId   BigInt @map("tenant_id")
+  workItemId BigInt @unique @map("work_item_id")
+
+  /// SUCCESS | PARTIAL | FAILED — เก็บเป็นสตริงตามที่เอนจินนิยาม
+  outcome ChangeReviewOutcome
+
+  /// ย้อนกลับไปแล้วหรือไม่
+  ///
+  /// **ไม่มีค่า "ยังไม่ตอบ" ในฐานข้อมูล** — เอนจินบังคับให้ตอบก่อนบันทึกเมื่อ
+  /// ผลไม่ใช่ "สำเร็จ" · ที่นี่จึงเป็น boolean ธรรมดา และค่า `false` แปลว่า
+  /// **มีคนตอบว่าไม่ได้ย้อน** ไม่ใช่ "ไม่มีใครตอบ"
+  rolledBack Boolean @default(false) @map("rolled_back")
+
+  /// สิ่งที่ได้เรียนรู้ — null เมื่อสำเร็จและไม่มีอะไรจะบันทึก
+  ///
+  /// บังคับกรอกเมื่อผลไม่ใช่ "สำเร็จ" · PIR ที่ไม่มีสิ่งที่ได้เรียนรู้
+  /// คือแบบฟอร์มที่กรอกเพื่อให้ครบ ไม่ใช่การทบทวน
+  notes String? @db.VarChar(4000)
+
+  reviewedById BigInt   @map("reviewed_by_id")
+  reviewedAt   DateTime @map("reviewed_at") @db.DateTime(3)
+  createdAt    DateTime @default(now()) @map("created_at") @db.DateTime(3)
+  updatedAt    DateTime @updatedAt @map("updated_at") @db.DateTime(3)
+
+  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  workItem   WorkItem @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+  /// `Restrict` เหมือน `change_window` — คนที่ทบทวนต้องยังตอบได้ว่าใคร
+  reviewedBy User     @relation(fields: [reviewedById], references: [id], onDelete: Restrict)
+
+  /// รายงาน "การเปลี่ยนแปลงที่ไม่สำเร็จในไตรมาสนี้" วิ่งด้วยคู่นี้
+  @@index([tenantId, outcome])
+  @@map("change_review")
+}
+
+enum ChangeReviewOutcome {
+  SUCCESS
+  PARTIAL
+  FAILED
 }
 
 /// ช่วงห้ามเปลี่ยนแปลงระดับองค์กร

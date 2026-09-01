@@ -32,6 +32,7 @@ import { ApprovalController } from './modules/approval/approval.controller';
 import {
   ChangeCalendarController,
   ChangeFreezeController,
+  ChangeReviewController,
   ChangeRiskController,
   ChangeWindowController,
 } from './modules/workitem/change-window.controller';
@@ -77,7 +78,8 @@ import { WorkItemController } from './modules/workitem/workitem.controller';
     CatalogController,
     CatalogAdminController,
     ApprovalController,
-    ChangeRiskController,
+    ChangeReviewController,
+  ChangeRiskController,
   ChangeWindowController,
     ChangeCalendarController,
     ChangeFreezeController,
