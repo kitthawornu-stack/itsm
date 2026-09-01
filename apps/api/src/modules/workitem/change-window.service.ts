@@ -15,6 +15,7 @@ import { systemClock, toUtcDate, type TenantContext, type UtcDate } from '@itsm/
 
 import { auditedTransaction, change } from '../../infrastructure/audit/audited-transaction';
 import { tenantScoped } from '../../infrastructure/prisma/tenant-scope';
+import { assertCan, browsableProjectIds } from '../permission';
 import {
   BackwardWindowError,
   MAX_WINDOW_DAYS,
@@ -142,8 +143,12 @@ export async function windowOf(
   now: UtcDate = systemClock.nowUtc(),
 ): Promise<WindowView | null> {
   const db = tenantScoped(ctx);
-  const item = await db.workItem.findFirst({ where: { itemKey }, select: { id: true } });
+  const item = await db.workItem.findFirst({
+    where: { itemKey },
+    select: { id: true, projectId: true },
+  });
   if (item === null) throw new WorkItemNotFoundForWindowError(itemKey);
+  await assertCan(ctx, item.projectId, 'BROWSE_PROJECT');
 
   const row = await db.changeWindow.findFirst({
     where: { workItemId: item.id },
@@ -197,8 +202,16 @@ export async function setWindow(
   if (ctx.actorId === null) throw new WorkItemNotFoundForWindowError(itemKey);
   const db = tenantScoped(ctx);
 
-  const item = await db.workItem.findFirst({ where: { itemKey }, select: { id: true } });
+  const item = await db.workItem.findFirst({
+    where: { itemKey },
+    select: { id: true, projectId: true },
+  });
   if (item === null) throw new WorkItemNotFoundForWindowError(itemKey);
+  /*
+    การตั้งช่วงเวลาคือ **การแก้เรื่อง** ไม่ใช่การอ่าน — ใช้ `EDIT_ITEM`
+    เหมือน `attachCi` · คนที่บอกได้ว่าจะทำเมื่อไร ต้องเป็นคนที่แก้เรื่องนั้นได้
+  */
+  await assertCan(ctx, item.projectId, 'EDIT_ITEM');
 
   const start = toUtcDate(input.plannedStart);
   const end = toUtcDate(input.plannedEnd);
@@ -267,8 +280,12 @@ export async function setWindow(
 /** ถอนหน้าต่างเวลา — งานที่ยกเลิกไปแล้วไม่ควรไปชนกับใคร */
 export async function clearWindow(ctx: TenantContext, itemKey: string): Promise<void> {
   const db = tenantScoped(ctx);
-  const item = await db.workItem.findFirst({ where: { itemKey }, select: { id: true } });
+  const item = await db.workItem.findFirst({
+    where: { itemKey },
+    select: { id: true, projectId: true },
+  });
   if (item === null) throw new WorkItemNotFoundForWindowError(itemKey);
+  await assertCan(ctx, item.projectId, 'EDIT_ITEM');
 
   const existing = await db.changeWindow.findFirst({
     where: { workItemId: item.id },
@@ -313,9 +330,15 @@ export async function changeCalendar(
 ): Promise<{ entries: CalendarEntry[]; freezes: WindowView['freezes'] }> {
   const from = toUtcDate(fromIso);
   const to = toUtcDate(toIso);
+  /*
+    **กรองด้วยโปรเจกต์ที่ผู้เรียกเปิดดูได้** — หัวเรื่องของงานในโปรเจกต์ที่
+    เข้าไม่ถึงเป็นข้อมูลรั่ว และปฏิทินเป็นที่ที่ทั้งองค์กรมาดู
+  */
+  const allowed = await browsableProjectIds(ctx);
   const rows = await tenantScoped(ctx).changeWindow.findMany({
     where: {
       plannedStart: { gte: new Date(from.getTime() - MAX_WINDOW_DAYS * DAY_MS), lt: to },
+      workItem: { projectId: { in: [...allowed] } },
     },
     orderBy: { plannedStart: 'asc' },
     select: {

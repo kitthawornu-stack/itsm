@@ -20,6 +20,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { toUtcDate, type TenantContext } from '@itsm/types';
 
 import { prismaClient } from '../src/infrastructure/prisma/client';
+import type { PermissionKey } from '../src/modules/permission';
 import {
   BackwardWindowError,
   DuplicateFreezeError,
@@ -43,6 +44,8 @@ let projectId: bigint;
 let template: { issueTypeId: bigint; statusId: bigint };
 let actorId: bigint;
 let ctx: TenantContext;
+let groupId: bigint;
+const grantIds: bigint[] = [];
 const keys: string[] = [];
 
 async function step(what: string, run: () => Promise<unknown>): Promise<void> {
@@ -94,6 +97,33 @@ beforeAll(async () => {
     })
   ).id;
   ctx = { tenantId, actorId };
+
+  /*
+    ไฟล์นี้ตั้งหน้าต่างเวลาเพื่อวัดว่าช่วงห้ามกระทบใบไหนบ้าง · `setWindow`
+    ขอ `EDIT_ITEM` แล้ว จึงต้องให้สิทธิ์ผ่าน **กลุ่มของเทสต์เอง** ·
+    ก่อนหน้านี้ผ่านได้เพราะเส้นทางนั้นไม่มีด่านสิทธิ์เลย ซึ่งไม่ใช่เหตุผลที่ควรผ่าน
+  */
+  const schemeId = (
+    await prismaClient.project.findFirstOrThrow({
+      where: { id: projectId },
+      select: { permissionSchemeId: true },
+    })
+  ).permissionSchemeId;
+  if (schemeId === null) throw new Error('โปรเจกต์ SD ไม่มี permission scheme');
+  groupId = (
+    await prismaClient.userGroup.create({
+      data: { tenantId, name: `ช่วงห้าม ${STAMP}` },
+      select: { id: true },
+    })
+  ).id;
+  await prismaClient.groupMember.create({ data: { tenantId, groupId, userId: actorId } });
+  for (const permission of ['BROWSE_PROJECT', 'EDIT_ITEM'] as PermissionKey[]) {
+    const g = await prismaClient.permissionGrant.create({
+      data: { tenantId, schemeId, permission, groupId },
+      select: { id: true },
+    });
+    grantIds.push(g.id);
+  }
 }, 120_000);
 
 afterAll(async () => {
@@ -122,7 +152,15 @@ afterAll(async () => {
   await step('งานทดสอบ', () =>
     prismaClient.workItem.deleteMany({ where: { itemKey: { in: keys } } }),
   );
+  await step('สิทธิ์ของเทสต์', () =>
+    prismaClient.permissionGrant.deleteMany({ where: { id: { in: grantIds } } }),
+  );
+  await step('สมาชิกกลุ่ม', () => prismaClient.groupMember.deleteMany({ where: { groupId } }));
   await step('ผู้ใช้ของเทสต์', () => prismaClient.user.deleteMany({ where: { id: actorId } }));
+  await step('กลุ่มของเทสต์', () => prismaClient.userGroup.deleteMany({ where: { id: groupId } }));
+
+  const leftGrants = await prismaClient.permissionGrant.count({ where: { groupId } });
+  if (leftGrants > 0) console.error(`เหลือสิทธิ์ของเทสต์ค้างอยู่ ${String(leftGrants)} รายการ`);
 
   const left = await prismaClient.changeFreeze.count({ where: { name: { contains: STAMP } } });
   if (left > 0) console.error(`เหลือช่วงห้ามของเทสต์ค้างอยู่ ${String(left)} รายการ`);

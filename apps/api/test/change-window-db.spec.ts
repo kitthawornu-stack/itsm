@@ -20,6 +20,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { toUtcDate, type TenantContext } from '@itsm/types';
 
 import { prismaClient } from '../src/infrastructure/prisma/client';
+import { PermissionDeniedError, type PermissionKey } from '../src/modules/permission';
 import {
   BackwardWindowError,
   InFreezeWindowError,
@@ -39,6 +40,11 @@ let projectId: bigint;
 let template: { issueTypeId: bigint; statusId: bigint };
 let actorId: bigint;
 let ctx: TenantContext;
+/** คนที่ล็อกอินได้ แต่ไม่อยู่กลุ่มไหนเลย — คนที่ด่านใหม่มีไว้กัน */
+let outsiderCtx: TenantContext;
+let outsiderId: bigint;
+let groupId: bigint;
+const grantIds: bigint[] = [];
 const keys: string[] = [];
 const freezeIds: bigint[] = [];
 
@@ -86,6 +92,46 @@ beforeAll(async () => {
     })
   ).id;
   ctx = { tenantId, actorId };
+
+  /*
+    **ให้สิทธิ์ผ่านกลุ่มของเทสต์เอง** — ก่อนหน้านี้ทั้งไฟล์รันด้วยผู้ใช้ที่
+    ไม่อยู่กลุ่มไหนเลยและผ่านหมด 34 เคส ซึ่งเป็นหลักฐานในตัวมันเองว่า
+    เส้นทางหน้าต่างเวลาไม่เคยมีด่านสิทธิ์เลย · ตอนนี้มีแล้ว เทสต์จึงต้อง
+    บอกได้ว่า "ผ่านเพราะมีสิทธิ์" ไม่ใช่ "ผ่านเพราะไม่มีใครถาม"
+  */
+  const schemeId = (
+    await prismaClient.project.findFirstOrThrow({
+      where: { id: projectId },
+      select: { permissionSchemeId: true },
+    })
+  ).permissionSchemeId;
+  if (schemeId === null) throw new Error('โปรเจกต์ SD ไม่มี permission scheme');
+  groupId = (
+    await prismaClient.userGroup.create({
+      data: { tenantId, name: `หน้าต่างเวลา ${STAMP}` },
+      select: { id: true },
+    })
+  ).id;
+  await prismaClient.groupMember.create({ data: { tenantId, groupId, userId: actorId } });
+  for (const permission of ['BROWSE_PROJECT', 'EDIT_ITEM'] as PermissionKey[]) {
+    const g = await prismaClient.permissionGrant.create({
+      data: { tenantId, schemeId, permission, groupId },
+      select: { id: true },
+    });
+    grantIds.push(g.id);
+  }
+
+  outsiderId = (
+    await prismaClient.user.create({
+      data: {
+        tenantId,
+        email: `cw-out-${STAMP}@example.test`,
+        displayName: `คนนอก ${STAMP}`,
+      },
+      select: { id: true },
+    })
+  ).id;
+  outsiderCtx = { tenantId, actorId: outsiderId };
 }, 120_000);
 
 afterAll(async () => {
@@ -102,7 +148,17 @@ afterAll(async () => {
   await step('งานทดสอบ', () =>
     prismaClient.workItem.deleteMany({ where: { itemKey: { in: keys } } }),
   );
-  await step('ผู้ใช้ของเทสต์', () => prismaClient.user.deleteMany({ where: { id: actorId } }));
+  await step('สิทธิ์ของเทสต์', () =>
+    prismaClient.permissionGrant.deleteMany({ where: { id: { in: grantIds } } }),
+  );
+  await step('สมาชิกกลุ่ม', () => prismaClient.groupMember.deleteMany({ where: { groupId } }));
+  await step('ผู้ใช้ของเทสต์', () =>
+    prismaClient.user.deleteMany({ where: { email: { contains: STAMP } } }),
+  );
+  await step('กลุ่มของเทสต์', () => prismaClient.userGroup.deleteMany({ where: { id: groupId } }));
+
+  const leftGrants = await prismaClient.permissionGrant.count({ where: { groupId } });
+  if (leftGrants > 0) console.error(`เหลือสิทธิ์ของเทสต์ค้างอยู่ ${String(leftGrants)} รายการ`);
 
   const left = await prismaClient.changeFreeze.count({ where: { name: { contains: STAMP } } });
   if (left > 0) console.error(`เหลือช่วงห้ามของเทสต์ค้างอยู่ ${String(left)} รายการ`);
@@ -360,5 +416,91 @@ describe('D · ปฏิทิน', () => {
   it('ช่วงที่ไม่มีอะไรเลย = รายการว่าง', async () => {
     const cal = await changeCalendar(ctx, '2030-01-01T00:00:00.000Z', '2030-01-02T00:00:00.000Z');
     expect(cal.entries.filter((e) => e.itemKey.startsWith(`SD-CW${STAMP}`))).toEqual([]);
+  });
+});
+
+// ============================================================
+
+/**
+ * E · ด่านสิทธิ์ของเส้นทางหน้าต่างเวลา
+ *
+ * **ทั้งเส้นทางนี้เคยไม่มีการตรวจสิทธิ์เลย** — ไม่มีทั้งใน controller และ
+ * service · พิสูจน์กับเซิร์ฟเวอร์ที่รันอยู่จริงด้วยผู้ใช้ที่ไม่อยู่กลุ่มไหนเลย:
+ * `GET` ตอบ 200 พร้อมเวลาและชื่อคนตั้ง · `PUT` เขียนทับสำเร็จ ·
+ * `DELETE` ลบทิ้งสำเร็จ · `GET /change-calendar` คืนหัวเรื่องของงานทุกใบ
+ * ในองค์กร — ขณะที่ `GET /work-items/SD-1` ของคนคนเดียวกันตอบ 404 ตามที่ควร
+ *
+ * นี่คือรูปแบบเดียวกับ `deleteAttachment` และ `listComments` ที่เคยเจอ:
+ * **ฟังก์ชันที่เขียนไว้ก่อนที่ระบบสิทธิ์จะทำงาน แล้วไม่มีใครกลับมาเก็บ**
+ */
+describe('E · ด่านสิทธิ์', () => {
+  it('**คนที่ไม่มีสิทธิ์เปิดดูโปรเจกต์ อ่านหน้าต่างเวลาไม่ได้**', async () => {
+    const key = await newItem('E1');
+    await setWindow(
+      ctx,
+      key,
+      { plannedStart: '2027-09-01T18:00:00.000Z', plannedEnd: '2027-09-01T20:00:00.000Z' },
+      NOW,
+    );
+    // เจ้าของสิทธิ์อ่านได้ — ถ้าเคสนี้ล้ม แปลว่าด่านกันผิดคน ไม่ใช่กันถูกคน
+    expect(await windowOf(ctx, key, NOW)).not.toBeNull();
+    await expect(windowOf(outsiderCtx, key, NOW)).rejects.toThrow(PermissionDeniedError);
+  });
+
+  it('**คนที่ไม่มีสิทธิ์แก้เรื่อง ตั้งหน้าต่างเวลาไม่ได้ และค่าเดิมต้องไม่เปลี่ยน**', async () => {
+    const key = await newItem('E2');
+    await setWindow(
+      ctx,
+      key,
+      { plannedStart: '2027-09-02T18:00:00.000Z', plannedEnd: '2027-09-02T20:00:00.000Z' },
+      NOW,
+    );
+    await expect(
+      setWindow(
+        outsiderCtx,
+        key,
+        { plannedStart: '2027-10-02T18:00:00.000Z', plannedEnd: '2027-10-02T20:00:00.000Z' },
+        NOW,
+      ),
+    ).rejects.toThrow(PermissionDeniedError);
+
+    /*
+      ตรวจ **ค่าในแถว** ไม่ใช่แค่ว่าโยน error — การนับแถวจับการแก้ค่าไม่ได้
+      (CLAUDE.md) · ถ้าด่านอยู่หลังการเขียน error จะโยนหลังจากข้อมูลเสียไปแล้ว
+    */
+    const after = await windowOf(ctx, key, NOW);
+    expect(after?.plannedStart).toBe('2027-09-02T18:00:00.000Z');
+  });
+
+  it('**คนที่ไม่มีสิทธิ์แก้เรื่อง ลบหน้าต่างเวลาไม่ได้ และแถวต้องยังอยู่**', async () => {
+    const key = await newItem('E3');
+    await setWindow(
+      ctx,
+      key,
+      { plannedStart: '2027-09-03T18:00:00.000Z', plannedEnd: '2027-09-03T20:00:00.000Z' },
+      NOW,
+    );
+    await expect(clearWindow(outsiderCtx, key)).rejects.toThrow(PermissionDeniedError);
+    expect(await windowOf(ctx, key, NOW)).not.toBeNull();
+  });
+
+  /**
+   * ปฏิทินเป็นที่ที่ทั้งองค์กรมาดู — หัวเรื่องของงานในโปรเจกต์ที่เข้าไม่ถึง
+   * ก็เป็นข้อมูลรั่ว · ต้องกรองด้วยโปรเจกต์ที่เปิดดูได้ ไม่ใช่แค่ tenant
+   */
+  it('**ปฏิทินไม่แสดงงานในโปรเจกต์ที่ผู้ดูเข้าไม่ถึง**', async () => {
+    const key = await newItem('E4');
+    await setWindow(
+      ctx,
+      key,
+      { plannedStart: '2027-11-04T18:00:00.000Z', plannedEnd: '2027-11-04T20:00:00.000Z' },
+      NOW,
+    );
+    const from = '2027-11-01T00:00:00.000Z';
+    const to = '2027-11-30T00:00:00.000Z';
+
+    // คนที่มีสิทธิ์เห็น — ยืนยันว่ามีอะไรให้เห็นจริง ไม่ใช่ว่างทั้งคู่
+    expect((await changeCalendar(ctx, from, to)).entries.map((e) => e.itemKey)).toContain(key);
+    expect((await changeCalendar(outsiderCtx, from, to)).entries).toEqual([]);
   });
 });
