@@ -13,3 +13,15 @@ export {
 } from './session.service';
 export { PASSWORD_MIN_LENGTH, WeakPasswordError, hashPassword } from './password';
 export { changeOwnPassword, createUser, listGroups, listUsers, setActive } from './user-admin.service';
+/*
+  ตัวเก็บกวาดเซสชัน — export เฉพาะสิ่งที่เทสต์และตัวเดินรอบต้องใช้ ·
+  ตัวตารางยังเป็นรายละเอียดภายในเหมือนเดิม
+*/
+export {
+  REAP_BATCH,
+  SESSION_KEEP_DAYS,
+  diedAt,
+  reapable,
+  type ReapableSession,
+} from './session-reaper';
+export { reapSessions, type ReapResult } from './session-reaper.service';

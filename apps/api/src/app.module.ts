@@ -54,6 +54,7 @@ import {
 import { OpenApiController } from './infrastructure/openapi/openapi.controller';
 import { WebhookController } from './modules/integration/webhook.controller';
 import { WebhookScheduler } from './modules/integration/webhook.scheduler';
+import { SessionReaperScheduler } from './modules/identity/session-reaper.scheduler';
 import { ReportController } from './modules/reporting/report.controller';
 import { KnowledgeController } from './modules/knowledge/knowledge.controller';
 import { BoardController } from './modules/board/board.controller';
@@ -130,6 +131,7 @@ import { WorkItemController } from './modules/workitem/workitem.controller';
     */
     EmailIntakeScheduler,
     WebhookScheduler,
+    SessionReaperScheduler,
     { provide: APP_GUARD, useClass: SessionGuard },
     // 403 ที่เดียวสำหรับทั้งแอป — handler ใหม่ไม่ต้องจำที่จะดักเอง
     { provide: APP_FILTER, useClass: PermissionDeniedFilter },
