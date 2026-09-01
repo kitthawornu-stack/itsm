@@ -1,0 +1,3813 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Helix — ศูนย์บริการไอที · REST API v1",
+    "version": "1.0.0",
+    "description": "เส้นทางทั้งหมด 160 เส้น อ่านจาก metadata ของ Nest โดยตรง\nจึงตรงกับเส้นทางที่ระบบให้บริการจริงเสมอ\n\n**อธิบายรูปร่างข้อมูลไว้ 10 จาก 160 เส้นทาง**\nที่เหลือมีแค่เส้นทางกับเมธอด — ดูได้จากธง `x-documented: false` ในแต่ละรายการ\nสเปกที่บอกความครอบคลุมของตัวเองไม่ได้ ทำให้คนอ่านเชื่อในสิ่งที่มันไม่ได้บอก\n\nยืนยันตัวตนด้วยคุกกี้เซสชัน `httpOnly` (ADR-003) — ไม่มี API key"
+  },
+  "servers": [
+    {
+      "url": "/api/v1"
+    }
+  ],
+  "paths": {
+    "/admin/audit": {
+      "get": {
+        "operationId": "AuditController_list",
+        "tags": [
+          "admin"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/admin/calendars": {
+      "get": {
+        "operationId": "CalendarController_list",
+        "tags": [
+          "admin"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/admin/calendars/{id}/years/{year}": {
+      "get": {
+        "operationId": "CalendarController_year",
+        "tags": [
+          "admin"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "year",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      },
+      "post": {
+        "operationId": "CalendarController_save",
+        "tags": [
+          "admin"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "year",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/admin/calendars/{id}/years/{year}/verify": {
+      "post": {
+        "operationId": "CalendarController_verify",
+        "tags": [
+          "admin"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "year",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/admin/catalog": {
+      "get": {
+        "operationId": "CatalogAdminController_list",
+        "tags": [
+          "admin"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/admin/catalog/categories": {
+      "post": {
+        "operationId": "CatalogAdminController_addCategory",
+        "tags": [
+          "admin"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/admin/catalog/categories/{id}": {
+      "delete": {
+        "operationId": "CatalogAdminController_removeCategory",
+        "tags": [
+          "admin"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/admin/catalog/items": {
+      "post": {
+        "operationId": "CatalogAdminController_addItem",
+        "tags": [
+          "admin"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/admin/catalog/items/{id}/active": {
+      "post": {
+        "operationId": "CatalogAdminController_setActive",
+        "tags": [
+          "admin"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/admin/fields": {
+      "get": {
+        "operationId": "FieldAdminController_list",
+        "tags": [
+          "admin"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      },
+      "post": {
+        "operationId": "FieldAdminController_create",
+        "tags": [
+          "admin"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/admin/fields/{id}/config": {
+      "post": {
+        "operationId": "FieldAdminController_setConfig",
+        "tags": [
+          "admin"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/admin/fields/{id}/options": {
+      "post": {
+        "operationId": "FieldAdminController_options",
+        "tags": [
+          "admin"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/admin/fields/{id}/remove": {
+      "post": {
+        "operationId": "FieldAdminController_remove",
+        "tags": [
+          "admin"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/admin/fields/config": {
+      "get": {
+        "operationId": "FieldAdminController_config",
+        "tags": [
+          "admin"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/admin/issue-types": {
+      "get": {
+        "operationId": "IssueTypeController_list",
+        "tags": [
+          "admin"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      },
+      "post": {
+        "operationId": "IssueTypeController_create",
+        "tags": [
+          "admin"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/admin/issue-types/{id}/bind": {
+      "post": {
+        "operationId": "IssueTypeController_bind",
+        "tags": [
+          "admin"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/admin/issue-types/{id}/remove": {
+      "post": {
+        "operationId": "IssueTypeController_remove",
+        "tags": [
+          "admin"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/admin/projects": {
+      "get": {
+        "operationId": "ProjectAdminController_list",
+        "tags": [
+          "admin"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      },
+      "post": {
+        "operationId": "ProjectAdminController_create",
+        "tags": [
+          "admin"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/admin/projects/{key}": {
+      "get": {
+        "operationId": "ProjectAdminController_detail",
+        "tags": [
+          "admin"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/admin/projects/{key}/permissions": {
+      "post": {
+        "operationId": "ProjectAdminController_setPermission",
+        "tags": [
+          "admin"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/admin/projects/{key}/scheme": {
+      "post": {
+        "operationId": "ProjectAdminController_assignScheme",
+        "tags": [
+          "admin"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/admin/projects/{key}/sla": {
+      "post": {
+        "operationId": "ProjectAdminController_createPolicy",
+        "tags": [
+          "admin"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/admin/projects/{key}/sla/goals": {
+      "post": {
+        "operationId": "ProjectAdminController_addGoal",
+        "tags": [
+          "admin"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/admin/projects/{key}/sla/goals/{goalId}/move": {
+      "post": {
+        "operationId": "ProjectAdminController_moveGoal",
+        "tags": [
+          "admin"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "goalId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/admin/projects/{key}/sla/goals/{goalId}/remove": {
+      "post": {
+        "operationId": "ProjectAdminController_dropGoal",
+        "tags": [
+          "admin"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "goalId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/admin/projects/{key}/sla/goals/{goalId}/target": {
+      "post": {
+        "operationId": "ProjectAdminController_setGoalTarget",
+        "tags": [
+          "admin"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "goalId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/admin/projects/new/options": {
+      "get": {
+        "operationId": "ProjectAdminController_options",
+        "tags": [
+          "admin"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/admin/projects/schemes": {
+      "post": {
+        "operationId": "ProjectAdminController_addScheme",
+        "tags": [
+          "admin"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/admin/projects/schemes/{schemeId}/remove": {
+      "post": {
+        "operationId": "ProjectAdminController_dropScheme",
+        "tags": [
+          "admin"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "parameters": [
+          {
+            "name": "schemeId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/admin/resolutions": {
+      "get": {
+        "operationId": "LookupController_list",
+        "tags": [
+          "admin"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      },
+      "post": {
+        "operationId": "LookupController_create",
+        "tags": [
+          "admin"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/admin/resolutions/{id}/active": {
+      "post": {
+        "operationId": "LookupController_active",
+        "tags": [
+          "admin"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/admin/resolutions/{id}/rename": {
+      "post": {
+        "operationId": "LookupController_rename",
+        "tags": [
+          "admin"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/admin/users": {
+      "get": {
+        "operationId": "UserAdminController_list",
+        "tags": [
+          "admin"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      },
+      "post": {
+        "operationId": "UserAdminController_create",
+        "tags": [
+          "admin"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/admin/users/{id}/active": {
+      "post": {
+        "operationId": "UserAdminController_setActiveState",
+        "tags": [
+          "admin"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/admin/users/{id}/groups": {
+      "post": {
+        "operationId": "UserAdminController_updateGroups",
+        "tags": [
+          "admin"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/admin/users/{id}/password": {
+      "post": {
+        "operationId": "UserAdminController_resetPassword",
+        "tags": [
+          "admin"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/admin/users/groups": {
+      "get": {
+        "operationId": "UserAdminController_groups",
+        "tags": [
+          "admin"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/admin/workflows": {
+      "get": {
+        "operationId": "WorkflowAdminController_list",
+        "tags": [
+          "admin"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      },
+      "post": {
+        "operationId": "WorkflowAdminController_create",
+        "tags": [
+          "admin"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/admin/workflows/{id}": {
+      "get": {
+        "operationId": "WorkflowAdminController_detail",
+        "tags": [
+          "admin"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/admin/workflows/{id}/statuses": {
+      "post": {
+        "operationId": "WorkflowAdminController_status",
+        "tags": [
+          "admin"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/admin/workflows/{id}/statuses/{statusId}/initial": {
+      "post": {
+        "operationId": "WorkflowAdminController_initial",
+        "tags": [
+          "admin"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "statusId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/admin/workflows/{id}/statuses/{statusId}/remove": {
+      "post": {
+        "operationId": "WorkflowAdminController_dropStatus",
+        "tags": [
+          "admin"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "statusId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/admin/workflows/{id}/transitions": {
+      "post": {
+        "operationId": "WorkflowAdminController_transition",
+        "tags": [
+          "admin"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/admin/workflows/{id}/transitions/{transitionId}/remove": {
+      "post": {
+        "operationId": "WorkflowAdminController_dropTransition",
+        "tags": [
+          "admin"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "transitionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/admin/workflows/{id}/transitions/{transitionId}/rules": {
+      "post": {
+        "operationId": "WorkflowAdminController_addRule",
+        "tags": [
+          "admin"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "transitionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/admin/workflows/{id}/transitions/{transitionId}/rules/{ruleId}/remove": {
+      "post": {
+        "operationId": "WorkflowAdminController_dropRule",
+        "tags": [
+          "admin"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "transitionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "ruleId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/auth/login": {
+      "post": {
+        "operationId": "IdentityController_signIn",
+        "tags": [
+          "auth"
+        ],
+        "summary": "เข้าสู่ระบบ — ตอบด้วยคุกกี้เซสชัน `httpOnly` ไม่ใช่โทเคนในเนื้อหา",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "email",
+                  "password"
+                ],
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "format": "email"
+                  },
+                  "password": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "เข้าสู่ระบบสำเร็จ — คุกกี้อยู่ในหัว `Set-Cookie`"
+          },
+          "401": {
+            "description": "อีเมลหรือรหัสผ่านไม่ถูกต้อง — ข้อความไม่บอกว่าผิดข้อไหน"
+          },
+          "429": {
+            "description": "พยายามถี่เกินไป"
+          }
+        },
+        "x-documented": true
+      }
+    },
+    "/auth/logout": {
+      "post": {
+        "operationId": "IdentityController_signOut",
+        "tags": [
+          "auth"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/auth/logout-all": {
+      "post": {
+        "operationId": "IdentityController_signOutEverywhere",
+        "tags": [
+          "auth"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/auth/me": {
+      "get": {
+        "operationId": "IdentityController_me",
+        "tags": [
+          "auth"
+        ],
+        "summary": "ผู้ใช้ที่เซสชันนี้เป็นเจ้าของ",
+        "responses": {
+          "200": {
+            "description": "ข้อมูลผู้ใช้"
+          },
+          "401": {
+            "description": "ยังไม่ได้เข้าสู่ระบบ"
+          }
+        },
+        "x-documented": true
+      }
+    },
+    "/automation/rules": {
+      "get": {
+        "operationId": "AutomationController_rules",
+        "tags": [
+          "automation"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      },
+      "post": {
+        "operationId": "AutomationController_create",
+        "tags": [
+          "automation"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/automation/rules/{id}": {
+      "delete": {
+        "operationId": "AutomationController_remove",
+        "tags": [
+          "automation"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      },
+      "post": {
+        "operationId": "AutomationController_update",
+        "tags": [
+          "automation"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/automation/rules/{id}/enabled": {
+      "post": {
+        "operationId": "AutomationController_toggle",
+        "tags": [
+          "automation"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/automation/runs": {
+      "get": {
+        "operationId": "AutomationController_runs",
+        "tags": [
+          "automation"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/automation/vocabulary": {
+      "get": {
+        "operationId": "AutomationController_vocabulary",
+        "tags": [
+          "automation"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/boards/{projectKey}": {
+      "get": {
+        "operationId": "BoardController_board",
+        "tags": [
+          "boards"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "parameters": [
+          {
+            "name": "projectKey",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/boards/{projectKey}/move": {
+      "post": {
+        "operationId": "BoardController_move",
+        "tags": [
+          "boards"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "parameters": [
+          {
+            "name": "projectKey",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/boards/{projectKey}/rebalance": {
+      "post": {
+        "operationId": "BoardController_rebalance",
+        "tags": [
+          "boards"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "parameters": [
+          {
+            "name": "projectKey",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/catalog": {
+      "get": {
+        "operationId": "CatalogController_browse",
+        "tags": [
+          "catalog"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/catalog/{id}": {
+      "get": {
+        "operationId": "CatalogController_item",
+        "tags": [
+          "catalog"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/change-calendar": {
+      "get": {
+        "operationId": "ChangeCalendarController_list",
+        "tags": [
+          "change-calendar"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/change-freezes": {
+      "get": {
+        "operationId": "ChangeFreezeController_list",
+        "tags": [
+          "change-freezes"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      },
+      "post": {
+        "operationId": "ChangeFreezeController_create",
+        "tags": [
+          "change-freezes"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/change-freezes/{id}": {
+      "delete": {
+        "operationId": "ChangeFreezeController_remove",
+        "tags": [
+          "change-freezes"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      },
+      "put": {
+        "operationId": "ChangeFreezeController_update",
+        "tags": [
+          "change-freezes"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/config-items": {
+      "get": {
+        "operationId": "CmdbController_list",
+        "tags": [
+          "config-items"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      },
+      "post": {
+        "operationId": "CmdbController_create",
+        "tags": [
+          "config-items"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/config-items/{id}": {
+      "delete": {
+        "operationId": "CmdbController_remove",
+        "tags": [
+          "config-items"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      },
+      "put": {
+        "operationId": "CmdbController_update",
+        "tags": [
+          "config-items"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/config-items/{id}/dependencies": {
+      "post": {
+        "operationId": "CmdbController_addDep",
+        "tags": [
+          "config-items"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/config-items/{id}/dependencies/{dependsOnId}": {
+      "delete": {
+        "operationId": "CmdbController_dropDep",
+        "tags": [
+          "config-items"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "dependsOnId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/config-items/{id}/impact": {
+      "get": {
+        "operationId": "CmdbController_impact",
+        "tags": [
+          "config-items"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/dashboards": {
+      "get": {
+        "operationId": "DashboardController_list",
+        "tags": [
+          "dashboards"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      },
+      "post": {
+        "operationId": "DashboardController_create",
+        "tags": [
+          "dashboards"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/dashboards/{id}": {
+      "delete": {
+        "operationId": "DashboardController_remove",
+        "tags": [
+          "dashboards"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      },
+      "get": {
+        "operationId": "DashboardController_open",
+        "tags": [
+          "dashboards"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      },
+      "put": {
+        "operationId": "DashboardController_update",
+        "tags": [
+          "dashboards"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/dashboards/{id}/gadgets": {
+      "post": {
+        "operationId": "DashboardController_add",
+        "tags": [
+          "dashboards"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/dashboards/{id}/gadgets/{gadgetId}": {
+      "delete": {
+        "operationId": "DashboardController_drop",
+        "tags": [
+          "dashboards"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "gadgetId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/dashboards/{id}/gadgets/{gadgetId}/move": {
+      "post": {
+        "operationId": "DashboardController_move",
+        "tags": [
+          "dashboards"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "gadgetId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/filters": {
+      "get": {
+        "operationId": "SavedFilterController_list",
+        "tags": [
+          "filters"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      },
+      "post": {
+        "operationId": "SavedFilterController_create",
+        "tags": [
+          "filters"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/filters/{id}": {
+      "delete": {
+        "operationId": "SavedFilterController_remove",
+        "tags": [
+          "filters"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      },
+      "post": {
+        "operationId": "SavedFilterController_update",
+        "tags": [
+          "filters"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/health": {
+      "get": {
+        "operationId": "HealthController_check",
+        "tags": [
+          "health"
+        ],
+        "summary": "ระบบพร้อมใช้งานไหม — ตรวจฐานข้อมูล ดัชนีค้นหา และคิว",
+        "responses": {
+          "200": {
+            "description": "ทุกอย่างปกติ",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "ok",
+                        "degraded"
+                      ]
+                    },
+                    "checks": {
+                      "type": "object",
+                      "additionalProperties": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "มีบางส่วนใช้งานไม่ได้ — รายละเอียดอยู่ใน `checks`"
+          }
+        },
+        "x-documented": true
+      }
+    },
+    "/knowledge": {
+      "get": {
+        "operationId": "KnowledgeController_search",
+        "tags": [
+          "knowledge"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      },
+      "post": {
+        "operationId": "KnowledgeController_create",
+        "tags": [
+          "knowledge"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/knowledge/{id}": {
+      "delete": {
+        "operationId": "KnowledgeController_remove",
+        "tags": [
+          "knowledge"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      },
+      "get": {
+        "operationId": "KnowledgeController_read",
+        "tags": [
+          "knowledge"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      },
+      "patch": {
+        "operationId": "KnowledgeController_update",
+        "tags": [
+          "knowledge"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/me/password": {
+      "post": {
+        "operationId": "SelfServiceController_changePassword",
+        "tags": [
+          "me"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/notification-settings/admin/audience": {
+      "get": {
+        "operationId": "NotificationSettingsController_audience",
+        "tags": [
+          "notification-settings"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      },
+      "post": {
+        "operationId": "NotificationSettingsController_setAudience",
+        "tags": [
+          "notification-settings"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/notification-settings/admin/switches": {
+      "get": {
+        "operationId": "NotificationSettingsController_adminSwitches",
+        "tags": [
+          "notification-settings"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      },
+      "post": {
+        "operationId": "NotificationSettingsController_setSwitch",
+        "tags": [
+          "notification-settings"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/notification-settings/me/preferences": {
+      "get": {
+        "operationId": "NotificationSettingsController_mine",
+        "tags": [
+          "notification-settings"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      },
+      "post": {
+        "operationId": "NotificationSettingsController_setMine",
+        "tags": [
+          "notification-settings"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/notifications": {
+      "get": {
+        "operationId": "NotificationController_list",
+        "tags": [
+          "notifications"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/notifications/{id}/read": {
+      "post": {
+        "operationId": "NotificationController_markRead",
+        "tags": [
+          "notifications"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/notifications/read-all": {
+      "post": {
+        "operationId": "NotificationController_markAllRead",
+        "tags": [
+          "notifications"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/openapi.json": {
+      "get": {
+        "operationId": "OpenApiController_spec",
+        "tags": [
+          "openapi.json"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/reports/summary": {
+      "get": {
+        "operationId": "ReportController_summary",
+        "tags": [
+          "reports"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/reports/time": {
+      "get": {
+        "operationId": "ReportController_time",
+        "tags": [
+          "reports"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/webhooks": {
+      "get": {
+        "operationId": "WebhookController_list",
+        "tags": [
+          "webhooks"
+        ],
+        "summary": "ปลายทางที่รับเหตุการณ์ออกไป — **ไม่มีความลับในคำตอบ**",
+        "responses": {
+          "200": {
+            "description": "รายการปลายทางและตัวเลือกเหตุการณ์"
+          },
+          "403": {
+            "description": "เฉพาะผู้ดูแลองค์กร"
+          }
+        },
+        "x-documented": true
+      },
+      "post": {
+        "operationId": "WebhookController_create",
+        "tags": [
+          "webhooks"
+        ],
+        "summary": "เพิ่มปลายทาง — ความลับอยู่ในคำตอบครั้งนี้ครั้งเดียว อ่านซ้ำไม่ได้",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "name",
+                  "url",
+                  "events"
+                ],
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "url": {
+                    "type": "string",
+                    "description": "http หรือ https · ที่อยู่ในวงแลนใช้ได้"
+                  },
+                  "events": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "enum": [
+                        "item.created",
+                        "item.transitioned",
+                        "comment.added",
+                        "sla.breached",
+                        "item.idle"
+                      ]
+                    },
+                    "description": "รายการว่าง = ไม่รับอะไรเลย ไม่ใช่ \"เอาหมด\""
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "สร้างแล้ว",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "secret": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "เฉพาะผู้ดูแลองค์กร"
+          },
+          "422": {
+            "description": "ชื่อซ้ำ ที่อยู่ใช้ไม่ได้ หรือเหตุการณ์ที่ไม่รู้จัก"
+          }
+        },
+        "x-documented": true
+      }
+    },
+    "/webhooks/{id}": {
+      "delete": {
+        "operationId": "WebhookController_remove",
+        "tags": [
+          "webhooks"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      },
+      "put": {
+        "operationId": "WebhookController_update",
+        "tags": [
+          "webhooks"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/webhooks/{id}/rotate": {
+      "post": {
+        "operationId": "WebhookController_rotate",
+        "tags": [
+          "webhooks"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/work-items": {
+      "get": {
+        "operationId": "WorkItemController_list",
+        "tags": [
+          "work-items"
+        ],
+        "summary": "ค้นหางาน — รับ HQL ผ่าน `q` และแบ่งหน้าด้วย `page`",
+        "responses": {
+          "200": {
+            "description": "รายการงานตามขอบเขตที่ผู้เรียกมีสิทธิ์เห็น",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "rows": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "itemKey": {
+                            "type": "string",
+                            "examples": [
+                              "SD-1024"
+                            ]
+                          },
+                          "summary": {
+                            "type": "string"
+                          },
+                          "statusName": {
+                            "type": "string"
+                          },
+                          "statusCategory": {
+                            "type": "string",
+                            "enum": [
+                              "TODO",
+                              "IN_PROGRESS",
+                              "DONE"
+                            ]
+                          },
+                          "priorityName": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "assignee": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "createdAt": {
+                            "type": "string",
+                            "format": "date-time"
+                          }
+                        }
+                      }
+                    },
+                    "total": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ไม่มีโปรเจกต์ไหนที่เปิดดูได้"
+          }
+        },
+        "x-documented": true
+      },
+      "post": {
+        "operationId": "WorkItemController_create",
+        "tags": [
+          "work-items"
+        ],
+        "summary": "แจ้งเรื่องใหม่",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "projectKey",
+                  "summary"
+                ],
+                "properties": {
+                  "projectKey": {
+                    "type": "string",
+                    "examples": [
+                      "SD"
+                    ]
+                  },
+                  "summary": {
+                    "type": "string",
+                    "maxLength": 500
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "issueTypeId": {
+                    "type": "string"
+                  },
+                  "priorityId": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "สร้างแล้ว",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "itemKey": {
+                      "type": "string",
+                      "examples": [
+                        "SD-1024"
+                      ]
+                    },
+                    "summary": {
+                      "type": "string"
+                    },
+                    "statusName": {
+                      "type": "string"
+                    },
+                    "statusCategory": {
+                      "type": "string",
+                      "enum": [
+                        "TODO",
+                        "IN_PROGRESS",
+                        "DONE"
+                      ]
+                    },
+                    "priorityName": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "assignee": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "createdAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ไม่มีสิทธิ์สร้างงานในโปรเจกต์นี้"
+          },
+          "422": {
+            "description": "ข้อมูลไม่ครบหรือใช้ไม่ได้"
+          }
+        },
+        "x-documented": true
+      }
+    },
+    "/work-items/{key}": {
+      "get": {
+        "operationId": "WorkItemController_detail",
+        "tags": [
+          "work-items"
+        ],
+        "summary": "รายละเอียดงานหนึ่งใบ",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "รายละเอียด",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "itemKey": {
+                      "type": "string",
+                      "examples": [
+                        "SD-1024"
+                      ]
+                    },
+                    "summary": {
+                      "type": "string"
+                    },
+                    "statusName": {
+                      "type": "string"
+                    },
+                    "statusCategory": {
+                      "type": "string",
+                      "enum": [
+                        "TODO",
+                        "IN_PROGRESS",
+                        "DONE"
+                      ]
+                    },
+                    "priorityName": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "assignee": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "createdAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ไม่มีสิทธิ์เปิดดูโปรเจกต์นี้"
+          },
+          "404": {
+            "description": "ไม่พบงาน"
+          }
+        },
+        "x-documented": true
+      }
+    },
+    "/work-items/{key}/approvals": {
+      "get": {
+        "operationId": "ApprovalController_list",
+        "tags": [
+          "work-items"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      },
+      "post": {
+        "operationId": "ApprovalController_request",
+        "tags": [
+          "work-items"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/work-items/{key}/approvals/decision": {
+      "post": {
+        "operationId": "ApprovalController_decide",
+        "tags": [
+          "work-items"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/work-items/{key}/articles": {
+      "post": {
+        "operationId": "WorkItemController_attachArticleToItem",
+        "tags": [
+          "work-items"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/work-items/{key}/articles/{articleId}": {
+      "delete": {
+        "operationId": "WorkItemController_detachArticleFromItem",
+        "tags": [
+          "work-items"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "articleId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/work-items/{key}/assign": {
+      "post": {
+        "operationId": "WorkItemController_assign",
+        "tags": [
+          "work-items"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/work-items/{key}/assignable": {
+      "get": {
+        "operationId": "WorkItemController_assignable",
+        "tags": [
+          "work-items"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/work-items/{key}/attachments": {
+      "get": {
+        "operationId": "WorkItemController_attachments",
+        "tags": [
+          "work-items"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      },
+      "post": {
+        "operationId": "WorkItemController_upload",
+        "tags": [
+          "work-items"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/work-items/{key}/change-window": {
+      "delete": {
+        "operationId": "ChangeWindowController_clear",
+        "tags": [
+          "work-items"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      },
+      "get": {
+        "operationId": "ChangeWindowController_get",
+        "tags": [
+          "work-items"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      },
+      "put": {
+        "operationId": "ChangeWindowController_set",
+        "tags": [
+          "work-items"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/work-items/{key}/comments": {
+      "get": {
+        "operationId": "WorkItemController_comments",
+        "tags": [
+          "work-items"
+        ],
+        "summary": "ความเห็นของงาน — บันทึกภายในจะไม่ถูกส่งให้คนที่ไม่มีสิทธิ์เห็น",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "รายการความเห็น"
+          },
+          "404": {
+            "description": "ไม่พบงาน"
+          }
+        },
+        "x-documented": true
+      },
+      "post": {
+        "operationId": "WorkItemController_comment",
+        "tags": [
+          "work-items"
+        ],
+        "summary": "เพิ่มความเห็น",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "body"
+                ],
+                "properties": {
+                  "body": {
+                    "type": "string"
+                  },
+                  "isInternal": {
+                    "type": "boolean",
+                    "description": "บันทึกภายใน — ผู้แจ้งไม่เห็น"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "เพิ่มแล้ว"
+          },
+          "403": {
+            "description": "ไม่มีสิทธิ์"
+          },
+          "404": {
+            "description": "ไม่พบงาน"
+          }
+        },
+        "x-documented": true
+      }
+    },
+    "/work-items/{key}/comments/{commentId}": {
+      "delete": {
+        "operationId": "WorkItemController_removeComment",
+        "tags": [
+          "work-items"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "commentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      },
+      "patch": {
+        "operationId": "WorkItemController_editComment",
+        "tags": [
+          "work-items"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "commentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/work-items/{key}/config-items": {
+      "get": {
+        "operationId": "WorkItemCiController_list",
+        "tags": [
+          "work-items"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      },
+      "post": {
+        "operationId": "WorkItemCiController_attach",
+        "tags": [
+          "work-items"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/work-items/{key}/config-items/{ciId}": {
+      "delete": {
+        "operationId": "WorkItemCiController_detach",
+        "tags": [
+          "work-items"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "ciId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/work-items/{key}/edit": {
+      "post": {
+        "operationId": "WorkItemController_edit",
+        "tags": [
+          "work-items"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/work-items/{key}/estimate": {
+      "post": {
+        "operationId": "WorkItemController_estimate",
+        "tags": [
+          "work-items"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/work-items/{key}/links": {
+      "post": {
+        "operationId": "WorkItemController_addLink",
+        "tags": [
+          "work-items"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/work-items/{key}/links/{linkId}": {
+      "delete": {
+        "operationId": "WorkItemController_removeLink",
+        "tags": [
+          "work-items"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "linkId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/work-items/{key}/mentionable": {
+      "get": {
+        "operationId": "WorkItemController_mentionable",
+        "tags": [
+          "work-items"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/work-items/{key}/parent": {
+      "post": {
+        "operationId": "WorkItemController_setItemParent",
+        "tags": [
+          "work-items"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/work-items/{key}/problem-impact": {
+      "get": {
+        "operationId": "WorkItemController_problemImpact",
+        "tags": [
+          "work-items"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/work-items/{key}/rating": {
+      "post": {
+        "operationId": "WorkItemController_rate",
+        "tags": [
+          "work-items"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/work-items/{key}/time": {
+      "get": {
+        "operationId": "WorkItemController_time",
+        "tags": [
+          "work-items"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      },
+      "post": {
+        "operationId": "WorkItemController_addWorkLog",
+        "tags": [
+          "work-items"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/work-items/{key}/time/{logId}": {
+      "delete": {
+        "operationId": "WorkItemController_removeWorkLog",
+        "tags": [
+          "work-items"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "logId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/work-items/{key}/transitions/{transitionId}": {
+      "post": {
+        "operationId": "WorkItemController_transition",
+        "tags": [
+          "work-items"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "transitionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/work-items/{key}/watch": {
+      "post": {
+        "operationId": "WorkItemController_setWatch",
+        "tags": [
+          "work-items"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/work-items/attachments/{id}": {
+      "delete": {
+        "operationId": "WorkItemController_removeAttachment",
+        "tags": [
+          "work-items"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/work-items/attachments/{id}/download": {
+      "get": {
+        "operationId": "WorkItemController_download",
+        "tags": [
+          "work-items"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/work-items/bulk": {
+      "post": {
+        "operationId": "WorkItemController_bulk",
+        "tags": [
+          "work-items"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/work-items/bulk/label-fields": {
+      "get": {
+        "operationId": "WorkItemController_bulkLabelFields",
+        "tags": [
+          "work-items"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/work-items/bulk/labels": {
+      "post": {
+        "operationId": "WorkItemController_bulkLabels",
+        "tags": [
+          "work-items"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/work-items/bulk/transition": {
+      "post": {
+        "operationId": "WorkItemController_bulkTransition",
+        "tags": [
+          "work-items"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/work-items/bulk/transitions": {
+      "post": {
+        "operationId": "WorkItemController_bulkTransitionChoices",
+        "tags": [
+          "work-items"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/work-items/options": {
+      "get": {
+        "operationId": "WorkItemController_options",
+        "tags": [
+          "work-items"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    }
+  }
+}

@@ -16,7 +16,8 @@
     "start": "node dist/main.js",
     "reindex": "dotenv -e ../../.env -- tsx src/scripts/reindex.ts",
     "seed:sla": "dotenv -e ../../.env -- tsx src/scripts/seed-sla.ts",
-    "recompute-sla": "dotenv -e ../../.env -- tsx src/scripts/recompute-sla.ts"
+    "recompute-sla": "dotenv -e ../../.env -- tsx src/scripts/recompute-sla.ts",
+    "openapi": "dotenv -e ../../.env -- tsx src/scripts/openapi.ts"
   },
   "devDependencies": {
     "@nestjs/testing": "^11.0.1",

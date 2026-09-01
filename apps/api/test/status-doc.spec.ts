@@ -76,12 +76,24 @@ describe('เอกสารสถานะ · ช่องหมายถูก
 });
 
 describe('เอกสารสถานะ · ตัวเลขที่นับจากซอร์สได้', () => {
+  /**
+   * นับจาก **สเปกที่ประกอบจาก metadata ของเราเตอร์** ไม่ใช่จากการนับข้อความ
+   *
+   * ตัวนับเดิมนับ `@Get(...)` ทุกที่ที่พบในไฟล์ controller · **รวมที่อยู่ใน
+   * คอมเมนต์ด้วย** — `workitem.controller.ts` มีคอมเมนต์เตือนว่า
+   * "ต้องประกาศก่อน `@Get(':key')`" ซึ่งถูกนับเป็นเส้นทางหนึ่งเส้น
+   * เอกสารจึงบอก 160 มาตลอด ทั้งที่เราเตอร์ให้บริการ 159 เส้น
+   *
+   * `docs/openapi.json` ถูกคอมมิตไว้และมี `openapi.spec.ts` คุมว่าตรงกับ
+   * metadata จริง — การนับจากที่นั่นจึงเป็นการนับจากสภาพจริง ไม่ใช่จากข้อความ
+   * ที่บังเอิญหน้าตาเหมือนโค้ด
+   */
   it('**จำนวน endpoint**', () => {
-    const files = walk(join(REPO, 'apps', 'api', 'src'), (f) => f.endsWith('.controller.ts'));
-    expect(files.length, 'หาไฟล์ controller ไม่เจอ — ตัวสแกนพัง').toBeGreaterThan(3);
-    const actual = files
-      .map((f) => (readFileSync(f, 'utf8').match(/@(Get|Post|Patch|Put|Delete)\(/g) ?? []).length)
-      .reduce((a, b) => a + b, 0);
+    const spec = JSON.parse(readFileSync(join(REPO, 'docs', 'openapi.json'), 'utf8')) as {
+      paths: Record<string, Record<string, unknown>>;
+    };
+    const actual = Object.values(spec.paths).reduce((a, byMethod) => a + Object.keys(byMethod).length, 0);
+    expect(actual, 'อ่านเส้นทางจากสเปกไม่เจอ — ไฟล์เสียหรือยังไม่ได้สร้าง').toBeGreaterThan(50);
     expect(numberBefore('endpoint')).toBe(actual);
   });
 
