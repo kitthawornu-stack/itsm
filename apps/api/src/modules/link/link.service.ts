@@ -20,6 +20,8 @@ import { systemClock, toUtcDate, type TenantContext, type UtcDate } from '@itsm/
 import { auditedTransaction } from '../../infrastructure/audit/audited-transaction';
 import { tenantScoped } from '../../infrastructure/prisma/tenant-scope';
 import { assertCan, browsableProjectIds } from '../permission';
+import { articlesOf } from '../knowledge';
+import { workaroundsFrom, type CausingProblem, type Workaround } from './known-error';
 import { summarizeImpact, type CausedIncident, type ProblemImpact } from './problem-impact';
 
 /** ชนิดของความสัมพันธ์ตามสคีมา — ตรงกับ enum `LinkType` */
@@ -372,4 +374,64 @@ export async function problemImpactOf(
     }));
 
   return { impact: summarizeImpact(incidents, now), incidents };
+}
+
+/**
+ * วิธีแก้จากปัญหาที่เป็นสาเหตุของเรื่องนี้
+ *
+ * ทิศตรงข้ามกับ `problemImpactOf` — ที่นั่นถามว่า "ปัญหาใบนี้ทำให้อะไรเกิดบ้าง"
+ * ที่นี่ถามว่า **"เรื่องใบนี้เกิดจากปัญหาอะไร และปัญหานั้นมีวิธีแก้แล้วหรือยัง"**
+ *
+ * คุณค่าทั้งหมดของ Known Error อยู่ตรงนี้: คนรับเรื่องใบใหม่เห็นคำตอบทันที
+ * โดยไม่ต้องรู้ว่ามีปัญหาใบนั้นอยู่ · คลังความรู้ที่ไม่มีใครเจอตอนต้องใช้
+ * ก็เป็นแค่โฟลเดอร์เอกสาร
+ *
+ * **ตัดปัญหาที่อยู่ในโปรเจกต์ซึ่งผู้ดูเข้าไม่ถึงออก** — กติกาเดียวกับ
+ * `problemImpactOf` · และการกรองบทความตามสิทธิ์ (ร่าง/ถูกลบ) ทำที่
+ * `articlesOf` ซึ่งกรองตอนอ่านทุกครั้ง ไม่ใช่เชื่อว่าตอนแนบกรองไปแล้ว
+ */
+export async function workaroundsFor(
+  ctx: TenantContext,
+  workItemId: bigint,
+): Promise<Workaround[]> {
+  /*
+    **ไม่มีทางลัด `allowed.length === 0`** ต่างจาก `problemImpactOf` ข้างบน —
+    ตัวกรองปลายทางให้คำตอบเดียวกันอยู่แล้ว และการมีทั้งสองอย่างทำให้ลบอันไหน
+    ออกเทสต์ก็ยังเขียว · ด่านเดียวต่อเรื่องเดียว (CLAUDE.md) · ราคาที่จ่ายคือ
+    คิวรีเดียวบนตารางความสัมพันธ์ ซึ่งคืนศูนย์แถวเกือบตลอดอยู่แล้ว
+  */
+  const allowed = await browsableProjectIds(ctx);
+
+  const rows = await tenantScoped(ctx).workItemLink.findMany({
+    where: { targetId: workItemId, type: 'CAUSES' },
+    select: {
+      source: {
+        select: {
+          id: true,
+          itemKey: true,
+          summary: true,
+          projectId: true,
+          status: { select: { category: true } },
+        },
+      },
+    },
+    orderBy: { id: 'asc' },
+  });
+
+  const visible = rows
+    .map((r) => r.source)
+    .filter((p) => allowed.some((id) => id === p.projectId));
+
+  const problems: CausingProblem[] = [];
+  for (const p of visible) {
+    const articles = await articlesOf(ctx, p.id);
+    problems.push({
+      itemKey: p.itemKey,
+      summary: p.summary,
+      // "ปิดแล้ว" ดูจากหมวดของสถานะ ไม่ใช่ `resolvedAt` — ให้ตรงกับที่หน้าคิวนับ
+      resolved: p.status.category === 'DONE',
+      articles: articles.map((a) => ({ id: a.id, title: a.title })),
+    });
+  }
+  return workaroundsFrom(problems);
 }

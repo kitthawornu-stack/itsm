@@ -147,6 +147,8 @@ import {
   linksOf,
   problemImpactOf,
   unlinkWorkItems,
+  workaroundsFor,
+  type Workaround,
 } from '../link';
 import {
   NotResolvedYetError,
@@ -1720,6 +1722,38 @@ export class WorkItemController {
         resolvedAt: i.resolvedAt?.toISOString() ?? null,
       })),
     };
+  }
+
+  /**
+   * วิธีแก้จากปัญหาที่เป็นสาเหตุ (Known Error)
+   *
+   * ทิศตรงข้ามกับ `problem-impact` — ที่นั่นถามจากฝั่งปัญหาว่าทำให้อะไรเกิดบ้าง
+   * ที่นี่ถามจากฝั่งเรื่องว่า **"เกิดจากปัญหาอะไร และปัญหานั้นมีวิธีแก้แล้วหรือยัง"**
+   *
+   * แยกจาก payload ของหน้ารายละเอียดเพราะต้องอ่านบทความของทุกปัญหาต้นทาง ·
+   * เรื่องส่วนใหญ่ไม่มีปัญหาต้นทางเลย การใส่ไว้ในเส้นทางหลักจึงเป็นค่าใช้จ่าย
+   * ที่ทุกใบต้องจ่ายเพื่อคำตอบว่าง
+   *
+   * ไม่มีวิธีแก้ ตอบ `[]` ไม่ใช่ 404 — "ยังไม่มีใครเขียนไว้" กับ "ไม่มีงานใบนี้"
+   * เป็นคนละคำตอบ
+   */
+  @Get(':key/workarounds')
+  async workarounds(
+    @Ctx() ctx: TenantContext,
+    @Param('key') key: string,
+  ): Promise<{ rows: Workaround[] }> {
+    const item = await tenantScoped(ctx).workItem.findFirst({
+      where: { itemKey: key },
+      select: { id: true, projectId: true },
+    });
+    if (item === null) {
+      throw new HttpException(
+        { error: 'not_found', message: `ไม่พบงาน ${key}` },
+        HttpStatus.NOT_FOUND,
+      );
+    }
+    await assertCan(ctx, item.projectId, 'BROWSE_PROJECT');
+    return { rows: await workaroundsFor(ctx, item.id) };
   }
 
   @Post(':key/links')
