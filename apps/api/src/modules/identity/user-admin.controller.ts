@@ -21,6 +21,18 @@ import { Ctx } from '../../infrastructure/http/session.guard';
 import { assertTenantAdmin } from '../permission';
 import { PASSWORD_MIN_LENGTH, WeakPasswordError } from './password';
 import {
+  AlreadyErasedError,
+  LastAdminError,
+  StillAssignedError,
+} from './personal-data';
+import {
+  UserNotFoundForPdpaError,
+  erasePersonalData,
+  exportPersonalData,
+  type ErasureResult,
+  type PersonalDataExport,
+} from './personal-data.service';
+import {
   CannotDeactivateSelfError,
   EmailInUseError,
   UserNotFoundError,
@@ -132,6 +144,44 @@ export class UserAdminController {
     }
   }
 
+  /**
+   * สำเนาข้อมูลส่วนบุคคล (PDPA · สิทธิเข้าถึง)
+   *
+   * `GET` เพราะเป็นการอ่านล้วน · **แต่ถูกบันทึกใน `audit_log` ไม่ได้**
+   * ด้วยกลไกปัจจุบันซึ่งผูกกับทรานแซกชันที่เขียนข้อมูล — ผู้ดูแลที่ดึงสำเนา
+   * ของคนอื่นจึงยังไม่มีร่องรอย · เขียนไว้ตรงนี้ให้เห็น ไม่ใช่ปล่อยให้คิดว่ามี
+   */
+  @Get(':id/personal-data')
+  async exportPersonal(
+    @Ctx() ctx: TenantContext,
+    @Param('id') id: string,
+  ): Promise<PersonalDataExport> {
+    try {
+      return await exportPersonalData(ctx, idOf(id));
+    } catch (e) {
+      return toPdpaHttp(e);
+    }
+  }
+
+  /**
+   * ทำให้เป็นนิรนามตามคำขอ (PDPA · สิทธิให้ลบ)
+   *
+   * **ไม่ลบแถว** — ประวัติของคนอื่นอ้างถึงคนคนนี้ · คำตอบมี `residual`
+   * ที่บอกว่าข้อมูลส่วนบุคคลอาจยังเหลืออยู่ตรงไหนบ้าง หน้าจอต้องแสดงเสมอ
+   */
+  @Post(':id/erase')
+  @HttpCode(HttpStatus.OK)
+  async erasePersonal(
+    @Ctx() ctx: TenantContext,
+    @Param('id') id: string,
+  ): Promise<ErasureResult> {
+    try {
+      return await erasePersonalData(ctx, idOf(id));
+    } catch (e) {
+      return toPdpaHttp(e);
+    }
+  }
+
   @Post(':id/groups')
   @HttpCode(HttpStatus.OK)
   async updateGroups(
@@ -169,4 +219,35 @@ export class SelfServiceController {
       toHttp(e);
     }
   }
+}
+
+function idOf(raw: string): bigint {
+  if (!/^[0-9]+$/.test(raw)) {
+    throw new HttpException(
+      { error: 'invalid_input', message: 'รหัสผู้ใช้ไม่ถูกต้อง' },
+      HttpStatus.UNPROCESSABLE_ENTITY,
+    );
+  }
+  return BigInt(raw);
+}
+
+function toPdpaHttp(e: unknown): never {
+  if (e instanceof UserNotFoundForPdpaError) {
+    throw new HttpException({ error: 'not_found', message: e.message }, HttpStatus.NOT_FOUND);
+  }
+  if (
+    e instanceof LastAdminError ||
+    e instanceof StillAssignedError ||
+    e instanceof AlreadyErasedError
+  ) {
+    /*
+      422 — คำขอถูกต้องตามรูปแบบ แต่สภาพตอนนี้ทำไม่ได้ · ข้อความบอกเหตุผล
+      เป็นภาษาคนพร้อมจำนวนอยู่แล้ว หน้าจอจึงแสดงตรง ๆ ได้
+    */
+    throw new HttpException(
+      { error: 'invalid_state', message: e.message },
+      HttpStatus.UNPROCESSABLE_ENTITY,
+    );
+  }
+  throw e;
 }

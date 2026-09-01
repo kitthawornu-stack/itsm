@@ -25,3 +25,22 @@ export {
   type ReapableSession,
 } from './session-reaper';
 export { reapSessions, type ReapResult } from './session-reaper.service';
+/* สิทธิเจ้าของข้อมูลตาม PDPA */
+export {
+  AlreadyErasedError,
+  ERASED_DOMAIN,
+  LastAdminError,
+  StillAssignedError,
+  assertErasable,
+  residualRisks,
+  tombstoneFor,
+  type ResidualRisk,
+} from './personal-data';
+export {
+  EXPORT_LIMIT,
+  UserNotFoundForPdpaError,
+  erasePersonalData,
+  exportPersonalData,
+  type ErasureResult,
+  type PersonalDataExport,
+} from './personal-data.service';
