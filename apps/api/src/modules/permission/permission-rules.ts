@@ -62,7 +62,6 @@ export type PermissionKey = (typeof ALL_PERMISSION_KEYS)[number];
  */
 export const UNENFORCED_PERMISSIONS: readonly PermissionKey[] = [
   'DELETE_ITEM',
-  'MANAGE_SPRINT',
   'MANAGE_PROJECT',
 ] as const;
 

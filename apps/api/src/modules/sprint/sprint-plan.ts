@@ -72,6 +72,21 @@ export class OneActiveSprintError extends Error {
 }
 
 /**
+ * สปรินต์ที่ปิดแล้ว **แตะไม่ได้อีก**
+ *
+ * แยกออกมาเป็นฟังก์ชันของตัวเอง เพราะเป็นคำถามคนละข้อกับ "เริ่มได้ไหม"
+ * และ "ปิดได้ไหม" · การเพิ่มงานเข้าสปรินต์ที่ยัง `planned` ต้องทำได้ —
+ * ตอนแรกเขียนโดยเรียก `assertCanComplete` มาใช้ซ้ำ แล้วมันปฏิเสธด้วย
+ * `NotStartedError` ซึ่งเป็นคำตอบของคำถามที่ไม่มีใครถาม
+ *
+ * เหตุผลที่ห้ามแตะ: ตัวเลขในรายงานของรอบที่ผ่านมาจะเปลี่ยนย้อนหลัง
+ * และไม่มีใครรู้ว่าตัวเลขที่เคยเห็นในที่ประชุมเป็นตัวไหน
+ */
+export function assertNotClosed(sprint: SprintSnapshot): void {
+  if (sprint.state === 'completed') throw new SprintClosedError(sprint.id);
+}
+
+/**
  * เริ่มสปรินต์นี้ได้ไหม
  *
  * **ทีมเดียวทำได้ทีละรอบ** — สองสปรินต์ที่ทำพร้อมกันทำให้คำถาม
@@ -81,7 +96,7 @@ export function assertCanStart(
   sprint: SprintSnapshot,
   othersInSameScope: readonly SprintSnapshot[],
 ): void {
-  if (sprint.state === 'completed') throw new SprintClosedError(sprint.id);
+  assertNotClosed(sprint);
   if (sprint.state === 'active') throw new AlreadyStartedError(sprint.id);
 
   /*
@@ -95,7 +110,7 @@ export function assertCanStart(
 }
 
 export function assertCanComplete(sprint: SprintSnapshot): void {
-  if (sprint.state === 'completed') throw new SprintClosedError(sprint.id);
+  assertNotClosed(sprint);
   if (sprint.state !== 'active') throw new NotStartedError(sprint.id);
 }
 

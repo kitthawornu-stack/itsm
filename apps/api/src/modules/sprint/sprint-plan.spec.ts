@@ -23,6 +23,7 @@ import {
   SprintClosedError,
   assertCanComplete,
   assertCanStart,
+  assertNotClosed,
   commitmentOf,
   completionOf,
   velocityOf,
@@ -91,6 +92,35 @@ describe('สปรินต์ · A · เริ่มได้เมื่อ�
     expect(() => {
       assertCanStart(sprint(), others);
     }).not.toThrow();
+  });
+});
+
+// ============================================================
+
+describe('สปรินต์ · A2 · ปิดแล้วแตะไม่ได้', () => {
+  /**
+   * คำถามคนละข้อกับ "เริ่มได้ไหม" และ "ปิดได้ไหม"
+   *
+   * เคยเขียนโดยเรียก `assertCanComplete` มาใช้ซ้ำ แล้วมันปฏิเสธสปรินต์ที่ยัง
+   * `planned` ด้วย `NotStartedError` — ซึ่งเป็นคำตอบของคำถามที่ไม่มีใครถาม
+   * และทำให้เพิ่มงานเข้าสปรินต์ที่ยังไม่เริ่มไม่ได้เลย
+   */
+  it('สปรินต์ที่ยังไม่เริ่ม แตะได้', () => {
+    expect(() => {
+      assertNotClosed(sprint());
+    }).not.toThrow();
+  });
+
+  it('สปรินต์ที่กำลังทำอยู่ แตะได้', () => {
+    expect(() => {
+      assertNotClosed(sprint({ state: 'active', startedAt: T0 }));
+    }).not.toThrow();
+  });
+
+  it('สปรินต์ที่ปิดแล้ว แตะไม่ได้', () => {
+    expect(() => {
+      assertNotClosed(sprint({ state: 'completed', completedAt: T1 }));
+    }).toThrow(SprintClosedError);
   });
 });
 

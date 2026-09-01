@@ -5,3 +5,4 @@
 // ESLint import/no-restricted-paths บังคับให้โมดูลอื่นเข้าถึงได้เฉพาะผ่านไฟล์นี้
 
 export * from './sprint-plan';
+export * from './sprint.service';

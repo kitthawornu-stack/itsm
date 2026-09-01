@@ -65,6 +65,7 @@ model Tenant {
   notificationAudienceRules NotificationAudienceRule[]
   webhooks                  Webhook[]
   webhookDeliveries         WebhookDelivery[]
+  sprints                   Sprint[]
 
   @@map("tenant")
 }
@@ -326,6 +327,7 @@ model Project {
   notificationRules         NotificationRule[]
   dashboardGadgets          DashboardGadget[]
   notificationAudienceRules NotificationAudienceRule[]
+  sprints                   Sprint[]
 
   @@unique([tenantId, key])
   @@index([tenantId, isArchived])
@@ -602,6 +604,11 @@ model WorkItem {
   // ต้องใช้ collation utf8mb4_bin — ตั้งใน migration แยก
   rank String @db.VarChar(255)
 
+  /// สปรินต์ที่งานใบนี้อยู่ — `null` = อยู่ใน backlog
+  ///
+  /// **งานที่ไม่มีสปรินต์ไม่ใช่งานที่หายไป** มันคือ backlog · การใช้ค่าพิเศษ
+  /// อย่าง "สปรินต์หมายเลข 0" แทน จะทำให้ทุกคิวรีต้องจำข้อยกเว้นนั้น
+  sprintId      BigInt?  @map("sprint_id")
   storyPoints   Decimal? @map("story_points") @db.Decimal(6, 2)
   timeOriginal  Int?     @map("time_original") // วินาที
   timeSpent     Int?     @map("time_spent") // วินาที
@@ -661,6 +668,7 @@ model WorkItem {
   notifications  Notification[]
   changeWindow   ChangeWindow?
   configItems    WorkItemCi[]
+  sprint         Sprint?              @relation(fields: [sprintId], references: [id], onDelete: SetNull)
 
   @@unique([tenantId, itemKey])
   @@index([tenantId, projectId, statusId])
@@ -673,6 +681,7 @@ model WorkItem {
   // EXPLAIN บนข้อมูลจริง 10,000 แถวชี้ว่า index สองตัวบนนี้ให้ filtered เพียง 7%
   // (สแกน 5,000 แถวเพื่อคืน 50) — index นี้ครอบทั้ง predicate และ ORDER BY
   @@index([tenantId, projectId, resolvedAt, updatedAt])
+  @@index([tenantId, sprintId])
   @@map("work_item")
 }
 
@@ -1829,4 +1838,53 @@ model WebhookDelivery {
   @@index([tenantId, state, nextAttemptAt])
   @@index([tenantId, webhookId, createdAt])
   @@map("webhook_delivery")
+}
+
+/// รอบการทำงานหนึ่งรอบ
+///
+/// **เก็บทั้งกำหนดการและเวลาที่เกิดขึ้นจริง แยกคอลัมน์กัน** — สปรินต์ที่วางไว้
+/// ว่าเริ่ม 1 ก.ย. แต่กดเริ่มจริงวันที่ 3 ตอบได้ทั้งสองคำถาม · ถ้าเก็บช่องเดียว
+/// จะตอบได้แค่คำถามเดียว และไม่มีใครรู้ว่าเป็นคำถามไหน
+/// (บทเรียนเดียวกับ `breachAt` กับ `breachedAt`)
+///
+/// **ภาพตอนเริ่มถูกเก็บไว้ถาวร** (`committed*`) เพราะรายการงานเปลี่ยนได้ตลอด
+/// สปรินต์ · ถ้าไม่เก็บ คำถาม "ทำได้ตามที่รับปากไหม" จะตอบไม่ได้ตลอดกาล
+model Sprint {
+  id        BigInt  @id @default(autoincrement())
+  tenantId  BigInt  @map("tenant_id")
+  /// สปรินต์เป็นของโปรเจกต์ — ทีมเดียวทำได้ทีละรอบ
+  projectId BigInt  @map("project_id")
+  name      String  @db.VarChar(128)
+  /// เป้าหมายของรอบ — ประโยคเดียวที่ตอบว่า "รอบนี้เราจะได้อะไร"
+  goal      String? @db.VarChar(500)
+
+  /// กำหนดการที่วางไว้
+  plannedStart DateTime? @map("planned_start") @db.DateTime(3)
+  plannedEnd   DateTime? @map("planned_end") @db.DateTime(3)
+  /// เวลาที่เกิดขึ้นจริง — `null` แปลว่ายังไม่เกิด
+  startedAt    DateTime? @map("started_at") @db.DateTime(3)
+  completedAt  DateTime? @map("completed_at") @db.DateTime(3)
+
+  /// "planned" | "active" | "completed" — ตรงกับ SprintState ใน sprint-plan.ts
+  state String @default("planned") @db.VarChar(16)
+
+  /// ภาพตอนกดเริ่ม — คำรับปาก · `null` แปลว่ายังไม่เคยเริ่ม
+  committedCount  Int?     @map("committed_count")
+  committedPoints Decimal? @map("committed_points") @db.Decimal(8, 2)
+  /// ผลตอนกดปิด
+  completedCount  Int?     @map("completed_count")
+  completedPoints Decimal? @map("completed_points") @db.Decimal(8, 2)
+  /// งานที่เพิ่มเข้ามาหลังเริ่ม — ตัวเลขที่ทำให้ "ทำเสร็จ N แต้ม" อ่านถูก
+  addedAfterStart Int?     @map("added_after_start")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.DateTime(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.DateTime(3)
+
+  tenant  Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  project Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  items   WorkItem[]
+
+  @@unique([projectId, name])
+  @@index([tenantId, projectId, state])
+  @@map("sprint")
 }
