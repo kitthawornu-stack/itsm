@@ -45,6 +45,11 @@ import {
   SprintController,
   StoryPointController,
 } from './modules/sprint/sprint.controller';
+import {
+  ItemVersionController,
+  ProjectVersionController,
+  VersionController,
+} from './modules/version/version.controller';
 import { OpenApiController } from './infrastructure/openapi/openapi.controller';
 import { WebhookController } from './modules/integration/webhook.controller';
 import { WebhookScheduler } from './modules/integration/webhook.scheduler';
@@ -94,6 +99,9 @@ import { WorkItemController } from './modules/workitem/workitem.controller';
     BacklogController,
     SprintController,
     StoryPointController,
+    ProjectVersionController,
+    VersionController,
+    ItemVersionController,
     KnowledgeController,
     BoardController,
     NotificationController,

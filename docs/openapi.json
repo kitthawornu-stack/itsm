@@ -3,7 +3,7 @@
   "info": {
     "title": "Helix — ศูนย์บริการไอที · REST API v1",
     "version": "1.0.0",
-    "description": "เส้นทางทั้งหมด 172 เส้น อ่านจาก metadata ของ Nest โดยตรง\nจึงตรงกับเส้นทางที่ระบบให้บริการจริงเสมอ\n\n**อธิบายรูปร่างข้อมูลไว้ 10 จาก 172 เส้นทาง**\nที่เหลือมีแค่เส้นทางกับเมธอด — ดูได้จากธง `x-documented: false` ในแต่ละรายการ\nสเปกที่บอกความครอบคลุมของตัวเองไม่ได้ ทำให้คนอ่านเชื่อในสิ่งที่มันไม่ได้บอก\n\nยืนยันตัวตนด้วยคุกกี้เซสชัน `httpOnly` (ADR-003) — ไม่มี API key"
+    "description": "เส้นทางทั้งหมด 180 เส้น อ่านจาก metadata ของ Nest โดยตรง\nจึงตรงกับเส้นทางที่ระบบให้บริการจริงเสมอ\n\n**อธิบายรูปร่างข้อมูลไว้ 10 จาก 180 เส้นทาง**\nที่เหลือมีแค่เส้นทางกับเมธอด — ดูได้จากธง `x-documented: false` ในแต่ละรายการ\nสเปกที่บอกความครอบคลุมของตัวเองไม่ได้ ทำให้คนอ่านเชื่อในสิ่งที่มันไม่ได้บอก\n\nยืนยันตัวตนด้วยคุกกี้เซสชัน `httpOnly` (ADR-003) — ไม่มี API key"
   },
   "servers": [
     {
@@ -2441,6 +2441,54 @@
         "x-documented": false
       }
     },
+    "/projects/{key}/versions": {
+      "get": {
+        "operationId": "ProjectVersionController_list",
+        "tags": [
+          "projects"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      },
+      "post": {
+        "operationId": "ProjectVersionController_create",
+        "tags": [
+          "projects"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
     "/reports/summary": {
       "get": {
         "operationId": "ReportController_summary",
@@ -2559,6 +2607,81 @@
         "operationId": "SprintController_start",
         "tags": [
           "sprints"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/versions/{id}/release": {
+      "post": {
+        "operationId": "VersionController_release",
+        "tags": [
+          "versions"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/versions/{id}/release-note": {
+      "get": {
+        "operationId": "VersionController_note",
+        "tags": [
+          "versions"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/versions/{id}/reopen": {
+      "post": {
+        "operationId": "VersionController_reopen",
+        "tags": [
+          "versions"
         ],
         "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
         "parameters": [
@@ -3908,6 +4031,87 @@
           },
           {
             "name": "transitionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/work-items/{key}/versions": {
+      "get": {
+        "operationId": "ItemVersionController_list",
+        "tags": [
+          "work-items"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      },
+      "post": {
+        "operationId": "ItemVersionController_add",
+        "tags": [
+          "work-items"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/work-items/{key}/versions/{versionId}": {
+      "delete": {
+        "operationId": "ItemVersionController_remove",
+        "tags": [
+          "work-items"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "versionId",
             "in": "path",
             "required": true,
             "schema": {
