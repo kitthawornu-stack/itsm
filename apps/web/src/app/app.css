@@ -3167,3 +3167,69 @@ tr[data-off='true'] td {
 tr[data-state='completed'] td {
   color: var(--text-muted);
 }
+
+/* ---------- วิธีแก้จากปัญหาที่เป็นสาเหตุ (Known Error) ---------- */
+
+/*
+  อยู่บนสุดของเนื้อหา และมีพื้นหลังของตัวเอง — ไม่ใช่เพื่อความสวย
+  แต่เพราะมันคือคำตอบที่ต้องอ่านก่อนลงมือ ไม่ใช่ข้อมูลประกอบที่ค่อยไล่อ่านทีหลัง
+*/
+.wka {
+  margin-bottom: var(--space-6);
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--status-info);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+}
+
+.wka .detail-section-title {
+  margin-top: 0;
+}
+
+.wka-lead {
+  margin: var(--space-2) 0 0;
+  color: var(--text-muted);
+  font-size: 12.5px;
+  line-height: var(--line-height-body);
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.wka-list {
+  list-style: none;
+  margin: var(--space-3) 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.wka-list li {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  line-height: var(--line-height-body);
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.wka-from {
+  color: var(--text-muted);
+  font-size: 12.5px;
+  line-height: var(--line-height-body);
+}
+
+/*
+  ป้าย "แก้ถาวรแล้ว" เป็นข้อมูล ไม่ใช่คำเตือน — ใช้สีข้อความรอง ไม่ใช่สีสถานะ ·
+  แต่มีขอบเพื่อให้แยกออกจากบรรทัดที่มาของบทความซึ่งอยู่ติดกัน
+*/
+.wka-resolved {
+  align-self: flex-start;
+  padding: 2px var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: var(--line-height-body);
+}

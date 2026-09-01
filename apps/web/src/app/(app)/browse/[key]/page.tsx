@@ -24,6 +24,7 @@ import { HierarchyPanel, type ChildRow, type ParentRow } from '@/components/hier
 import { LinkPanel, type LinkRow } from '@/components/link-panel';
 import { ItemCiPanel } from '@/components/item-ci-panel';
 import { ProblemImpactPanel } from '@/components/problem-impact-panel';
+import { WorkaroundPanel } from '@/components/workaround-panel';
 import { TimePanel } from '@/components/time-panel';
 import { WatchButton } from '@/components/watch-button';
 import { TransitionButtons } from '@/components/transition-buttons';
@@ -197,6 +198,13 @@ export default async function WorkItemDetail({
 
       <div className="detail-body">
         <section>
+          {/*
+            วิธีแก้ที่มีอยู่แล้วอยู่**เหนือ**รายละเอียด · คนรับเรื่องต้องเห็น
+            ก่อนลงมือ ไม่ใช่หลังจากไล่แก้เองเสร็จแล้ว — บทความที่อยู่ท้ายหน้า
+            เท่ากับไม่มี · แผงนี้ไม่ขึ้นเลยเมื่อไม่มีปัญหาต้นทางที่มีบทความ
+          */}
+          <WorkaroundPanel apiBase={API} itemKey={detail.itemKey} />
+
           {detail.description === null ? null : (
             <>
               <h2 className="detail-section-title">รายละเอียด</h2>
