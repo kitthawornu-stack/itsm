@@ -57,6 +57,7 @@ model Tenant {
   notifications             Notification[]
   changeWindows             ChangeWindow[]
   changeReviews             ChangeReview[]
+  importRecords             ImportRecord[]
   changeFreezes             ChangeFreeze[]
   configItems               ConfigurationItem[]
   ciDependencies            CiDependency[]
@@ -111,6 +112,7 @@ model User {
   notifications           Notification[]
   changeWindows           ChangeWindow[]
   createdVersions         ProjectVersion[]
+  importRecords           ImportRecord[]
   changeReviews           ChangeReview[]
   workLogs                WorkLog[]
 
@@ -677,6 +679,7 @@ model WorkItem {
   configItems    WorkItemCi[]
   sprint         Sprint?              @relation(fields: [sprintId], references: [id], onDelete: SetNull)
   versions       WorkItemVersion[]
+  importRecord   ImportRecord?
 
   @@unique([tenantId, itemKey])
   @@index([tenantId, projectId, statusId])
@@ -1917,6 +1920,38 @@ model WebhookDelivery {
 /// สถานะ "เลยกำหนดปล่อย" **ไม่ใช่คอลัมน์** — มันคือ "ยังไม่ปล่อย" ที่เลยวันนัด
 /// แล้ว · เก็บเป็นคอลัมน์แปลว่าต้องมีอะไรคอยอัปเดตทุกเที่ยงคืน และวันที่ลืมรัน
 /// ทุกรุ่นจะดูเหมือนยังตรงกำหนด
+/// ร่องรอยการนำเข้าจากระบบเดิม
+///
+/// **แยกตาราง ไม่ใช่คอลัมน์บน `work_item`** — การเพิ่มคอลัมน์ลงตารางที่มีหมื่นแถว
+/// ต้องใช้ gh-ost บน production (CLAUDE.md §3) ซึ่งไม่คุ้มกับข้อมูลที่ใช้เฉพาะ
+/// ตอนย้ายระบบ · และการเก็บแยกทำให้ตอบได้ว่า "ใครนำเข้าเมื่อไร" ซึ่งคอลัมน์
+/// เดี่ยว ๆ ตอบไม่ได้
+///
+/// มีไว้เพื่อ **นำเข้าซ้ำแล้วไม่สร้างซ้ำ** — คนจะรันไฟล์เดิมอีกรอบเสมอ
+/// ไม่ว่าจะตั้งใจหรือไม่
+model ImportRecord {
+  id       BigInt @id @default(autoincrement())
+  tenantId BigInt @map("tenant_id")
+
+  /// แหล่งที่มา เช่น "excel" — เผื่อวันหน้ามีที่อื่น
+  source      String @db.VarChar(32)
+  /// รหัสของเดิมในไฟล์ที่นำเข้า
+  externalKey String @map("external_key") @db.VarChar(128)
+
+  workItemId   BigInt   @unique @map("work_item_id")
+  importedById BigInt   @map("imported_by_id")
+  importedAt   DateTime @default(now()) @map("imported_at") @db.DateTime(3)
+
+  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  workItem   WorkItem @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+  /// `Restrict` — ต้องตอบได้เสมอว่าใครเป็นคนนำเข้าชุดนี้
+  importedBy User     @relation(fields: [importedById], references: [id], onDelete: Restrict)
+
+  /// ด่านสุดท้ายของการนำเข้าซ้ำ — อยู่ที่สคีมา ไม่ใช่ที่โค้ดอย่างเดียว
+  @@unique([tenantId, source, externalKey])
+  @@map("import_record")
+}
+
 model ProjectVersion {
   id        BigInt @id @default(autoincrement())
   tenantId  BigInt @map("tenant_id")

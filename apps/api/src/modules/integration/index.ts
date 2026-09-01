@@ -10,3 +10,5 @@ export * from './mail-source';
 export * from './intake-config';
 export * from './webhook-policy';
 export * from './webhook.service';
+export * from './csv-import';
+export * from './csv-import.service';

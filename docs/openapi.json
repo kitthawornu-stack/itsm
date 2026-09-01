@@ -3,7 +3,7 @@
   "info": {
     "title": "Helix — ศูนย์บริการไอที · REST API v1",
     "version": "1.0.0",
-    "description": "เส้นทางทั้งหมด 183 เส้น อ่านจาก metadata ของ Nest โดยตรง\nจึงตรงกับเส้นทางที่ระบบให้บริการจริงเสมอ\n\n**อธิบายรูปร่างข้อมูลไว้ 10 จาก 183 เส้นทาง**\nที่เหลือมีแค่เส้นทางกับเมธอด — ดูได้จากธง `x-documented: false` ในแต่ละรายการ\nสเปกที่บอกความครอบคลุมของตัวเองไม่ได้ ทำให้คนอ่านเชื่อในสิ่งที่มันไม่ได้บอก\n\nยืนยันตัวตนด้วยคุกกี้เซสชัน `httpOnly` (ADR-003) — ไม่มี API key"
+    "description": "เส้นทางทั้งหมด 185 เส้น อ่านจาก metadata ของ Nest โดยตรง\nจึงตรงกับเส้นทางที่ระบบให้บริการจริงเสมอ\n\n**อธิบายรูปร่างข้อมูลไว้ 10 จาก 185 เส้นทาง**\nที่เหลือมีแค่เส้นทางกับเมธอด — ดูได้จากธง `x-documented: false` ในแต่ละรายการ\nสเปกที่บอกความครอบคลุมของตัวเองไม่ได้ ทำให้คนอ่านเชื่อในสิ่งที่มันไม่ได้บอก\n\nยืนยันตัวตนด้วยคุกกี้เซสชัน `httpOnly` (ADR-003) — ไม่มี API key"
   },
   "servers": [
     {
@@ -2421,6 +2421,56 @@
     "/projects/{key}/backlog": {
       "get": {
         "operationId": "BacklogController_list",
+        "tags": [
+          "projects"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/projects/{key}/import": {
+      "post": {
+        "operationId": "CsvImportController_run",
+        "tags": [
+          "projects"
+        ],
+        "summary": "ยังไม่ได้เขียนคำอธิบาย — ดูโค้ดของ handler นี้",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "ยังไม่ได้อธิบายรูปร่างของคำตอบ"
+          }
+        },
+        "x-documented": false
+      }
+    },
+    "/projects/{key}/import/preview": {
+      "post": {
+        "operationId": "CsvImportController_preview",
         "tags": [
           "projects"
         ],
