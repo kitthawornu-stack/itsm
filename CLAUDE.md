@@ -38,7 +38,7 @@
 ## 2. สถาปัตยกรรม
 
 ```
-apps/api      NestJS 11 · modular monolith · 22 โมดูล (มีโค้ดจริง 20)
+apps/api      NestJS 11 · modular monolith · 22 โมดูล (มีโค้ดจริง 21)
 apps/web      Next.js 15 App Router · Agent Console + Service Portal + Admin
 apps/worker   BullMQ consumers · SLA timer, automation, indexer, email
 packages/ui   Design System + Storybook (26 คอมโพเนนต์ · 90 story)
@@ -54,9 +54,11 @@ infra/compose  Docker Compose สำหรับ dev และ on-prem bundle
 - โมดูลคุยกันผ่าน method call หรือ domain event เท่านั้น
 - **ห้าม JOIN ข้ามขอบเขตโมดูลใน SQL** — ต้องการข้อมูลจากอีกโมดูลให้เรียก service ของมัน
 - บังคับด้วย ESLint `import/no-restricted-paths`
-- **`sprint` และ `version` เป็นเปลือกเปล่า** (`export {}`) — สร้างไว้ล่วงหน้าตาม
-  ADR-004 ยังไม่มีโค้ดสักบรรทัด · อย่านับเป็นโมดูลที่ทำงานได้
+- **`version` ยังเป็นเปลือกเปล่า** (`export {}`) — สร้างไว้ล่วงหน้าตาม ADR-004
+  ยังไม่มีโค้ดสักบรรทัด · อย่านับเป็นโมดูลที่ทำงานได้
   (`status-doc.spec.ts` นับให้อัตโนมัติ ไม่ต้องจำเอง)
+- **`sprint` มีเอนจินแล้ว** (`sprint-plan.ts`) แต่ยังไม่มีตาราง ไม่มี service
+  และไม่มีหน้าจอ — เอนจินที่ยังไม่มีอะไรเรียก
 
 ### กลุ่มโมดูล
 
