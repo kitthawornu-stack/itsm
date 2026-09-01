@@ -3233,3 +3233,102 @@ tr[data-state='completed'] td {
   font-size: 12px;
   line-height: var(--line-height-body);
 }
+
+/* ---------- ระดับความเสี่ยงของการเปลี่ยนแปลง ---------- */
+
+.crk {
+  margin-top: var(--space-6);
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+}
+
+.crk .detail-section-title {
+  margin-top: 0;
+}
+
+.crk-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2) var(--space-3);
+}
+
+/*
+  ระดับเป็น **ข้อความ ไม่ใช่สีอย่างเดียว** — คนที่แยกสีไม่ออกต้องอ่านได้เท่ากัน
+  · สีเป็นตัวช่วยอ่านเร็ว ไม่ใช่ตัวเดียวที่บอกความหมาย
+*/
+.crk-level {
+  padding: 2px var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: var(--line-height-body);
+}
+
+.crk[data-level='LOW'] .crk-level {
+  color: var(--status-success);
+  border-color: var(--status-success);
+}
+
+.crk[data-level='MEDIUM'] .crk-level {
+  color: var(--status-warning);
+  border-color: var(--status-warning);
+}
+
+.crk[data-level='HIGH'] .crk-level {
+  color: var(--status-critical);
+  border-color: var(--status-critical);
+}
+
+.crk-list {
+  list-style: none;
+  margin: var(--space-3) 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  font-size: 12.5px;
+}
+
+/*
+  จุดนำหน้าบอกระดับของแต่ละปัจจัย — แต่ข้อความก็บอกอยู่แล้วว่าคืออะไร
+  จุดจึงเป็นตัวช่วย ไม่ใช่ข้อมูลที่มีอยู่แค่ในสี
+*/
+.crk-list li {
+  position: relative;
+  padding-left: var(--space-4);
+  line-height: var(--line-height-body);
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.crk-list li::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0.55em;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--status-neutral);
+}
+
+.crk-list li[data-level='MEDIUM']::before {
+  background: var(--status-warning);
+}
+
+.crk-list li[data-level='HIGH']::before {
+  background: var(--status-critical);
+}
+
+.crk-quiet {
+  margin: var(--space-3) 0 0;
+  color: var(--text-muted);
+  font-size: 12.5px;
+  line-height: var(--line-height-body);
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}

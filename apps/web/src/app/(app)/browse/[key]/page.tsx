@@ -15,6 +15,7 @@ import { EditItem } from '@/components/edit-item';
 import { CommentThread } from '@/components/comment-thread';
 import { ApprovalPanel } from '@/components/approval-panel';
 import { AttachmentPanel } from '@/components/attachment-panel';
+import { ChangeRiskPanel } from '@/components/change-risk-panel';
 import { ChangeWindowPanel } from '@/components/change-window-panel';
 import { RatingForm, type Satisfaction } from '@/components/rating-form';
 import { toSlaBar, type SlaSnapshotView } from '@/lib/sla-label';
@@ -297,6 +298,13 @@ export default async function WorkItemDetail({
             — ประเภทงานตั้งได้เองจากหน้าจอ การผูกกับชื่อประเภทจะพังทันทีที่มีคน
             ตั้งชื่ออื่น (เหตุผลเดียวกับที่ Single Work Item Model มีอยู่)
           */}
+          {/*
+            ความเสี่ยงอยู่**เหนือ**หน้าต่างเวลา เพราะมันเป็นข้อสรุปของทั้ง
+            สิ่งที่กระทบและเวลาที่เลือก · คนที่กำลังจะกดอนุมัติต้องเห็นข้อสรุป
+            ก่อนรายละเอียด · แผงไม่ขึ้นเลยจนกว่าจะมีคนเริ่มวางแผน
+          */}
+          <ChangeRiskPanel apiBase={API} itemKey={detail.itemKey} />
+
           <ChangeWindowPanel apiBase={API} itemKey={detail.itemKey} />
 
           <h2 className="detail-section-title detail-section-gap">บทสนทนา</h2>

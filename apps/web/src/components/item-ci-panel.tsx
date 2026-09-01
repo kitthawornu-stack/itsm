@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { Alert, Button, Field, LinkButton, Select, TextLink } from '@itsm/ui';
 
+import { RISK_CHANGED_EVENT } from './change-risk-panel';
+
 interface AttachedCi {
   id: string;
   key: string;
@@ -90,6 +92,11 @@ export function ItemCiPanel({
         return false;
       }
       await load();
+      /*
+        บอกแผงความเสี่ยงว่าต้องคำนวณใหม่ — ระดับมาจาก CI ที่ผูกไว้ ·
+        ถ้าไม่บอก มันจะแสดงระดับเก่าค้างไว้ ซึ่งเป็นตัวเลขที่ผิดโดยไม่มีอะไรฟ้อง
+      */
+      window.dispatchEvent(new CustomEvent(RISK_CHANGED_EVENT));
       return true;
     } catch {
       setError('เชื่อมต่อเซิร์ฟเวอร์ไม่ได้');
