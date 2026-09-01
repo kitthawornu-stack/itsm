@@ -3721,3 +3721,47 @@ tr[data-state='completed'] td {
 .rmp-quiet {
   color: var(--text-muted);
 }
+
+/* ---------- นำเข้าจาก Excel ---------- */
+
+.imp {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  align-items: flex-start;
+}
+
+.imp .ui-field {
+  width: 100%;
+  max-width: 60rem;
+}
+
+/*
+  ช่องวาง CSV ใช้ฟอนต์ความกว้างเท่ากัน — คอลัมน์ของ CSV ต้องเรียงตรงกัน
+  ไม่งั้นคนหาคอลัมน์ที่ผิดไม่เจอ
+*/
+.imp #imp-csv {
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  font-size: 12.5px;
+  line-height: var(--line-height-body);
+  white-space: pre;
+  overflow-wrap: normal;
+  overflow-x: auto;
+}
+
+.imp table {
+  width: 100%;
+}
+
+/* เลขบรรทัดเรียงกันเป็นแถว — ตัวเลขความกว้างเท่ากัน */
+.imp-line {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.imp-msg {
+  line-height: var(--line-height-body);
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
