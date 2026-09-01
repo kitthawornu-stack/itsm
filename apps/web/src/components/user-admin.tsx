@@ -135,6 +135,57 @@ export function UserAdmin({ apiBase }: { apiBase: string }): ReactNode {
     setNotice(`ตั้งรหัสผ่านใหม่ให้ ${u.email} แล้ว · ตัด ${String(revoked)} เซสชัน`);
   }
 
+  /**
+   * สำเนาข้อมูลส่วนบุคคล (PDPA · สิทธิเข้าถึง)
+   *
+   * เปิดเป็นแท็บใหม่ ไม่ใช่ดาวน์โหลดอัตโนมัติ — ผู้ดูแลต้องได้อ่านก่อนส่งต่อ
+   * ให้เจ้าของข้อมูล · และเบราว์เซอร์บางตัวบล็อกการดาวน์โหลดที่สคริปต์สั่งเอง
+   */
+  function openPersonalData(u: UserRow): void {
+    window.open(`${apiBase}/api/v1/admin/users/${u.id}/personal-data`, '_blank', 'noopener');
+  }
+
+  /**
+   * ทำให้เป็นนิรนามตามคำขอ (PDPA · สิทธิให้ลบ)
+   *
+   * **ถามยืนยันด้วยการพิมพ์อีเมล** ไม่ใช่แค่กด OK — ทำแล้วย้อนไม่ได้
+   * และปุ่มอยู่ในแถวเดียวกับปุ่มอื่นที่กดผิดแล้วแก้ได้
+   *
+   * **แสดง `residual` เสมอ** — สิ่งที่ลบไม่ได้ต้องบอก ไม่ใช่รายงานว่าเสร็จเฉย ๆ
+   * มิฉะนั้นองค์กรจะเชื่อว่าทำตามกฎหมายครบแล้ว
+   */
+  async function erasePersonal(u: UserRow): Promise<void> {
+    const typed = window.prompt(
+      [
+        `ทำให้ข้อมูลของ ${u.email} เป็นนิรนามตามคำขอ PDPA`,
+        '',
+        'ชื่อและอีเมลจะถูกแทนที่ ล็อกอินไม่ได้อีก และเซสชันทั้งหมดถูกลบ',
+        'ประวัติการทำงานยังอยู่ เพราะเป็นหลักฐานของงานที่คนอื่นทำต่อ',
+        '',
+        'ทำแล้วย้อนไม่ได้ — พิมพ์อีเมลของเจ้าตัวเพื่อยืนยัน',
+      ].join('\n'),
+    );
+    if (typed === null) return;
+    if (typed.trim() !== u.email) {
+      setError('อีเมลที่พิมพ์ไม่ตรง — ยังไม่ได้ทำอะไร');
+      return;
+    }
+    const { ok, data } = await post(`/${u.id}/erase`, {});
+    if (!ok) {
+      setError((data as { message?: string }).message ?? 'ทำให้เป็นนิรนามไม่สำเร็จ');
+      return;
+    }
+    const residual = (data as { residual?: Array<{ detail: string }> }).residual ?? [];
+    setNotice(
+      residual.length === 0
+        ? 'ทำให้เป็นนิรนามแล้ว — ไม่พบข้อมูลส่วนบุคคลที่ตกค้างในข้อความอิสระ'
+        : `ทำให้เป็นนิรนามแล้ว · ยังมีที่ต้องไล่ตรวจเอง: ${residual
+            .map((r) => r.detail)
+            .join(' · ')}`,
+    );
+    await load();
+  }
+
   if (rows === null) return <p className="admin-empty">กำลังโหลด…</p>;
 
   return (
@@ -224,6 +275,21 @@ export function UserAdmin({ apiBase }: { apiBase: string }): ReactNode {
                   </button>
                   <button type="button" onClick={() => void toggleActive(u)}>
                     {u.isActive ? 'ปิดบัญชี' : 'เปิดบัญชี'}
+                  </button>
+                  {/*
+                    สองปุ่มของ PDPA · ชื่อปุ่มบอกสิ่งที่เกิดขึ้นจริง —
+                    "ลบข้อมูล" เป็นคำสัญญาที่ระบบทำตามไม่ได้ เพราะประวัติยังอยู่
+                  */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      openPersonalData(u);
+                    }}
+                  >
+                    สำเนาข้อมูล
+                  </button>
+                  <button type="button" onClick={() => void erasePersonal(u)}>
+                    ทำให้เป็นนิรนาม
                   </button>
                 </td>
               </tr>
