@@ -6,6 +6,7 @@ import { PermissionDeniedFilter } from './infrastructure/http/permission-denied.
 import { SessionGuard } from './infrastructure/http/session.guard';
 
 import { IdentityController } from './modules/identity/identity.controller';
+import { RetentionController } from './modules/identity/retention.controller';
 import {
   SelfServiceController,
   UserAdminController,
@@ -72,6 +73,7 @@ import { WorkItemController } from './modules/workitem/workitem.controller';
   controllers: [
     HealthController,
     IdentityController,
+    RetentionController,
     UserAdminController,
     SelfServiceController,
     LookupController,

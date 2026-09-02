@@ -44,3 +44,22 @@ export {
   type ErasureResult,
   type PersonalDataExport,
 } from './personal-data.service';
+/* นโยบายระยะเวลาเก็บข้อมูล (PDPA) */
+export {
+  RETENTION_TARGETS,
+  InvalidKeepDaysError,
+  UnknownRetentionTargetError,
+  cutoffFor,
+  planRetention,
+  targetByKey,
+  type RetentionPolicy,
+  type RetentionStep,
+  type RetentionTarget,
+} from './retention';
+export {
+  retentionSettings,
+  runRetention,
+  setRetention,
+  type RetentionRunResult,
+  type RetentionView,
+} from './retention.service';

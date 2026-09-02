@@ -58,6 +58,7 @@ model Tenant {
   changeWindows             ChangeWindow[]
   changeReviews             ChangeReview[]
   importRecords             ImportRecord[]
+  retentionPolicies         RetentionPolicy[]
   changeFreezes             ChangeFreeze[]
   configItems               ConfigurationItem[]
   ciDependencies            CiDependency[]
@@ -2050,4 +2051,32 @@ model Sprint {
   @@unique([projectId, name])
   @@index([tenantId, projectId, state])
   @@map("sprint")
+}
+
+/// นโยบายระยะเวลาเก็บข้อมูล (PDPA)
+///
+/// **ไม่มีแถว = เก็บตลอดไป** — ไม่ใช่ "ใช้ค่าปริยายแล้วลบ" · การไม่กรอง
+/// คือค่าปริยายของทุกคิวรี ถ้าเผลอตรงนี้ องค์กรที่ไม่เคยตั้งอะไรจะถูกลบข้อมูลทิ้ง
+model RetentionPolicy {
+  id       BigInt @id @default(autoincrement())
+  tenantId BigInt @map("tenant_id")
+  /// ชื่อตารางจริง — ตรงกับ RETENTION_TARGETS ใน retention.ts (เทสต์เทียบสองฝั่ง)
+  target   String @db.VarChar(64)
+  /// จำนวนวันที่เก็บ · ขั้นต่ำต่างกันตามตาราง บังคับที่ `cutoffFor()`
+  keepDays Int    @map("keep_days")
+  /// ปิดไว้ = ตั้งค่าไว้แต่ยังไม่ให้ทำงาน · ต่างจากไม่มีแถว ซึ่งแปลว่ายังไม่เคยตั้ง
+  isEnabled Boolean @default(false) @map("is_enabled")
+
+  /// ครั้งล่าสุดที่ลบจริงตามนโยบายนี้ · null = ยังไม่เคยลบเลยสักครั้ง
+  lastRunAt    DateTime? @map("last_run_at") @db.DateTime(3)
+  /// จำนวนแถวที่ลบไปในครั้งล่าสุด — ตัวเลขที่ตอบได้ว่าเกิดอะไรขึ้นจริง
+  lastDeleted  Int?      @map("last_deleted")
+
+  updatedAt DateTime @updatedAt @map("updated_at") @db.DateTime(3)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  /// หนึ่งตารางหนึ่งนโยบาย — สองแถวที่ค่าต่างกัน ตอบไม่ได้ว่าอันไหนจริง
+  @@unique([tenantId, target])
+  @@map("retention_policy")
 }

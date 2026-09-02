@@ -3731,6 +3731,43 @@ tr[data-state='completed'] td {
   **คลาสที่ไม่มีกฎ ไม่ error และไม่เตือน** — เหมือน `.page-sub` ที่เคยถูกใช้
   ใน 8 หน้าจอโดยไม่มีกฎอยู่จริง · ประกาศคลาสแล้วต้องมีกฎ ไม่งั้นอย่าประกาศ
 */
+/*
+  ตารางนโยบายระยะเวลาเก็บข้อมูล
+
+  เหตุผลของขั้นต่ำแต่ละอันอยู่ใต้ชื่อ **ไม่ใช่ใน tooltip** — คนที่กำลังตัดสินใจ
+  ว่าจะลบข้อมูลของทั้งองค์กรหรือไม่ ต้องอ่านเหตุผลได้โดยไม่ต้องเอาเมาส์ไปชี้
+*/
+.ret {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  align-items: flex-start;
+}
+
+.ret-label {
+  font-weight: 600;
+}
+
+.ret-why {
+  color: var(--text-muted);
+  font-size: 12px;
+  /* ข้อความไทยยาว ๆ ในเซลล์ตาราง — ไม่ตั้งไว้จะดันตารางล้น */
+  max-width: 34rem;
+}
+
+.ret-problem {
+  color: var(--status-critical);
+  font-size: 12px;
+  margin-top: var(--space-1);
+}
+
+/* ตัวเลขเรียงหลักตรงกัน อ่านเทียบกันได้ */
+.ret-num {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+
 .exp {
   display: flex;
   flex-direction: column;

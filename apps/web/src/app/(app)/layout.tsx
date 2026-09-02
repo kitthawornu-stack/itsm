@@ -46,6 +46,7 @@ export default function AppLayout({ children }: { children: ReactNode }): ReactN
             <a href="/admin/audit">ร่องรอย</a>
             <a href="/admin/users">ผู้ใช้</a>
             <a href="/admin/import/SD">นำเข้า Excel</a>
+            <a href="/admin/retention">ระยะเวลาเก็บข้อมูล</a>
             <a href="/admin/resolutions">ผลการแก้ไข</a>
             <a href="/admin/calendars">วันหยุด</a>
             <a href="/admin/change-freezes">ช่วงห้ามเปลี่ยนแปลง</a>
