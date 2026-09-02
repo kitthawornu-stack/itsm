@@ -296,8 +296,22 @@ describe('B · กวาดกับข้อมูลจริง', () => {
     await mkItem(2, 1); // ค้าง 1 วัน — ยังไม่ครบ
 
     const summary = await scanIdleItems(ctx, NOW);
-    expect(summary.rules).toBe(1);
-    expect(summary.fired).toBe(1);
+    /*
+      **ยอดรวมจาก `scanIdleItems` เป็นค่าระดับองค์กร ไม่ใช่ของเทสต์นี้**
+
+      `scanIdleItems` อ่านกฎ `item.idle` ที่เปิดอยู่ **ทุกตัวในองค์กร** ·
+      ไฟล์เทสต์อื่นที่สร้างกฎของตัวเองอยู่พร้อมกัน ทำให้ `rules` เป็น 2
+      และเปลี่ยนเกณฑ์ `minIdleDays` ซึ่งกระทบ `fired` ด้วย
+
+      เจอเพราะ CI แดงหนึ่งครั้งแล้วรันใหม่ก็เขียว — **เทสต์ที่แดงเป็นบางครั้ง
+      แย่กว่าเทสต์ที่แดงตลอด** เพราะไม่มีใครเชื่อมันอีก และคนจะรันใหม่จนเขียว
+      แทนที่จะอ่านว่ามันบอกอะไร
+
+      จึงยืนยันด้วย **สิ่งที่เทสต์นี้เป็นเจ้าของ** (แถว `automation_run` ที่มี
+      ลายเซ็นของตัวเอง ซึ่งตรวจอยู่ข้างล่างแล้ว) และปล่อยยอดรวมเป็นขอบล่าง
+    */
+    expect(summary.rules, 'ไม่เห็นกฎของเทสต์นี้เลย').toBeGreaterThanOrEqual(1);
+    expect(summary.fired, 'กฎของเทสต์นี้ไม่ถูกปลุก').toBeGreaterThanOrEqual(1);
 
     const runs = await prismaClient.automationRun.findMany({
       where: { ruleName: { contains: STAMP } },
@@ -318,10 +332,15 @@ describe('B · กวาดกับข้อมูลจริง', () => {
       where: { ruleName: { contains: STAMP } },
     });
     const summary = await scanIdleItems(ctx, NOW);
-    expect(summary.fired).toBe(0);
-    expect(summary.skipped).toBeGreaterThan(0);
+    /*
+      `summary.fired` เป็นค่าระดับองค์กร กฎของไฟล์เทสต์อื่นทำให้มันไม่เป็นศูนย์ได้ ·
+      สิ่งที่เคสนี้ต้องพิสูจน์คือ **กฎของเทสต์นี้ไม่ยิงซ้ำ** ซึ่งวัดจากจำนวนแถว
+      ที่มีลายเซ็นของตัวเอง ไม่เปลี่ยน — บรรทัดข้างล่างคือการวัดนั้น
+    */
+    expect(summary.skipped, 'ไม่มีเรื่องไหนถูกข้ามเลย ทั้งที่ควรถูกข้าม').toBeGreaterThan(0);
     expect(
       await prismaClient.automationRun.count({ where: { ruleName: { contains: STAMP } } }),
+      'กฎของเทสต์นี้ยิงซ้ำ',
     ).toBe(before);
   }, 120_000);
 
