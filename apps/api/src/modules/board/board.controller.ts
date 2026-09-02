@@ -12,6 +12,7 @@ import {
   HttpStatus,
   Param,
   Post,
+  Query,
 } from '@nestjs/common';
 import type { TenantContext } from '@itsm/types';
 
@@ -21,9 +22,9 @@ import {
   BoardItemNotFoundError,
   NoTransitionForColumnError,
   boardOf,
+  type BoardView,
   moveCard,
   rebalanceColumn,
-  type BoardColumn,
 } from './board.service';
 
 function toHttp(e: unknown): unknown {
@@ -48,13 +49,22 @@ function toHttp(e: unknown): unknown {
 
 @Controller('boards')
 export class BoardController {
+  /**
+   * กระดานของโปรเจกต์
+   *
+   * `?mode=scrum` จำกัดขอบเขตเหลือเฉพาะรอบที่กำลังทำอยู่ · ค่าปริยายคือ
+   * kanban ซึ่งเป็นสิ่งที่กระดานนี้เป็นมาตลอด — **ค่าที่พิมพ์ผิดตกไปเป็น
+   * kanban ไม่ใช่ scrum** เพราะการแสดงน้อยกว่าที่คนคาดโดยไม่ตั้งใจ
+   * ทำให้คนเชื่อว่างานหายไป
+   */
   @Get(':projectKey')
   async board(
     @Ctx() ctx: TenantContext,
     @Param('projectKey') projectKey: string,
-  ): Promise<{ projectKey: string; columns: BoardColumn[] }> {
+    @Query('mode') mode?: string,
+  ): Promise<BoardView> {
     try {
-      return await boardOf(ctx, projectKey);
+      return await boardOf(ctx, projectKey, undefined, mode === 'scrum' ? 'scrum' : 'kanban');
     } catch (e) {
       throw toHttp(e);
     }

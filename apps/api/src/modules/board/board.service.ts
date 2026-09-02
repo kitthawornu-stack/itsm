@@ -25,6 +25,8 @@ import { tenantScoped } from '../../infrastructure/prisma/tenant-scope';
 import { assertCan, browsableProjectIds } from '../permission';
 import { applyTransition, availableTransitions } from '../workflow';
 
+import { scrumScopeOf, type ScrumScope } from './scrum-scope';
+
 export class BoardItemNotFoundError extends Error {
   constructor() {
     super('ไม่พบเรื่องที่ระบุ');
@@ -56,6 +58,16 @@ export interface BoardCard {
   rank: string;
 }
 
+export type BoardMode = 'kanban' | 'scrum';
+
+export interface BoardView {
+  projectKey: string;
+  mode: BoardMode;
+  /** ขอบเขตที่ใช้จริง — โหมด kanban ได้ `not-scrum` เสมอ เพราะไม่จำกัดด้วยรอบ */
+  scope: ScrumScope;
+  columns: BoardColumn[];
+}
+
 export interface BoardColumn {
   statusId: string;
   name: string;
@@ -74,7 +86,14 @@ export async function boardOf(
   ctx: TenantContext,
   projectKey: string,
   limitPerColumn = 100,
-): Promise<{ projectKey: string; columns: BoardColumn[] }> {
+  /**
+   * `'scrum'` = แสดงเฉพาะงานในรอบที่กำลังทำอยู่ · `'kanban'` = ทั้งโปรเจกต์
+   *
+   * ค่าปริยายคือ kanban เพราะเป็นสิ่งที่กระดานนี้เป็นมาตลอด — โหมดใหม่
+   * ต้องถูกขอ ไม่ใช่ได้มาเงียบ ๆ แล้วคนสงสัยว่างานหายไปไหน
+   */
+  mode: BoardMode = 'kanban',
+): Promise<BoardView> {
   const allowed = await browsableProjectIds(ctx);
   const project =
     allowed.length === 0
@@ -114,10 +133,37 @@ export async function boardOf(
     byName.set(st.name, e);
   }
 
+  /*
+    **ขอบเขตของโหมด Scrum ตัดสินก่อนคิวรี ไม่ใช่กรองผลทีหลัง**
+
+    กรองทีหลังแปลว่าเราอ่านงานทั้งโปรเจกต์มาก่อน แล้วเพดาน `limitPerColumn`
+    จะถูกใช้ไปกับงานที่ไม่ได้อยู่ในรอบ · คอลัมน์ที่มีงานนอกรอบเยอะ
+    จะแสดงงานในรอบไม่ครบ โดยไม่มีอะไรบอก
+  */
+  let scope: ScrumScope = { kind: 'not-scrum' };
+  if (mode === 'scrum') {
+    const sprints = await db.sprint.findMany({
+      where: { projectId: project.id },
+      select: { id: true, name: true, goal: true, state: true },
+      orderBy: { id: 'asc' },
+    });
+    scope = scrumScopeOf(sprints.map((x) => ({ ...x, id: x.id.toString() })));
+    /*
+      **ขอบเขตที่ตัดสินไม่ได้ ต้องคืนกระดานเปล่าพร้อมเหตุผล ไม่ใช่ทั้งโปรเจกต์**
+
+      กติกาเดิมของโปรเจกต์นี้: รายการที่ใช้กรองว่างเปล่า ต้องแปลว่าไม่เห็น
+      อะไรเลย ไม่ใช่เห็นทุกอย่าง (CLAUDE.md)
+    */
+    if (scope.kind !== 'sprint') {
+      return { projectKey: project.key, mode, scope, columns: [] };
+    }
+  }
+  const sprintFilter = scope.kind === 'sprint' ? { sprintId: BigInt(scope.sprintId) } : {};
+
   const columns: BoardColumn[] = [];
   for (const [name, e] of byName) {
     const rows = await db.workItem.findMany({
-      where: { projectId: project.id, statusId: { in: e.ids } },
+      where: { projectId: project.id, statusId: { in: e.ids }, ...sprintFilter },
       // `rank` ใช้ collation utf8mb4_bin — เรียงฝั่งฐานข้อมูลตรงกับ `compareRank`
       orderBy: { rank: 'asc' },
       take: limitPerColumn,
@@ -143,7 +189,7 @@ export async function boardOf(
     });
   }
 
-  return { projectKey: project.key, columns };
+  return { projectKey: project.key, mode, scope, columns };
 }
 
 export interface MoveInput {
