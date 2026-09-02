@@ -21,7 +21,8 @@
     "loadtest": "dotenv -e ../../.env -- tsx src/scripts/loadtest.ts",
     "loadtest:write": "dotenv -e ../../.env -- tsx src/scripts/loadtest-write.ts",
     "loadtest:upload": "dotenv -e ../../.env -- tsx src/scripts/loadtest-upload.ts",
-    "orphans": "dotenv -e ../../.env -- tsx src/scripts/orphan-objects.ts"
+    "orphans": "dotenv -e ../../.env -- tsx src/scripts/orphan-objects.ts",
+    "verify:multitenant": "tsx src/scripts/verify-multitenant.ts"
   },
   "devDependencies": {
     "@nestjs/testing": "^11.0.1",
