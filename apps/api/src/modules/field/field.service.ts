@@ -264,6 +264,72 @@ export async function setFieldValues(
 
 type Tx = TxScopedClient;
 
+/**
+ * เขียนค่าฟิลด์ของงานที่ **เพิ่งถูกสร้างในทรานแซกชันเดียวกันนี้**
+ *
+ * ## ทำไมต้องมีตัวนี้แยกจาก `setFieldValues`
+ *
+ * เดิมการสร้างงานทำสองทรานแซกชัน: สร้างงานหนึ่ง แล้วเขียนค่าฟิลด์อีกหนึ่ง ·
+ * ตอนขั้นที่สองล้ม **ตั๋วถูกสร้างไปแล้วโดยขาดฟิลด์บังคับ และผู้ใช้เห็น 500
+ * แล้วแจ้งซ้ำ** — ซึ่งเป็นสภาพที่คอมเมนต์ตรงจุดสร้างงานอ้างว่าออกแบบมาเพื่อกัน
+ *
+ * วัดจริงด้วย `loadtest:write 5 6`: 10 จาก 30 คำขอตอบ 500 แต่การเก็บกวาด
+ * ลบตั๋วไป 30 ใบ — ส่วนต่าง 10 ใบนั้นคือตั๋วที่ค้างอยู่โดยไม่มีใครรู้
+ *
+ * ## ทำไมไม่ใช้ `setFieldValues` ตรง ๆ
+ *
+ * `setFieldValues` เปิดทรานแซกชันของตัวเอง ซึ่งซ้อนไม่ได้ · และมันลบค่าเดิม
+ * ก่อนเขียนใหม่ ซึ่งงานที่เพิ่งสร้างไม่มีค่าเดิมให้ลบอยู่แล้ว — **การไม่ลบเลย
+ * จึงถูกกว่าและไม่จับ gap lock** (ดูบทเรียน deadlock ใน CLAUDE.md)
+ *
+ * คืน `AuditEntry[]` ให้ผู้เรียกรวมเข้ากับ audit ของการสร้างงาน แทนที่จะ
+ * เขียนเอง — INVARIANT 2 บอกว่า audit ต้องอยู่ในทรานแซกชันเดียวกับ mutation
+ * และทรานแซกชันนั้นเป็นของผู้เรียก
+ */
+export async function insertInitialFieldValues(
+  tx: Tx,
+  ctx: TenantContext,
+  workItemId: bigint,
+  inputs: readonly FieldValueInput[],
+): Promise<AuditEntry[]> {
+  if (inputs.length === 0) return [];
+
+  const keys = await tx.fieldDefinition.findMany({
+    where: { id: { in: inputs.map((i) => i.fieldId) } },
+    select: { id: true, key: true },
+  });
+  const keyOf = new Map(keys.map((k) => [k.id.toString(), k.key]));
+
+  const audit: AuditEntry[] = [];
+  for (const input of inputs) {
+    const values = normalise(input);
+    if (values.length === 0) continue;
+    const slice = MULTI_VALUE_TYPES.has(input.type) ? values : values.slice(0, 1);
+
+    await tx.workItemFieldValue.createMany({
+      data: slice.map((v, position) => ({
+        tenantId: ctx.tenantId,
+        workItemId,
+        fieldId: input.fieldId,
+        position,
+        ...toColumns(input.type, v),
+      })),
+    });
+
+    /*
+      ฟิลด์ที่ไม่รู้จักไม่ถูกข้ามเงียบ ๆ ตรงนี้ — `createMany` ข้างบนจะชน
+      foreign key แล้วทั้งทรานแซกชันถูกยกเลิก ซึ่งคือสิ่งที่ต้องการ ·
+      ที่ข้ามได้คือการ *บันทึกประวัติ* เพราะไม่มีชื่อฟิลด์ให้เขียน
+    */
+    const key = keyOf.get(input.fieldId.toString());
+    if (key === undefined) continue;
+    audit.push(change(workItemId, key, null, historyText(slice)));
+  }
+
+  await writeSnapshot(tx, ctx, workItemId);
+  return audit;
+}
+
 /** สร้าง snapshot จาก EAV แล้วเขียนลง work_item — ใช้ในทรานแซกชันเดียวกับการเขียน EAV */
 async function writeSnapshot(tx: Tx, ctx: TenantContext, workItemId: bigint): Promise<void> {
   const snapshot = await buildSnapshot(tx, ctx, workItemId);

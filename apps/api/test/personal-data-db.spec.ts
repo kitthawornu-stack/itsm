@@ -161,9 +161,26 @@ afterAll(async () => {
   await step('ประวัติ', () =>
     prismaClient.workItemHistory.deleteMany({ where: { workItem: { itemKey: { in: keys } } } }),
   );
-  await step('audit', () =>
-    prismaClient.auditLog.deleteMany({ where: { actorId: { in: [adminId] } } }),
-  );
+  /*
+    **ลบ audit ของผู้ใช้ *ทุกคน* ที่ไฟล์นี้สร้าง ไม่ใช่แค่ผู้ดูแล**
+
+    เดิมลบเฉพาะ `adminId` ที่จำไว้ตอนเขียน · พอเพิ่มการบันทึก audit ตอนดึง
+    สำเนาข้อมูล แถวที่ผู้ใช้ธรรมดาเป็นคนเขียนก็โผล่ขึ้นมา และไม่มีใครลบ ·
+    จากนั้นการลบผู้ใช้ทำให้ `actor_id` กลายเป็น NULL (`onDelete: SetNull`
+    โดยตั้งใจ) แถวจึงกำพร้าและหาไม่เจอด้วยเงื่อนไขไหนอีกเลย
+
+    ถามจากฐานข้อมูลว่ามีผู้ใช้ของเทสต์คนไหนบ้าง แล้วลบตามนั้น — ไม่ใช่จาก
+    ตัวแปรที่จำไว้ ซึ่งจะไม่ครบทุกครั้งที่มีใครเพิ่มผู้ใช้หรือเพิ่มการเขียน audit
+    (CLAUDE.md) · และต้องลบ **ก่อน** ลบผู้ใช้ ไม่งั้นสายที่ใช้หาจะขาดไปก่อน
+  */
+  await step('audit ของผู้ใช้ทุกคนที่เทสต์สร้าง', async () => {
+    const mine = await prismaClient.user.findMany({
+      where: { email: { contains: STAMP } },
+      select: { id: true },
+    });
+    const ids = [...new Set([adminId, ...mine.map((u) => u.id)])];
+    return prismaClient.auditLog.deleteMany({ where: { actorId: { in: ids } } });
+  });
   await step('งานทดสอบ', () =>
     prismaClient.workItem.deleteMany({ where: { itemKey: { in: keys } } }),
   );

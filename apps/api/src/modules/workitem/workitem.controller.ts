@@ -44,7 +44,6 @@ import {
   formFieldsFor,
   listResolutions,
   prepareFieldValues,
-  saveFieldValues,
 } from '../field';
 import { CatalogItemNotFoundError, catalogItemForReport } from '../catalog';
 import {
@@ -737,16 +736,22 @@ export class WorkItemController {
         ...(body.priorityRank === undefined ? {} : { priorityRank: Number(body.priorityRank) }),
         ...(body.assigneeId === undefined ? {} : { assigneeId: BigInt(body.assigneeId) }),
         ...(catalogItemId === undefined ? {} : { catalogItemId }),
+        // เขียนในทรานแซกชันเดียวกับการสร้างงาน — ล้มเมื่อไร ตั๋วก็ไม่เกิด
+        fieldValues,
       });
-      /**
-       * เขียนค่าฟิลด์หลังสร้างงาน ไม่ใช่ในทรานแซกชันเดียวกัน
-       *
-       * `setFieldValues` เขียน EAV และ snapshot ในทรานแซกชันของตัวเอง (ADR-001)
-       * การซ้อนอีกชั้นจะถือล็อกบน `work_item` นานเกินจำเป็น
-       * ค่าบังคับถูกตรวจไปแล้วข้างบน ที่เหลือคือการเขียนซึ่งกู้ได้ด้วย
-       * `rebuildSnapshot` ถ้าล้ม — ต่างจากการปล่อยตั๋วที่ขาดฟิลด์บังคับ
-       */
-      await saveFieldValues(ctx, created.id, fieldValues);
+      /*
+        **ค่าฟิลด์ถูกเขียนไปแล้วในทรานแซกชันของ `createWorkItem`**
+
+        เดิมเขียนที่นี่ด้วย `saveFieldValues` ซึ่งเปิดทรานแซกชันของตัวเอง
+        พร้อมคอมเมนต์ว่าทำแบบนั้นเพื่อไม่ถือล็อกบน `work_item` นาน และว่า
+        ถ้าล้มก็กู้ได้ด้วย `rebuildSnapshot` — **ทั้งสองข้ออ้างไม่ถูก** ·
+        `rebuildSnapshot` สร้าง snapshot ใหม่จาก EAV ได้ แต่ค่าที่ไม่เคย
+        ถูกเขียนลง EAV เลย ไม่มีอะไรให้สร้างใหม่จาก
+
+        ผลจริงที่วัดได้ (`loadtest:write 5 6`): 10 จาก 30 คำขอตอบ 500
+        แต่การเก็บกวาดลบตั๋วไป 30 ใบ — ส่วนต่างคือตั๋วที่ค้างอยู่โดยขาด
+        ฟิลด์บังคับ เดินนาฬิกา SLA อยู่ในคิว และผู้แจ้งเชื่อว่าแจ้งไม่สำเร็จ
+      */
       /*
         ปลุกกฎ **หลังเขียนฟิลด์เสร็จ** ไม่ใช่ทันทีที่สร้างงาน — กฎที่ดูป้าย
         หรือฟิลด์กำหนดเอง จะอ่านได้ค่าว่างถ้าปลุกก่อน แล้วมันจะ "ไม่ทำงาน

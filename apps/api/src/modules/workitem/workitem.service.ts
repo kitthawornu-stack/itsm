@@ -23,6 +23,7 @@ import {
   type AuditEntry,
 } from '../../infrastructure/audit/audited-transaction';
 import { tenantScoped } from '../../infrastructure/prisma/tenant-scope';
+import { insertInitialFieldValues, type FieldValueInput } from '../field';
 import { assertCan } from '../permission';
 import { indexWorkItem } from '../search-index';
 import { startSlaFor } from '../sla';
@@ -96,6 +97,17 @@ export interface CreateWorkItemInput {
    * ที่นี่แค่บันทึก — **ต้องบันทึกตอนสร้างเท่านั้น** เพราะย้อนกลับไปเติมทีหลังไม่ได้
    */
   catalogItemId?: bigint;
+  /**
+   * ค่าฟิลด์กำหนดเองที่ตรวจแล้ว — เขียน **ในทรานแซกชันเดียวกับการสร้างงาน**
+   *
+   * เดิมผู้เรียกเขียนทีหลังในทรานแซกชันของตัวเอง · ตอนขั้นนั้นล้ม ตั๋วถูกสร้าง
+   * ไปแล้วโดยขาดฟิลด์บังคับ และผู้ใช้เห็น 500 แล้วแจ้งซ้ำ — สองผลเสียพร้อมกัน
+   * · **ตั๋วที่ไม่ครบ แย่กว่าไม่มีตั๋ว** เพราะมันเข้าคิวและเดินนาฬิกา SLA
+   * ทั้งที่ขาดข้อมูลที่ใช้จัดลำดับความสำคัญ
+   *
+   * ผู้เรียกต้องตรวจค่ามาแล้วด้วย `prepareFieldValues` — ที่นี่แค่เขียน
+   */
+  fieldValues?: readonly FieldValueInput[];
 }
 
 export interface CreatedWorkItem {
@@ -216,6 +228,13 @@ export async function createWorkItem(
     if (input.catalogItemId !== undefined) {
       audit.push(change(row.id, 'catalogItem', null, input.catalogItemId.toString()));
     }
+
+    /*
+      **ค่าฟิลด์เขียนที่นี่ ในทรานแซกชันเดียวกัน** — ล้มเมื่อไร ตั๋วก็ไม่เกิด
+      · รายการ audit ของฟิลด์ถูกรวมเข้ากับของการสร้างงาน เพราะ INVARIANT 2
+      บอกว่า audit ต้องอยู่ในทรานแซกชันเดียวกับ mutation
+    */
+    audit.push(...(await insertInitialFieldValues(tx, ctx, row.id, input.fieldValues ?? [])));
 
     return { result: { id: row.id, itemKey: row.itemKey, statusName: initial.name }, audit };
   });
