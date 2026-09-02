@@ -54,6 +54,7 @@ import {
 import { OpenApiController } from './infrastructure/openapi/openapi.controller';
 import { WebhookController } from './modules/integration/webhook.controller';
 import { WebhookScheduler } from './modules/integration/webhook.scheduler';
+import { CsvExportController } from './modules/integration/csv-export.controller';
 import { CsvImportController } from './modules/integration/csv-import.controller';
 import { SessionReaperScheduler } from './modules/identity/session-reaper.scheduler';
 import { ReportController } from './modules/reporting/report.controller';
@@ -97,6 +98,7 @@ import { WorkItemController } from './modules/workitem/workitem.controller';
     ReportController,
     DashboardController,
     WebhookController,
+    CsvExportController,
     CsvImportController,
     OpenApiController,
     ProjectSprintController,
