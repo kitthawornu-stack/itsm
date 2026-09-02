@@ -130,8 +130,13 @@ const PUBLIC_ROUTES: ReadonlyMap<string, Allowed> = new Map([
  * เส้นทางที่หาค่าพารามิเตอร์จริงให้ไม่ได้ ตรวจไม่ได้ว่ามีด่านหรือเปล่า ·
  * **ตัวเลขนี้ห้ามโตขึ้นเงียบ ๆ** — ถ้าโต แปลว่ามีเส้นทางใหม่ที่ไม่มีใครตรวจ
  * เพิ่มเข้ามา · ลดลงได้เสมอ (เพิ่มค่าจริงให้มันตรวจได้)
+ *
+ * **เคยตั้งไว้ที่ 40 ทั้งที่ของจริงมีแค่ 1** — เพดานที่หลวมขนาดนั้นไม่ได้
+ * กั้นอะไรเลย เส้นทางใหม่ที่ตรวจไม่ได้อีก 39 เส้นจะเข้ามาได้เงียบ ๆ ·
+ * ตอนนี้ตั้งเป็น 0 และเส้นทางปฏิทินที่เคยตรวจไม่ได้ ถูกทำให้ตรวจได้แล้ว
+ * ด้วยการผูก id ของปฏิทินจริงและปีจริงให้มัน
  */
-const MAX_UNCHECKABLE = 40;
+const MAX_UNCHECKABLE = 0;
 
 let app: INestApplication;
 let base = '';
@@ -230,6 +235,26 @@ beforeAll(async () => {
     'id',
     (await prismaClient.workflow.findFirst({ select: { id: true } }))?.id.toString() ?? null,
   );
+
+  /*
+    **ปฏิทิน SLA ต้องใช้ id ของปฏิทินจริง ไม่ใช่ id ของ workflow**
+
+    `:id` ทั่วไปผูกไว้กับ workflow · เส้นทางปฏิทินจึงได้ id ที่ไม่มีจริง
+    ในตารางของมัน แล้วตอบ 404 ไม่ว่าจะมีด่านหรือไม่ — ซึ่งคือกับดัก
+    "404 เพราะไม่มีของ กับ 404 เพราะไม่มีสิทธิ์ หน้าตาเหมือนกัน" เป๊ะ ๆ
+    · และ `:year` ไม่มีค่าเลย เส้นทางนี้จึงถูกนับว่า **ตรวจไม่ได้** มาตลอด
+  */
+  const cal = await prismaClient.slaCalendar.findFirst({ select: { id: true } });
+  if (cal !== null) {
+    await put('/api/v1/admin/calendars/:id/years/:year::id', cal.id.toString());
+    await put('/api/v1/admin/calendars/:id::id', cal.id.toString());
+  }
+  /*
+    ปีที่ใช้ต้องเป็นปีที่ **มีอยู่จริงในตาราง** ถ้ามี · ถ้าไม่มีเลยให้ใช้ปีปัจจุบัน
+    ซึ่งเป็นค่าที่หน้าจอจริงส่งมา — ไม่ใช่เลขมั่วที่การันตี 404
+  */
+  const anyYear = await prismaClient.slaCalendarYear.findFirst({ select: { year: true } });
+  await put('year', String(anyYear?.year ?? new Date().getUTCFullYear()));
 }, 180_000);
 
 afterAll(async () => {
