@@ -8,6 +8,8 @@ import { systemClock, type TenantContext } from '@itsm/types';
 
 import { Ctx } from '../../infrastructure/http/session.guard';
 import { tenantScoped } from '../../infrastructure/prisma/tenant-scope';
+import { browsableProjectIds } from '../permission';
+import { inboxAudience } from './inbox-audience';
 
 export interface NotificationRow {
   id: string;
@@ -25,7 +27,8 @@ export class NotificationController {
    * รายการแจ้งเตือนของผู้ใช้ปัจจุบัน
    *
    * รวมการแจ้งเตือนระดับทีม (`userId` เป็น null) ด้วย — งานที่ยังไม่มีผู้รับผิดชอบ
-   * ก็ต้องมีคนเห็นว่า SLA กำลังจะหลุด ไม่งั้นมันจะเงียบจนหลุดจริง
+   * ก็ต้องมีคนเห็นว่า SLA กำลังจะหลุด ไม่งั้นมันจะเงียบจนหลุดจริง · **แต่ "ทีม"
+   * คือคนที่เข้าถึงโปรเจกต์ของงานนั้นได้ ไม่ใช่ทุกคนในองค์กร** ดู `inbox-audience.ts`
    */
   @Get()
   async list(
@@ -36,7 +39,7 @@ export class NotificationController {
     const db = tenantScoped(ctx);
     const take = Math.min(Number(limit ?? 20) || 20, 100);
 
-    const audience = { OR: [{ userId: ctx.actorId }, { userId: null }] };
+    const audience = inboxAudience(ctx.actorId, await browsableProjectIds(ctx));
     const where = {
       ...audience,
       ...(unreadOnly === 'true' ? { readAt: null } : {}),
@@ -73,7 +76,13 @@ export class NotificationController {
   @Post(':id/read')
   async markRead(@Ctx() ctx: TenantContext, @Param('id') id: string): Promise<{ ok: true }> {
     const db = tenantScoped(ctx);
-    const found = await db.notification.findFirst({ where: { id: BigInt(id) } });
+    /*
+      **ขอบเขตเดียวกับตอนอ่าน** — เดิมค้นด้วย id อย่างเดียว ผู้ใช้คนหนึ่งจึงกด
+      "อ่านแล้ว" บนแถวที่จ่าหน้าถึงคนอื่นได้ · ไม่รั่วเนื้อหา แต่ทำให้แจ้งเตือน
+      ของคนอื่นหายไปจากที่ยังไม่อ่าน ซึ่งเงียบกว่าการรั่วเสียอีก
+    */
+    const audience = inboxAudience(ctx.actorId, await browsableProjectIds(ctx));
+    const found = await db.notification.findFirst({ where: { id: BigInt(id), ...audience } });
     if (found === null) {
       throw new HttpException({ message: 'ไม่พบการแจ้งเตือนนี้' }, HttpStatus.NOT_FOUND);
     }
@@ -88,7 +97,7 @@ export class NotificationController {
   async markAllRead(@Ctx() ctx: TenantContext): Promise<{ ok: true; count: number }> {
     const db = tenantScoped(ctx);
     const r = await db.notification.updateMany({
-      where: { OR: [{ userId: ctx.actorId }, { userId: null }], readAt: null },
+      where: { ...inboxAudience(ctx.actorId, await browsableProjectIds(ctx)), readAt: null },
       data: { readAt: systemClock.nowUtc() },
     });
     return { ok: true, count: r.count };

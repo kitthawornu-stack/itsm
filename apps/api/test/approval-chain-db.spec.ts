@@ -22,6 +22,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { TenantContext } from '@itsm/types';
 
 import { prismaClient } from '../src/infrastructure/prisma/client';
+import type { PermissionKey } from '../src/modules/permission';
 import {
   AlreadyDecidedInChainError,
   DuplicateGroupInChainError,
@@ -51,6 +52,8 @@ let g1: bigint;
 let g2: bigint;
 let g3: bigint;
 let gEmpty: bigint;
+let permGroupId: bigint;
+const permGrantIds: bigint[] = [];
 const keys: string[] = [];
 
 async function step(what: string, run: () => Promise<unknown>): Promise<void> {
@@ -145,9 +148,47 @@ beforeAll(async () => {
   a1 = { tenantId, actorId: a1Id };
   a2 = { tenantId, actorId: a2Id };
   a3 = { tenantId, actorId: a3Id };
+
+  /*
+    **ให้สิทธิ์ผ่านกลุ่มของเทสต์เอง** — ก่อนหน้านี้ทั้งไฟล์รันด้วยผู้ใช้ที่
+    ไม่มีสิทธิ์ในโปรเจกต์ไหนเลยและผ่านหมด ซึ่งเป็นหลักฐานว่าโมดูล `approval`
+    ไม่เคยมีด่านสิทธิ์
+  */
+  const schemeId = (
+    await prismaClient.project.findFirstOrThrow({
+      where: { id: projectId },
+      select: { permissionSchemeId: true },
+    })
+  ).permissionSchemeId;
+  if (schemeId === null) throw new Error('โปรเจกต์ SD ไม่มี permission scheme');
+  permGroupId = (
+    await prismaClient.userGroup.create({
+      data: { tenantId, name: `สิทธิ์สายอนุมัติ ${STAMP}` },
+      select: { id: true },
+    })
+  ).id;
+  for (const userId of [requesterId, a1Id, a2Id, a3Id]) {
+    await prismaClient.groupMember.create({ data: { tenantId, groupId: permGroupId, userId } });
+  }
+  for (const permission of ['BROWSE_PROJECT', 'EDIT_ITEM'] as PermissionKey[]) {
+    const g = await prismaClient.permissionGrant.create({
+      data: { tenantId, schemeId, permission, groupId: permGroupId },
+      select: { id: true },
+    });
+    permGrantIds.push(g.id);
+  }
 }, 120_000);
 
 afterAll(async () => {
+  await step('สิทธิ์ของเทสต์', () =>
+    prismaClient.permissionGrant.deleteMany({ where: { id: { in: permGrantIds } } }),
+  );
+  await step('สมาชิกกลุ่มสิทธิ์', () =>
+    prismaClient.groupMember.deleteMany({ where: { groupId: permGroupId } }),
+  );
+  await step('กลุ่มสิทธิ์', () =>
+    prismaClient.userGroup.deleteMany({ where: { id: permGroupId } }),
+  );
   /*
     ลบด้วยเงื่อนไข "ผู้ใช้ของเทสต์สร้าง" ก่อน แล้วค่อยตามด้วยงานที่จำไว้ —
     **ตอนกลไกถูกลบ เคสที่ "ไม่ควรสร้างอะไร" จะสร้างแถวจริง** จึงเชื่อ `keys`

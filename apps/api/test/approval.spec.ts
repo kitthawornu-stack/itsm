@@ -20,6 +20,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { TenantContext } from '@itsm/types';
 
 import { prismaClient } from '../src/infrastructure/prisma/client';
+import { PermissionDeniedError, type PermissionKey } from '../src/modules/permission';
 import {
   AlreadyPendingError,
   NoPendingApprovalError,
@@ -46,6 +47,8 @@ let groupId: bigint;
 let emptyGroupId: bigint;
 let itemKey: string;
 let itemId: bigint;
+let permGroupId: bigint;
+const permGrantIds: bigint[] = [];
 const keys: string[] = [];
 /** สร้างงานของเทสต์เอง แล้วจำคีย์ไว้เก็บกวาด — ห้ามหยิบงานของ seed มาใช้ */
 let mkItem: (tag: string) => Promise<string>;
@@ -99,6 +102,37 @@ beforeAll(async () => {
   approver = { tenantId, actorId: approverId };
   outsider = { tenantId, actorId: outsiderId };
 
+  /*
+    **ให้สิทธิ์ผ่านกลุ่มของเทสต์เอง**
+
+    ก่อนหน้านี้ทั้งไฟล์รันด้วยผู้ใช้ที่ไม่มีสิทธิ์ในโปรเจกต์ไหนเลยและผ่านหมด
+    ซึ่งเป็นหลักฐานในตัวมันเองว่าโมดูล `approval` ไม่เคยมีด่านสิทธิ์ ·
+    **คนนอกไม่ได้อยู่ในกลุ่มนี้** เพราะเคสของเขาคือการพิสูจน์ว่าถูกปฏิเสธ
+  */
+  const schemeId = (
+    await prismaClient.project.findFirstOrThrow({
+      where: { id: projectId },
+      select: { permissionSchemeId: true },
+    })
+  ).permissionSchemeId;
+  if (schemeId === null) throw new Error('โปรเจกต์ SD ไม่มี permission scheme');
+  permGroupId = (
+    await prismaClient.userGroup.create({
+      data: { tenantId, name: `สิทธิ์อนุมัติ ${STAMP}` },
+      select: { id: true },
+    })
+  ).id;
+  for (const userId of [requesterId, approverId]) {
+    await prismaClient.groupMember.create({ data: { tenantId, groupId: permGroupId, userId } });
+  }
+  for (const permission of ['BROWSE_PROJECT', 'EDIT_ITEM'] as PermissionKey[]) {
+    const g = await prismaClient.permissionGrant.create({
+      data: { tenantId, schemeId, permission, groupId: permGroupId },
+      select: { id: true },
+    });
+    permGrantIds.push(g.id);
+  }
+
   const template = await prismaClient.workItem.findFirstOrThrow({ where: { projectId } });
   mkItem = async (tag: string): Promise<string> => {
     const w = await prismaClient.workItem.create({
@@ -125,6 +159,15 @@ beforeAll(async () => {
 }, 120_000);
 
 afterAll(async () => {
+  await step('สิทธิ์ของเทสต์', () =>
+    prismaClient.permissionGrant.deleteMany({ where: { id: { in: permGrantIds } } }),
+  );
+  await step('สมาชิกกลุ่มสิทธิ์', () =>
+    prismaClient.groupMember.deleteMany({ where: { groupId: permGroupId } }),
+  );
+  await step('กลุ่มสิทธิ์', () =>
+    prismaClient.userGroup.deleteMany({ where: { id: permGroupId } }),
+  );
   await step('คำขออนุมัติ', () =>
     prismaClient.approval.deleteMany({ where: { workItem: { itemKey: { in: keys } } } }),
   );
@@ -195,8 +238,30 @@ describe('A · ขออนุมัติ', () => {
     );
   });
 
+  /**
+   * **โมดูลนี้เคยไม่มีด่านสิทธิ์เลยสักบรรทัด**
+   *
+   * `tenantScoped` กันข้ามองค์กรได้ แต่ไม่ได้กันข้ามโปรเจกต์ · ใครก็ตาม
+   * ในองค์กรจึงอ่านสายอนุมัติของงานที่ตัวเองเปิดดูไม่ได้ รวมถึงชื่อกลุ่ม
+   * ผู้อนุมัติ คำตัดสิน และเหตุผลที่ปฏิเสธ · และ `approverGroups` คืน
+   * **ทุกกลุ่มในองค์กรพร้อมจำนวนสมาชิก** ให้ใครก็ได้ที่ล็อกอินอยู่
+   *
+   * เจอด้วย `authz-smoke.spec.ts` ไม่ได้เจอด้วยการอ่านโค้ด
+   */
+  it('**คนที่เปิดดูโปรเจกต์ไม่ได้ อ่านสายอนุมัติและรายชื่อกลุ่มไม่ได้**', async () => {
+    const key = await mkItem('SEC');
+    // เจ้าของสิทธิ์อ่านได้ — ถ้าเคสนี้ล้ม แปลว่าด่านกันผิดคน ไม่ใช่กันถูกคน
+    await expect(approvalsFor(requester, key)).resolves.toBeDefined();
+    await expect(approvalsFor(outsider, key)).rejects.toThrow(PermissionDeniedError);
+    await expect(approverGroups(outsider, key)).rejects.toThrow(PermissionDeniedError);
+    await expect(requestApproval(outsider, key, [groupId])).rejects.toThrow(
+      PermissionDeniedError,
+    );
+  });
+
   it('กลุ่มที่เลือกได้ ต้องไม่มีกลุ่มว่างอยู่ในรายการ', async () => {
-    const groups = await approverGroups(requester);
+    // ต้องส่งงานที่กำลังจะขออนุมัติมาด้วย — ฟังก์ชันนี้ตรวจสิทธิ์จากโปรเจกต์ของงาน
+    const groups = await approverGroups(requester, await mkItem('GROUPS'));
     expect(groups.some((g) => g.id === groupId.toString())).toBe(true);
     expect(groups.some((g) => g.id === emptyGroupId.toString())).toBe(false);
   });

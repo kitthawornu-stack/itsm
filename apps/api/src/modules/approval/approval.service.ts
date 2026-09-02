@@ -22,6 +22,7 @@ import { systemClock, type TenantContext, type UtcDate } from '@itsm/types';
 import { auditedTransaction, change } from '../../infrastructure/audit/audited-transaction';
 import { tenantScoped } from '../../infrastructure/prisma/tenant-scope';
 import { createNotifications } from '../notification';
+import { assertCan } from '../permission';
 import {
   AlreadyDecidedInChainError,
   NotYourTurnError,
@@ -198,11 +199,39 @@ export async function approvalStateOf(
   return chainState(await latestChain(ctx, workItemId));
 }
 
-/** ประวัติการอนุมัติทั้งหมดของงานใบหนึ่ง — รอบใหม่สุดก่อน ในรอบเรียงตามขั้น */
+/**
+ * งานใบนี้อยู่ในโปรเจกต์ที่ผู้เรียกเปิดดูได้หรือไม่
+ *
+ * ตอบ `WorkItemNotFoundForApprovalError` เมื่อไม่มีงาน และปล่อยให้
+ * `assertCan` โยน `PermissionDeniedError` เมื่อมีแต่เปิดดูไม่ได้ —
+ * ต่างกันโดยตั้งใจ เพราะคนที่เปิดดูโปรเจกต์ได้ ควรรู้ว่าเลขที่งานผิด
+ */
+async function assertBrowsable(ctx: TenantContext, itemKey: string): Promise<bigint> {
+  const item = await tenantScoped(ctx).workItem.findFirst({
+    where: { itemKey },
+    select: { id: true, projectId: true },
+  });
+  if (item === null) throw new WorkItemNotFoundForApprovalError(itemKey);
+  await assertCan(ctx, item.projectId, 'BROWSE_PROJECT');
+  return item.id;
+}
+
+/**
+ * ประวัติการอนุมัติทั้งหมดของงานใบหนึ่ง — รอบใหม่สุดก่อน ในรอบเรียงตามขั้น
+ *
+ * **ทั้งโมดูลนี้เคยไม่มีการตรวจสิทธิ์เลยสักบรรทัด** — `tenantScoped` กันข้าม
+ * องค์กรได้ แต่ไม่ได้กันข้ามโปรเจกต์ · ใครก็ตามในองค์กรจึงอ่านสายอนุมัติ
+ * ของงานในโปรเจกต์ที่ตัวเองเปิดดูไม่ได้ รวมถึงชื่อกลุ่มผู้อนุมัติ คำตัดสิน
+ * และ **เหตุผลที่ปฏิเสธ** ซึ่งมักเป็นข้อความภายใน
+ *
+ * เจอด้วย `authz-smoke.spec.ts` ที่ยิงทุกเส้นทาง `GET` ด้วยผู้ใช้ที่ไม่มีสิทธิ์
+ * — ไม่ได้เจอด้วยการอ่านโค้ด
+ */
 export async function approvalsFor(
   ctx: TenantContext,
   itemKey: string,
 ): Promise<ApprovalView[]> {
+  await assertBrowsable(ctx, itemKey);
   /*
     **ในรอบเดียวกันเรียงตาม `stepNumber`** — เรียงด้วย `createdAt` อย่างเดียว
     จะได้ลำดับที่ไม่แน่นอนภายในรอบ เพราะทุกขั้นถูกสร้างพร้อมกัน
@@ -257,6 +286,12 @@ export async function requestApproval(
     select: { id: true, summary: true, projectId: true },
   });
   if (item === null) throw new WorkItemNotFoundForApprovalError(itemKey);
+  /*
+    **การขออนุมัติคือการลงมือกับงานใบนั้น** จึงใช้ `EDIT_ITEM` ไม่ใช่
+    `BROWSE_PROJECT` — เดิมไม่มีด่านเลย ใครก็ตามในองค์กรจึงเปิดสายอนุมัติ
+    บนงานของโปรเจกต์ไหนก็ได้ แล้วกลุ่มผู้อนุมัติจะได้รับแจ้งเตือนจริง
+  */
+  await assertCan(ctx, item.projectId, 'EDIT_ITEM');
 
   if ((await approvalStateOf(ctx, item.id)) === 'pending') throw new AlreadyPendingError();
 
@@ -542,6 +577,12 @@ export async function decideApproval(
 export async function canDecideNow(ctx: TenantContext, itemKey: string): Promise<boolean> {
   if (ctx.actorId === null) return false;
   const db = tenantScoped(ctx);
+  /*
+    ไม่ต้องตรวจ `BROWSE_PROJECT` ซ้ำที่นี่ — ผู้เรียกเดียวคือ controller
+    ซึ่งเรียก `approvalsFor` ก่อนเสมอ และตัวนั้นโยนแล้วถ้าเปิดดูไม่ได้ ·
+    **ด่านเดียวต่อเรื่องเดียว** (CLAUDE.md) · ฟังก์ชันนี้คืน `false`
+    ไม่ใช่โยน จึงใช้เป็นด่านไม่ได้อยู่แล้ว
+  */
   const item = await db.workItem.findFirst({ where: { itemKey }, select: { id: true } });
   if (item === null) return false;
 
@@ -567,7 +608,15 @@ export async function canDecideNow(ctx: TenantContext, itemKey: string): Promise
 /** กลุ่มที่เลือกเป็นผู้อนุมัติได้ — เฉพาะกลุ่มที่มีสมาชิกจริง */
 export async function approverGroups(
   ctx: TenantContext,
+  /**
+   * งานที่กำลังจะขออนุมัติ — **บังคับให้ต้องมี** เพื่อให้ฟังก์ชันนี้ถูกเรียก
+   * โดยไม่มีบริบทไม่ได้ · เดิมไม่รับพารามิเตอร์นี้ ผลคือมันคืน **ทุกกลุ่ม
+   * ในองค์กรพร้อมจำนวนสมาชิก** ให้ใครก็ได้ที่ล็อกอินอยู่ — เท่ากับยื่นผัง
+   * องค์กรให้คนที่เปิดดูโปรเจกต์ไหนไม่ได้เลยสักโปรเจกต์
+   */
+  itemKey: string,
 ): Promise<Array<{ id: string; name: string; memberCount: number }>> {
+  await assertBrowsable(ctx, itemKey);
   const rows = await tenantScoped(ctx).userGroup.findMany({
     orderBy: { name: 'asc' },
     select: { id: true, name: true, _count: { select: { members: true } } },

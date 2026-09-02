@@ -66,7 +66,7 @@ export class ApprovalController {
     return {
       rows: await approvalsFor(ctx, key),
       // กลุ่มที่เลือกได้ ส่งมาพร้อมกันเลย ไม่ต้องยิงอีกคำขอ
-      groups: await approverGroups(ctx),
+      groups: await approverGroups(ctx, key),
       // ซ่อนปุ่มที่กดแล้วได้ 403 — ไม่ใช่การป้องกัน เซิร์ฟเวอร์ตรวจซ้ำเองทุกครั้ง
       canDecide: await canDecideNow(ctx, key),
     };
