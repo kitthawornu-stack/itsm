@@ -12,9 +12,9 @@
  */
 import { systemClock, type TenantContext, type UtcDate } from '@itsm/types';
 
-import { cisOfItem, dependentCountsOf } from '../cmdb';
+import { cisOfItem, dependentCountsOf, WorkItemNotFoundForCiError } from '../cmdb';
 import { assessRisk, type RiskAssessment, type RiskCi } from './change-risk';
-import { windowOf } from './change-window.service';
+import { windowOf, WorkItemNotFoundForWindowError } from './change-window.service';
 
 /**
  * ระดับความเสี่ยงของงานหนึ่งใบ
@@ -29,7 +29,27 @@ export async function riskOf(
   itemKey: string,
   now: UtcDate = systemClock.nowUtc(),
 ): Promise<RiskAssessment> {
-  const attached = await cisOfItem(ctx, itemKey);
+  /*
+    **แปล error ของโมดูลอื่นเป็นของโมดูลนี้**
+
+    `cisOfItem` โยน `WorkItemNotFoundForCiError` ซึ่งเป็นคลาสของ `cmdb` ·
+    ตัวแปลง error ของ controller รู้จักเฉพาะ `WorkItemNotFoundForWindowError`
+    ของ `workitem` — `instanceof` จึงไม่ตรง แล้ว error ถูกโยนต่อจนกลายเป็น
+    **HTTP 500 ที่ไม่มีข้อความอะไรเลย**
+
+    วัดจริง: `GET /work-items/ZZ-999999/change-risk` ตอบ 500 · คนที่พิมพ์คีย์ผิด
+    หรือกดลิงก์เก่าจะเห็น "Internal server error" แทน "ไม่พบเรื่องนี้"
+
+    ตรงกับบทเรียนใน CLAUDE.md: คลาส error ชื่อคล้ายกันคนละโมดูล `instanceof`
+    ไม่ตรง · ผู้เรียกที่ดักตัวเดียวแล้วคิดว่าครอบทั้งสองที่ จะพลาดแบบเงียบ
+  */
+  let attached;
+  try {
+    attached = await cisOfItem(ctx, itemKey);
+  } catch (e) {
+    if (e instanceof WorkItemNotFoundForCiError) throw new WorkItemNotFoundForWindowError(itemKey);
+    throw e;
+  }
   const counts = await dependentCountsOf(
     ctx,
     attached.map((c) => BigInt(c.id)),
