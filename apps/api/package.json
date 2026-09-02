@@ -18,7 +18,8 @@
     "seed:sla": "dotenv -e ../../.env -- tsx src/scripts/seed-sla.ts",
     "recompute-sla": "dotenv -e ../../.env -- tsx src/scripts/recompute-sla.ts",
     "openapi": "dotenv -e ../../.env -- tsx src/scripts/openapi.ts",
-    "loadtest": "dotenv -e ../../.env -- tsx src/scripts/loadtest.ts"
+    "loadtest": "dotenv -e ../../.env -- tsx src/scripts/loadtest.ts",
+    "loadtest:write": "dotenv -e ../../.env -- tsx src/scripts/loadtest-write.ts"
   },
   "devDependencies": {
     "@nestjs/testing": "^11.0.1",

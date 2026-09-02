@@ -215,9 +215,32 @@ export async function setFieldValues(
     if (item === null) throw new Error(`ไม่พบงาน #${workItemId.toString()} ใน tenant นี้`);
 
     for (const input of inputs) {
-      await tx.workItemFieldValue.deleteMany({
+      /*
+        **ลบด้วย id ที่หามาก่อน ไม่ใช่ลบด้วยเงื่อนไขช่วง**
+
+        `deleteMany({ where: { workItemId, fieldId } })` ที่ไม่ตรงแถวไหนเลย
+        (ซึ่งคือกรณีของงานที่เพิ่งสร้าง) ยังทำให้ MySQL จับ **gap lock**
+        ถึง supremum ของ unique index `(work_item_id, field_id, position)` ·
+        สองทรานแซกชันที่สร้างงานคนละใบพร้อมกัน จับ gap เดียวกันได้ทั้งคู่
+        (gap lock เข้ากันได้) แล้วต่างฝ่ายต่างขอ insert intention ซึ่งชนกัน
+        → **deadlock**
+
+        วัดจริงด้วย `loadtest:write 5 6`: 10 จาก 30 คำขอตอบ HTTP 500 และ
+        `SHOW ENGINE INNODB STATUS` ชี้มาที่ดัชนีนี้ตรง ๆ
+
+        การอ่านด้วย SELECT ธรรมดาใน REPEATABLE READ เป็น consistent read
+        จึงไม่จับล็อก · แล้วลบด้วย primary key ได้ record lock อย่างเดียว
+        ไม่มี gap · พฤติกรรมเหมือนเดิมทุกประการ
+      */
+      const existing = await tx.workItemFieldValue.findMany({
         where: { workItemId, fieldId: input.fieldId, tenantId: ctx.tenantId },
+        select: { id: true },
       });
+      if (existing.length > 0) {
+        await tx.workItemFieldValue.deleteMany({
+          where: { id: { in: existing.map((r) => r.id) } },
+        });
+      }
 
       const values = normalise(input);
       if (values.length === 0) continue;
