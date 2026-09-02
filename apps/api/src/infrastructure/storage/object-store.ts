@@ -13,6 +13,7 @@ import {
   DeleteObjectCommand,
   GetObjectCommand,
   HeadBucketCommand,
+  ListObjectsV2Command,
   PutObjectCommand,
   S3Client,
   CreateBucketCommand,
@@ -98,4 +99,55 @@ export async function deleteObject(key: string): Promise<void> {
   } catch (err) {
     throw new ObjectStoreUnavailableError(err instanceof Error ? err.message : String(err));
   }
+}
+
+export interface StoredObject {
+  key: string;
+  /** เวลาที่ไบต์ถูกเขียนลง bucket — **จำเป็นสำหรับการเก็บกวาดที่ปลอดภัย** */
+  lastModified: Date | null;
+  sizeBytes: number;
+}
+
+/**
+ * ไล่รายการทุกวัตถุใน bucket
+ *
+ * มีไว้เพื่อ **ตรวจว่าไบต์ที่เก็บอยู่ตรงกับที่ฐานข้อมูลรู้จักหรือไม่** ·
+ * ฐานข้อมูลคือแหล่งความจริง (ดูหัวไฟล์) แต่ถ้าไม่มีใครเทียบสองฝั่งเลย
+ * ไบต์ที่ไม่มีแถวชี้ถึงจะสะสมไปเรื่อย ๆ โดยไม่มีใครรู้ว่ามันอยู่ที่นั่น
+ *
+ * เดินทีละหน้า — bucket ที่โตแล้วคืนทีเดียวไม่ได้ และการหยุดที่หน้าแรก
+ * จะรายงานว่า "ไม่มีขยะ" ซึ่งเป็นคำตอบที่ผิดแบบเงียบที่สุด
+ */
+export async function listObjects(prefix = ''): Promise<StoredObject[]> {
+  const out: StoredObject[] = [];
+  let token: string | undefined;
+  try {
+    do {
+      const res = await s3().send(
+        new ListObjectsV2Command({
+          Bucket: BUCKET,
+          ...(prefix === '' ? {} : { Prefix: prefix }),
+          ...(token === undefined ? {} : { ContinuationToken: token }),
+        }),
+      );
+      for (const o of res.Contents ?? []) {
+        if (o.Key === undefined) continue;
+        out.push({
+          key: o.Key,
+          lastModified: o.LastModified ?? null,
+          /*
+            ตรวจชนิดจริงแทนที่จะ `Number()` — lint บอกว่า `Number()` ซ้ำซ้อน
+            เพราะ SDK ประกาศ `Size` เป็น `number` · แต่ CLAUDE.md บันทึกไว้ว่า
+            เคยลบ `Number()` ตามที่ lint บอก แล้วพังเพราะชนิดที่ประกาศไม่ตรงกับ
+            ค่าที่คืนจริง · เขียนแบบนี้ทั้งผ่าน lint และไม่พังถ้าชนิดโกหก
+          */
+          sizeBytes: typeof o.Size === 'number' ? o.Size : 0,
+        });
+      }
+      token = res.IsTruncated === true ? res.NextContinuationToken : undefined;
+    } while (token !== undefined);
+  } catch (err) {
+    throw new ObjectStoreUnavailableError(err instanceof Error ? err.message : String(err));
+  }
+  return out;
 }

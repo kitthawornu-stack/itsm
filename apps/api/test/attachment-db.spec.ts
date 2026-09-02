@@ -17,6 +17,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { TenantContext } from '@itsm/types';
 
 import { prismaClient } from '../src/infrastructure/prisma/client';
+import { deleteObject } from '../src/infrastructure/storage/object-store';
 import { PermissionDeniedError, type PermissionKey } from '../src/modules/permission';
 import {
   AttachmentNotFoundError,
@@ -144,11 +145,31 @@ afterAll(async () => {
     เทสต์แดงได้ มันจะลบจริง — รายการที่จำไว้ตอนเขียนไม่ครอบสิ่งที่เกิด
     ตอนกลไกหายไป
   */
-  await step('ไฟล์แนบของเทสต์', () =>
-    prismaClient.workItemAttachment.deleteMany({
+  /*
+    **ลบไบต์ใน object storage ด้วย ไม่ใช่ลบแค่แถว**
+
+    แถวคือสิ่งเดียวที่รู้ว่าไฟล์อยู่ที่ไหน (`storageKey`) · ลบแถวก่อนแล้วไม่ลบไฟล์
+    เท่ากับทิ้งไบต์ไว้โดยไม่มีอะไรชี้ถึงและไม่มีใครตามไปลบได้อีก
+
+    วัดจริง: ที่เก็บไฟล์มี **849 วัตถุ แต่มีแถวไฟล์แนบเพียง 5 แถว** — 540 รายการ
+    เก่ากว่าหนึ่งวันและกำพร้าสนิท สะสมจากเทสต์นี้เป็นหลัก · เจอด้วย
+    `pnpm --filter @itsm/api orphans`
+  */
+  await step('ไฟล์แนบของเทสต์', async () => {
+    const rows = await prismaClient.workItemAttachment.findMany({
       where: { workItem: { itemKey: { startsWith: ITEM_PREFIX } } },
-    }),
-  );
+      select: { id: true, storageKey: true },
+    });
+    for (const r of rows) {
+      if (r.storageKey === '') continue;
+      try {
+        await deleteObject(r.storageKey);
+      } catch {
+        // ไฟล์ที่ลบไม่ได้จะถูกรายงานโดย `orphans` ภายหลัง — ไม่ขวางการเก็บกวาดที่เหลือ
+      }
+    }
+    return prismaClient.workItemAttachment.deleteMany({ where: { id: { in: rows.map((r) => r.id) } } });
+  });
   await step('ประวัติของงานเทสต์', () =>
     prismaClient.workItemHistory.deleteMany({
       where: { workItem: { itemKey: { startsWith: ITEM_PREFIX } } },
