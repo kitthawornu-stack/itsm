@@ -170,14 +170,46 @@ afterAll(async () => {
   await step('สมาชิกกลุ่ม', () =>
     prismaClient.groupMember.deleteMany({ where: { userId: { in: owners } } }),
   );
-  await step('ผู้ใช้', () => prismaClient.user.deleteMany({ where: { id: { in: owners } } }));
+  /*
+    **ถามฐานข้อมูลว่าเทสต์นี้สร้างอะไรไว้ ไม่ใช่ถามตัวแปรที่จำไว้ตอนเขียน**
+
+    เดิมบรรทัดนี้ลบเฉพาะ `owners` ซึ่งเก็บมาจาก `beforeAll` สองคน · แต่เคส
+    "ผู้เฝ้าดูที่ไม่เกี่ยวข้องอะไรเลย" สร้างผู้ใช้คนที่สามขึ้นมาในตัวเทสต์เอง
+    และไม่มีใครใส่มันเข้า `owners` — ผู้ใช้คนนั้นจึงค้างในฐานข้อมูลพัฒนา
+    ทุกครั้งที่รัน · วัดจริง: เจอ `wat-obs-454418` กับ `wat-obs-579959`
+    ค้างอยู่จากการรันสองครั้งเมื่อ 2026-08-28 ห่างกันสองนาที
+
+    ทุกอีเมลที่ไฟล์นี้สร้างลงท้ายด้วย `${STAMP}@example.test` เหมือนกันหมด
+    จึงลบด้วยรูปนั้น — ไม่มีทางชนกับผู้ใช้จริง และครอบคนที่ยังไม่ได้เขียน
+    ในวันที่มีคนเพิ่มเคสใหม่ที่สร้างผู้ใช้เพิ่ม (CLAUDE.md)
+  */
+  const mine = { email: { endsWith: `${STAMP}@example.test` } };
+  await step('สมาชิกกลุ่มของผู้ใช้ทุกคนที่เทสต์สร้าง', () =>
+    prismaClient.groupMember.deleteMany({ where: { user: mine } }),
+  );
+  await step('ผู้เฝ้าดูของผู้ใช้ทุกคนที่เทสต์สร้าง', () =>
+    prismaClient.workItemWatcher.deleteMany({ where: { user: mine } }),
+  );
+  await step('แจ้งเตือนของผู้ใช้ทุกคนที่เทสต์สร้าง', () =>
+    prismaClient.notification.deleteMany({ where: { user: mine } }),
+  );
+  await step('ผู้ใช้', () => prismaClient.user.deleteMany({ where: mine }));
   await step('กลุ่ม', () =>
     prismaClient.userGroup.deleteMany({ where: { name: { contains: STAMP } } }),
   );
   await step('ชุดสิทธิ์', () =>
     prismaClient.permissionScheme.deleteMany({ where: { name: { contains: STAMP } } }),
   );
+  /*
+    **นับหลังคืน ไม่ใช่เชื่อว่าลูปทำงาน** — `step()` กลืน error ไว้เพื่อไม่ให้
+    ขั้นที่ล้มขวางขั้นถัดไป ผลข้างเคียงคือการเก็บกวาดที่ล้มทั้งหมดก็ยัง
+    "เสร็จ" เงียบ ๆ · ด่านนี้คือสิ่งเดียวที่ทำให้มันดังขึ้นมา
+  */
+  const left = await prismaClient.user.count({
+    where: { email: { endsWith: `${STAMP}@example.test` } },
+  });
   await prismaClient.$disconnect();
+  expect(left, `เก็บกวาดไม่ครบ — เหลือผู้ใช้ของเทสต์ ${String(left)} คนในฐานข้อมูล`).toBe(0);
 });
 
 describe('A · กดเฝ้าดู', () => {

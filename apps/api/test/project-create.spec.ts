@@ -121,6 +121,16 @@ afterAll(async () => {
   expect(
     await prismaClient.workflow.count({ where: { id: { in: [workflowId, emptyWorkflowId] } } }),
   ).toBe(0);
+  /*
+    **ผู้ใช้ก็ต้องนับด้วย** — ด่านข้างบนตรวจโปรเจกต์กับ workflow แต่ไม่เคยตรวจ
+    ผู้ใช้ที่เทสต์สร้าง · วัดจริง: `pc-43735@example.test` ค้างในฐานข้อมูลพัฒนา
+    ตั้งแต่ 2026-08-27 โดยไม่มีอะไรส่งเสียง · ตรวจด้วยรูปอีเมล ไม่ใช่ด้วย
+    `actorId` ที่จำไว้ เพราะตอนกลางทางล้ม ตัวแปรนั้นอาจยังไม่มีค่า
+  */
+  expect(
+    await prismaClient.user.count({ where: { email: { endsWith: `${STAMP}@example.test` } } }),
+    'เก็บกวาดไม่ครบ — เหลือผู้ใช้ของเทสต์ในฐานข้อมูล',
+  ).toBe(0);
   await prismaClient.$disconnect();
 });
 
