@@ -54,6 +54,7 @@ export default function AppLayout({ children }: { children: ReactNode }): ReactN
             <a href="/admin/automation">กฎอัตโนมัติ</a>
             <a href="/admin/webhooks">ส่งเหตุการณ์ออก</a>
             <a href="/settings/notifications">การแจ้งเตือน</a>
+            <a href="/settings/my-data">ข้อมูลของฉัน</a>
             <a href="/components">คลังคอมโพเนนต์</a>
           </nav>
           <NotificationTray apiBase={API} />

@@ -3737,6 +3737,13 @@ tr[data-state='completed'] td {
   เหตุผลของขั้นต่ำแต่ละอันอยู่ใต้ชื่อ **ไม่ใช่ใน tooltip** — คนที่กำลังตัดสินใจ
   ว่าจะลบข้อมูลของทั้งองค์กรหรือไม่ ต้องอ่านเหตุผลได้โดยไม่ต้องเอาเมาส์ไปชี้
 */
+.mydata {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  align-items: flex-start;
+}
+
 .ret {
   display: flex;
   flex-direction: column;

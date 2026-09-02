@@ -85,6 +85,20 @@ const PUBLIC_ROUTES: ReadonlyMap<string, Allowed> = new Map([
   ['/api/v1/notifications', { reason: 'กล่องแจ้งเตือนของตัวเอง', emptyKeys: ['rows'] }],
   ['/api/v1/notifications/unread-count', { reason: 'จำนวนที่ยังไม่อ่านของตัวเอง' }],
   [
+    '/api/v1/me/personal-data',
+    {
+      reason:
+        'สำเนาข้อมูลส่วนบุคคลของตัวเอง (PDPA · สิทธิขอเข้าถึง) — ' +
+        'ไม่รับพารามิเตอร์ id เลย ตัวตนมาจากเซสชันทางเดียว จึงเล็งคนอื่นไม่ได้',
+      /*
+        บัญชีของตัวเอง (อีเมล ชื่อ) ต้องมี — นั่นคือสิ่งที่เขามาขอ ·
+        แต่ทุกอย่างที่เชื่อมกับงานขององค์กรต้องว่าง สำหรับคนที่ไม่มีสิทธิ์
+        เห็นโปรเจกต์ไหนเลย · ถ้าวันหนึ่งขอบเขตพัง จะแดงที่นี่
+      */
+      emptyKeys: ['groups', 'reportedItems', 'assignedItems', 'comments', 'workLogs'],
+    },
+  ],
+  [
     '/api/v1/openapi.json',
     { reason: 'สเปกของ API — หลังยืนยันตัวตนแล้วเปิดให้ทุกคน (ดู openapi.spec.ts)' },
   ],

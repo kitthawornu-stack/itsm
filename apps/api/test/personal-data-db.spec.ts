@@ -26,6 +26,7 @@ import {
   LastAdminError,
   StillAssignedError,
   erasePersonalData,
+  exportMyPersonalData,
   exportPersonalData,
 } from '../src/modules/identity';
 
@@ -41,6 +42,7 @@ let adminId: bigint;
 let subjectId: bigint;
 /** คนธรรมดา — ใช้พิสูจน์ด่านสิทธิ์ */
 let plainCtx: TenantContext;
+let plainId: bigint;
 let adminGroupId: bigint;
 const grantIds: bigint[] = [];
 const keys: string[] = [];
@@ -116,7 +118,8 @@ beforeAll(async () => {
     where: { id: subjectId },
     data: { passwordHash: `hash-${STAMP}` },
   });
-  plainCtx = { tenantId, actorId: await mkUser('plain') };
+  plainId = await mkUser('plain');
+  plainCtx = { tenantId, actorId: plainId };
 
   const schemeId = (
     await prismaClient.project.findFirstOrThrow({
@@ -386,5 +389,78 @@ describe('PDPA · ต่อของจริง', () => {
   it('**คนที่ไม่ใช่ผู้ดูแล ดึงสำเนาและลบไม่ได้**', async () => {
     await expect(exportPersonalData(plainCtx, subjectId)).rejects.toThrow(PermissionDeniedError);
     await expect(erasePersonalData(plainCtx, adminId)).rejects.toThrow(PermissionDeniedError);
+  });
+
+  /**
+   * **สิทธิขอเข้าถึงข้อมูลของตัวเอง (PDPA)**
+   *
+   * คนธรรมดาที่ไม่ใช่ผู้ดูแล ต้องขอสำเนา **ของตัวเอง** ได้ · การบังคับให้ผ่าน
+   * ผู้ดูแลทำให้สิทธิ์นั้นขึ้นกับว่ามีคนว่างมาทำให้หรือไม่ ซึ่งไม่ใช่สิทธิ์
+   */
+  it('**คนธรรมดาขอสำเนาของตัวเองได้ โดยไม่ต้องเป็นผู้ดูแล**', async () => {
+    const mine = await exportMyPersonalData(plainCtx);
+    expect(mine.person.id).toBe(plainId.toString());
+  });
+
+  /**
+   * **หัวใจของเส้นทางนี้: มันเล็งคนอื่นไม่ได้ เพราะไม่มีที่ให้ใส่**
+   *
+   * `exportMyPersonalData` ไม่รับ `userId` เลย — ไม่ใช่รับแล้วตรวจว่าตรงกับ
+   * ตัวเอง · เคสนี้ยืนยันว่าคนละคนเรียกแล้วได้คนละคำตอบ ซึ่งเป็นสิ่งเดียว
+   * ที่พิสูจน์ได้จากภายนอกว่าตัวตนมาจากเซสชันจริง ไม่ได้มาจากคำขอ
+   */
+  it('**สำเนาที่ได้เป็นของคนที่เรียกเสมอ ไม่ใช่ของคนที่ระบุมา**', async () => {
+    const asPlain = await exportMyPersonalData(plainCtx);
+    const asAdmin = await exportMyPersonalData(adminCtx);
+    expect(asPlain.person.id).toBe(plainId.toString());
+    expect(asAdmin.person.id).toBe(adminId.toString());
+    expect(asPlain.person.id).not.toBe(asAdmin.person.id);
+  });
+
+  /**
+   * **การดึงสำเนาต้องมีร่องรอย**
+   *
+   * เอกสารสถานะเคยเขียนไว้เองว่าเส้นทางนี้ "ยังไม่ถูกบันทึกใน `audit_log`
+   * เพราะกลไก audit ผูกกับทรานแซกชันที่เขียนข้อมูล" — ซึ่งเป็นข้อจำกัดที่
+   * เราสร้างขึ้นเอง · ข้อมูลส่วนบุคคลที่ถูกดึงออกไปโดยไม่มีร่องรอย
+   * คือสิ่งที่ตอบไม่ได้เลยว่าเคยเกิดขึ้นหรือไม่
+   */
+  it('**บันทึก audit ทั้งตอนผู้ดูแลดึง และตอนเจ้าตัวดึงเอง**', async () => {
+    const count = async (actorId: bigint): Promise<number> =>
+      prismaClient.auditLog.count({
+        where: { actorId, action: 'identity.personal-data.export' },
+      });
+
+    const beforeAdmin = await count(adminId);
+    await exportPersonalData(adminCtx, subjectId);
+    expect(await count(adminId), 'ผู้ดูแลดึงแล้วไม่มีร่องรอย').toBe(beforeAdmin + 1);
+
+    const beforePlain = await count(plainId);
+    await exportMyPersonalData(plainCtx);
+    expect(await count(plainId), 'เจ้าตัวดึงเองแล้วไม่มีร่องรอย').toBe(beforePlain + 1);
+
+    // แยกได้ว่าใครดึง — ของตัวเอง หรือผู้ดูแลดึงให้
+    const latest = await prismaClient.auditLog.findFirst({
+      where: { actorId: plainId, action: 'identity.personal-data.export' },
+      orderBy: { id: 'desc' },
+    });
+    expect((latest?.payload as { bySelf?: boolean } | null)?.bySelf).toBe(true);
+  });
+
+  /**
+   * **audit ต้องไม่กลายเป็นสำเนาที่สองของข้อมูลส่วนบุคคล**
+   *
+   * การบันทึกว่า "ใครดึงของใคร" ถูกต้อง · การบันทึก *เนื้อ* ที่ดึงไป
+   * คือการทำสำเนาไว้ในตารางที่ลบยากกว่าเดิม ซึ่งขัดกับสิ่งที่ PDPA ต้องการ
+   */
+  it('**audit ไม่เก็บอีเมลหรือเนื้อข้อมูลที่ดึงไป**', async () => {
+    await exportMyPersonalData(plainCtx);
+    const row = await prismaClient.auditLog.findFirst({
+      where: { actorId: plainId, action: 'identity.personal-data.export' },
+      orderBy: { id: 'desc' },
+    });
+    const text = JSON.stringify(row?.payload ?? {});
+    expect(text, 'อีเมลหลุดเข้า audit').not.toContain('@');
+    expect(text.length, 'payload ใหญ่เกินกว่าจะเป็นแค่ตัวนับ').toBeLessThan(400);
   });
 });

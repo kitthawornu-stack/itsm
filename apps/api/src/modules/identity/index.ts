@@ -38,8 +38,10 @@ export {
 } from './personal-data';
 export {
   EXPORT_LIMIT,
+  NoActorError,
   UserNotFoundForPdpaError,
   erasePersonalData,
+  exportMyPersonalData,
   exportPersonalData,
   type ErasureResult,
   type PersonalDataExport,

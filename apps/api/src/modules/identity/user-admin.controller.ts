@@ -26,9 +26,11 @@ import {
   StillAssignedError,
 } from './personal-data';
 import {
+  NoActorError,
   UserNotFoundForPdpaError,
   erasePersonalData,
   exportPersonalData,
+  exportMyPersonalData,
   type ErasureResult,
   type PersonalDataExport,
 } from './personal-data.service';
@@ -207,6 +209,22 @@ export class SelfServiceController {
    * ตัดเซสชันอื่นทั้งหมดรวมถึงของตัวเอง ผู้ใช้ต้องล็อกอินใหม่ ซึ่งเป็นสิ่งที่
    * คนคาดหวังหลังเปลี่ยนรหัสผ่าน และเป็นสิ่งที่ต้องเกิดถ้าเปลี่ยนเพราะถูกยึดบัญชี
    */
+  /**
+   * สำเนาข้อมูลส่วนบุคคล **ของตัวเอง** (PDPA · สิทธิขอเข้าถึง)
+   *
+   * **ไม่มีพารามิเตอร์ id เลย** — ไม่ใช่มีแล้วตรวจว่าตรงกับตัวเอง ·
+   * พารามิเตอร์ที่ไม่มี คือพารามิเตอร์ที่ปลอมไม่ได้ · ตัวตนมาจากเซสชัน
+   * ทางเดียว เหมือน `POST /me/password`
+   */
+  @Get('personal-data')
+  async exportMine(@Ctx() ctx: TenantContext): Promise<PersonalDataExport> {
+    try {
+      return await exportMyPersonalData(ctx);
+    } catch (e) {
+      return toPdpaHttp(e);
+    }
+  }
+
   @Post('password')
   @HttpCode(HttpStatus.OK)
   async changePassword(
@@ -232,6 +250,9 @@ function idOf(raw: string): bigint {
 }
 
 function toPdpaHttp(e: unknown): never {
+  if (e instanceof NoActorError) {
+    throw new HttpException({ error: 'unauthorized', message: e.message }, HttpStatus.UNAUTHORIZED);
+  }
   if (e instanceof UserNotFoundForPdpaError) {
     throw new HttpException({ error: 'not_found', message: e.message }, HttpStatus.NOT_FOUND);
   }

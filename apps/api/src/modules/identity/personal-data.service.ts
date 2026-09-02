@@ -34,6 +34,20 @@ function textOf(value: unknown): string {
   return typeof doc['text'] === 'string' ? doc['text'] : '';
 }
 
+/**
+ * ไม่มีตัวตนในเซสชัน
+ *
+ * เส้นทางของตัวเองอ่าน `ctx.actorId` อย่างเดียว · session guard กันไว้ก่อนถึง
+ * ตรงนี้อยู่แล้ว แต่ค่าปริยายของฟังก์ชันต้องเป็นการปฏิเสธ ไม่ใช่การเดาว่า
+ * คนที่ถามคือใคร
+ */
+export class NoActorError extends Error {
+  constructor() {
+    super('ต้องเข้าสู่ระบบก่อนขอสำเนาข้อมูลของตัวเอง');
+    this.name = 'NoActorError';
+  }
+}
+
 export class UserNotFoundForPdpaError extends Error {
   constructor(id: bigint) {
     super(`ไม่พบผู้ใช้รหัส ${id.toString()}`);
@@ -88,14 +102,12 @@ async function personFor(
  * อ่านเหมือน "นี่คือทั้งหมดที่มี" ซึ่งเป็นคำตอบที่ผิดต่อคำขอตามกฎหมาย ·
  * `counts` จึงมาจากการนับจริง ไม่ใช่ `rows.length`
  */
-export async function exportPersonalData(
+async function gatherPersonalData(
   ctx: TenantContext,
   userId: bigint,
-  now: UtcDate = systemClock.nowUtc(),
-  /** ฉีดเข้ามาได้เพื่อให้เทสต์พิสูจน์ได้ว่า `counts` ไม่ใช่ `rows.length` */
-  limit: number = EXPORT_LIMIT,
+  now: UtcDate,
+  limit: number,
 ): Promise<PersonalDataExport> {
-  await assertTenantAdmin(ctx);
   const db = tenantScoped(ctx);
   const person = await personFor(ctx, userId);
 
@@ -196,6 +208,79 @@ export async function exportPersonalData(
     })),
     counts,
   };
+}
+
+/**
+ * บันทึกว่ามีการดึงสำเนาข้อมูลส่วนบุคคลออกไป
+ *
+ * **การดึงสำเนาไม่ใช่การแก้ข้อมูล แต่ต้องมีร่องรอย** — เอกสารสถานะเคยเขียนไว้เอง
+ * ว่าเส้นทางนี้ "ยังไม่ถูกบันทึกใน `audit_log` เพราะกลไก audit ผูกกับทรานแซกชัน
+ * ที่เขียนข้อมูล" · ซึ่งเป็นข้อจำกัดที่เราสร้างขึ้นเอง ไม่ใช่ข้อเท็จจริง —
+ * `auditedTransaction` รับงานที่ไม่เขียนอะไรได้อยู่แล้ว
+ *
+ * ข้อมูลส่วนบุคคลของคนหนึ่งถูกดึงออกไปเป็นไฟล์ คือเหตุการณ์ที่ต้องตอบได้ว่า
+ * ใครดึง ของใคร เมื่อไร · ถ้าไม่บันทึก จะไม่มีทางรู้เลยว่าเคยเกิดขึ้น
+ *
+ * **payload ไม่มีเนื้อข้อมูลและไม่มีอีเมล** — บันทึกว่าใครดึงของใคร ไม่ใช่
+ * ทำสำเนาที่สองไว้ในตารางที่ลบยากกว่าเดิม
+ */
+async function recordExport(
+  ctx: TenantContext,
+  subjectId: bigint,
+  bySelf: boolean,
+  counts: PersonalDataExport['counts'],
+): Promise<void> {
+  await auditedTransaction(ctx, 'identity.personal-data.export', () =>
+    Promise.resolve({
+      result: undefined,
+      audit: [
+        {
+          kind: 'system' as const,
+          action: 'identity.personal-data.export',
+          entityType: 'user',
+          entityId: subjectId.toString(),
+          payload: { bySelf, counts },
+        },
+      ],
+    }),
+  );
+}
+
+/**
+ * สำเนาข้อมูลส่วนบุคคลของคนอื่น — สำหรับผู้ดูแลที่รับคำขอมาจากช่องทางอื่น
+ */
+export async function exportPersonalData(
+  ctx: TenantContext,
+  userId: bigint,
+  now: UtcDate = systemClock.nowUtc(),
+  /** ฉีดเข้ามาได้เพื่อให้เทสต์พิสูจน์ได้ว่า `counts` ไม่ใช่ `rows.length` */
+  limit: number = EXPORT_LIMIT,
+): Promise<PersonalDataExport> {
+  await assertTenantAdmin(ctx);
+  const out = await gatherPersonalData(ctx, userId, now, limit);
+  await recordExport(ctx, userId, false, out.counts);
+  return out;
+}
+
+/**
+ * สำเนาข้อมูลส่วนบุคคล **ของตัวเอง**
+ *
+ * PDPA ให้สิทธิ์เจ้าของข้อมูลขอสำเนาได้เอง · การบังคับให้ต้องผ่านผู้ดูแล
+ * ทำให้สิทธิ์นั้นขึ้นกับว่ามีคนว่างมาทำให้หรือไม่ ซึ่งไม่ใช่สิทธิ์
+ *
+ * **ไม่รับ `userId` เลย** — ไม่ใช่รับแล้วตรวจว่าตรงกับตัวเอง · พารามิเตอร์ที่
+ * ไม่มี คือพารามิเตอร์ที่ปลอมไม่ได้ · เป็นรูปแบบเดียวกับ `changeOwnPassword`
+ * และเป็นเหตุผลที่ฟังก์ชันนี้ไม่ต้องมีด่านสิทธิ์ของตัวเอง
+ */
+export async function exportMyPersonalData(
+  ctx: TenantContext,
+  now: UtcDate = systemClock.nowUtc(),
+  limit: number = EXPORT_LIMIT,
+): Promise<PersonalDataExport> {
+  if (ctx.actorId === null) throw new NoActorError();
+  const out = await gatherPersonalData(ctx, ctx.actorId, now, limit);
+  await recordExport(ctx, ctx.actorId, true, out.counts);
+  return out;
 }
 
 export interface ErasureResult {
