@@ -24,13 +24,28 @@ export interface LaneColumn {
   name: string;
   category: string;
   cards: LaneCard[];
+  /**
+   * จำนวนงานจริงในคอลัมน์ · ตอนแบ่งเลนจะถูกเขียนใหม่เป็นจำนวนของเลนนั้น
+   *
+   * **จำนวนของทั้งคอลัมน์ตอบคำถามคนละข้อกับจำนวนในเลน** · หัวคอลัมน์ในเลน
+   * ต้องบอกจำนวนที่อยู่ในเลนนั้น มิฉะนั้นห้าเลนจะขึ้นเลขเดียวกันหมด
+   * และไม่มีเลนไหนตรงกับการ์ดที่เห็น
+   */
+  count: number;
 }
 
-export interface Lane {
+/**
+ * เลนหนึ่ง · **คงชนิดคอลัมน์ของผู้เรียกไว้**
+ *
+ * ผู้เรียกส่ง `BoardColumn` ซึ่งมีฟิลด์มากกว่าที่นี่ต้องใช้ (เช่น `wip`) ·
+ * ถ้าคืนเป็น `LaneColumn` เฉย ๆ ฟิลด์เหล่านั้นจะหายไปจากชนิด ทั้งที่ค่ายัง
+ * อยู่จริง แล้วผู้เรียกต้องแปลงชนิดเอง ซึ่งเป็นจุดที่ข้อผิดพลาดเข้ามาได้
+ */
+export interface Lane<T extends LaneColumn = LaneColumn> {
   /** คีย์ที่ไม่ซ้ำ ใช้เป็น `key` ของ React */
   key: string;
   label: string;
-  columns: LaneColumn[];
+  columns: T[];
 }
 
 export type LaneMode = 'none' | 'assignee' | 'priority';
@@ -64,7 +79,7 @@ function sortKeyOf(card: LaneCard, mode: Exclude<LaneMode, 'none'>): number {
  * ไปอยู่เลนของตัวเองที่มีชื่อ ไม่ใช่หายไป — การหายไปทำให้กระดานดูโล่ง
  * และไม่มีใครรู้ว่ามีงานรออยู่
  */
-export function splitLanes(columns: readonly LaneColumn[], mode: LaneMode): Lane[] {
+export function splitLanes<T extends LaneColumn>(columns: readonly T[], mode: LaneMode): Lane<T>[] {
   if (columns.length === 0) return [];
   if (mode === 'none') {
     return [{ key: 'all', label: '', columns: columns.map((c) => ({ ...c, cards: [...c.cards] })) }];
@@ -101,9 +116,15 @@ export function splitLanes(columns: readonly LaneColumn[], mode: LaneMode): Lane
       **ทุกเลนมีคอลัมน์ครบเท่ากัน แม้คอลัมน์นั้นจะว่างในเลนนี้** ·
       ถ้าซ่อนคอลัมน์ว่าง เลนแต่ละเลนจะกว้างไม่เท่ากัน แล้วอ่านเทียบกันไม่ได้
     */
-    columns: columns.map((col) => ({
-      ...col,
-      cards: col.cards.filter((c) => (laneKeyOf(c, mode) ?? noLabel) === label),
-    })),
+    columns: columns.map((col) => {
+      const cards = col.cards.filter((c) => (laneKeyOf(c, mode) ?? noLabel) === label);
+      /*
+        `count` ของเลนคือจำนวนการ์ดในเลนนั้น ไม่ใช่ของทั้งคอลัมน์ ·
+        นี่เป็นจำนวน *ที่แสดง* จริง ๆ เพราะการแบ่งเลนทำจากการ์ดที่ถูกดึงมาแล้ว
+        (ไม่เกิน 100 ใบต่อคอลัมน์) — ต่างจาก `count` ของคอลัมน์ทั้งใบ
+        ที่มาจากคิวรีนับของเซิร์ฟเวอร์
+      */
+      return { ...col, cards, count: cards.length };
+    }),
   }));
 }

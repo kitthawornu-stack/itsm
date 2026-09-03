@@ -14,11 +14,66 @@ export interface BoardCard {
   rank: string;
 }
 
+/** ผลตัดสินเพดานงานที่ทำพร้อมกัน — ตรงกับ `WipState` ฝั่ง API */
+export type WipState =
+  | { kind: 'no-limit'; count: number }
+  | { kind: 'under'; count: number; max: number; remaining: number }
+  | { kind: 'at'; count: number; max: number }
+  | { kind: 'over'; count: number; max: number; excess: number }
+  | { kind: 'ambiguous'; count: number; values: number[] };
+
 export interface BoardColumn {
   statusId: string;
   name: string;
   category: string;
   cards: BoardCard[];
+  /**
+   * จำนวนงานจริงในคอลัมน์ · **ไม่ใช่ `cards.length`**
+   *
+   * `cards` ถูกตัดที่ 100 ใบ · หัวคอลัมน์เคยแสดง `cards.length` ซึ่งทำให้
+   * คอลัมน์ที่มีงาน 150 ใบขึ้นว่า "100" — **ตัวเลขที่ผิดแย่กว่าไม่มีตัวเลข**
+   * เพราะคนเชื่อมันแล้วเอาไปตัดสินใจ
+   */
+  count: number;
+  wip: WipState;
+}
+
+/**
+ * ป้ายบอกสถานะเพดานของคอลัมน์
+ *
+ * **มีข้อความเสมอ ไม่ใช่สีอย่างเดียว** — คนตาบอดสีและคนที่ใช้ screen reader
+ * ต้องอ่านออกเท่ากัน · `null` เมื่อยังไม่ได้ตั้งเพดาน เพราะป้ายที่ขึ้นทุกคอลัมน์
+ * ตลอดเวลาไม่ได้บอกอะไรใครเลย
+ */
+function wipBadge(w: WipState): { text: string; tone: 'over' | 'at' | 'under' } | null {
+  switch (w.kind) {
+    case 'no-limit':
+      return null;
+    case 'under':
+      return { text: `เพดาน ${String(w.max)} · รับได้อีก ${String(w.remaining)}`, tone: 'under' };
+    case 'at':
+      // "เต็มพอดี" ไม่ใช่การละเมิด — ข้อความจึงไม่ใช่คำเตือน
+      return { text: `เต็มเพดาน ${String(w.max)} แล้ว`, tone: 'at' };
+    case 'over':
+      return { text: `เกินเพดาน ${String(w.max)} อยู่ ${String(w.excess)} เรื่อง`, tone: 'over' };
+    case 'ambiguous':
+      /*
+        ตั้งไม่ตรงกันระหว่างสถานะที่ยุบเป็นคอลัมน์เดียว · บอกตรง ๆ ว่า
+        ตอบไม่ได้ ดีกว่าเลือกมาแสดงอันหนึ่งแล้วให้ครึ่งทีมอ่านค่าที่ไม่ได้ใช้
+      */
+      return { text: `เพดานตั้งไว้ไม่ตรงกัน (${w.values.join(' · ')})`, tone: 'over' };
+  }
+}
+
+/** ป้ายเพดานของคอลัมน์หนึ่ง — `null` เมื่อยังไม่ได้ตั้งเพดาน */
+function wipNote(col: BoardColumn): ReactNode {
+  const badge = wipBadge(col.wip);
+  if (badge === null) return null;
+  return (
+    <p className="board-wip" data-tone={badge.tone}>
+      {badge.text}
+    </p>
+  );
 }
 
 /**
@@ -55,6 +110,7 @@ export function BoardView({
   projectKey,
   columns,
   showHelp = true,
+  showWip = true,
   laneLabel = null,
 }: {
   apiBase: string;
@@ -67,6 +123,14 @@ export function BoardView({
    * คำอธิบายชุดเดียวกันซ้ำห้ารอบเป็นเสียงรบกวน ไม่ใช่ความช่วยเหลือ
    */
   showHelp?: boolean;
+  /**
+   * แสดงป้ายเพดานของคอลัมน์หรือไม่
+   *
+   * ปิดเมื่อกระดานถูกแบ่งเลน — เพดานเป็นข้อเท็จจริงของทั้งคอลัมน์
+   * ส่วนเลนเห็นแค่บางส่วนของมัน · ป้ายที่บอกว่า "เกินเพดาน 2 อยู่ 1 เรื่อง"
+   * เหนือเลนที่มีการ์ดใบเดียว อ่านแล้วขัดกับสิ่งที่ตาเห็น
+   */
+  showWip?: boolean;
   /**
    * ชื่อเลนที่กระดานนี้อยู่ · ใช้ต่อท้าย `aria-label` ของคอลัมน์
    *
@@ -219,8 +283,16 @@ export function BoardView({
           >
             <h2 className="board-col-head">
               <StatusPill label={col.name} category={col.category as StatusCategory} />
-              <span className="board-count">{col.cards.length.toLocaleString('th-TH')}</span>
+              {/* จำนวนจริง ไม่ใช่จำนวนที่แสดง — ดู `count` ใน BoardColumn */}
+              <span className="board-count">{col.count.toLocaleString('th-TH')}</span>
             </h2>
+
+            {/*
+              ป้ายเพดานแสดงเฉพาะตอนไม่แบ่งเลน — เพดานเป็นข้อเท็จจริงของ
+              **ทั้งคอลัมน์** ไม่ใช่ของเลน · ขึ้นทุกเลนคือการบอกเรื่องเดียวกัน
+              ห้ารอบ และตัวเลขจะไม่ตรงกับจำนวนการ์ดที่เห็นในเลนนั้นด้วย
+            */}
+            {showWip ? wipNote(col) : null}
 
             {col.cards.length === 0 ? (
               <p className="board-empty">ไม่มีเรื่องในคอลัมน์นี้</p>

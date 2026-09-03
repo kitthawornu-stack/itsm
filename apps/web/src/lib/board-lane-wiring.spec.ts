@@ -73,6 +73,7 @@ describe('การต่อสายเลนเข้ากับกระด�
             { itemKey: 'B', summary: 'ข', assignee: 'สมชาย', priority: null, rank: 'b' },
             { itemKey: 'C', summary: 'ค', assignee: null, priority: null, rank: 'c' },
           ],
+          count: 3,
         },
       ],
       'assignee',

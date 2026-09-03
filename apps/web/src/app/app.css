@@ -3753,6 +3753,39 @@ tr[data-state='completed'] td {
   margin-bottom: var(--space-6);
 }
 
+/*
+  ป้ายเพดานงานที่ทำพร้อมกัน
+
+  **สีไม่ใช่ตัวบอกเพียงอย่างเดียว** — ข้อความบอกครบทุกกรณีอยู่แล้ว
+  (`wipBadge` ใน board-view.tsx) สีเป็นแค่ตัวช่วยกวาดสายตา · คนตาบอดสี
+  และคนที่ใช้ screen reader จึงได้ข้อมูลเท่ากัน
+*/
+.board-wip {
+  margin: 0 0 var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  /* ข้อความไทยที่ตัดบรรทัดได้ ต้องไม่ต่ำกว่า 1.6 (CLAUDE.md §5) */
+  line-height: var(--line-height-body);
+  overflow-wrap: anywhere;
+}
+
+.board-wip[data-tone='under'] {
+  background: var(--status-neutral-soft);
+  color: var(--text-muted);
+}
+
+.board-wip[data-tone='at'] {
+  background: var(--status-warning-soft);
+  color: var(--status-warning);
+}
+
+.board-wip[data-tone='over'] {
+  background: var(--status-critical-soft);
+  color: var(--status-critical);
+  font-weight: 600;
+}
+
 .board-lane-title {
   font-family: var(--font-display);
   font-size: 15px;

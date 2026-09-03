@@ -34,12 +34,19 @@ const columns = [
     name: 'ใหม่',
     category: 'TODO',
     cards: [card('A', 'สมชาย', 1), card('B', null, 3), card('C', 'มาลี', 1)],
+    /*
+      **ตั้งไว้สูงกว่าจำนวนการ์ดโดยตั้งใจ** — เลียนแบบคอลัมน์จริงที่มีงาน
+      มากกว่าที่กระดานดึงมาแสดง · ถ้า `splitLanes` คัดลอกค่านี้ไปทุกเลน
+      ห้าเลนจะขึ้นเลข 999 เหมือนกันหมด ซึ่งไม่ตรงกับการ์ดที่เห็นสักเลน
+    */
+    count: 999,
   },
   {
     statusId: '2',
     name: 'กำลังทำ',
     category: 'IN_PROGRESS',
     cards: [card('D', 'สมชาย', null)],
+    count: 42,
   },
 ];
 
@@ -134,6 +141,7 @@ describe('เลนบนกระดาน', () => {
         name: 'ใหม่',
         category: 'TODO',
         cards: [named('A', 5, 'ต่ำ'), named('B', 1, 'สูงมาก'), named('C', 3, 'ปานกลาง')],
+        count: 3,
       },
     ];
     const lanes = splitLanes(many, 'priority');
@@ -142,6 +150,28 @@ describe('เลนบนกระดาน', () => {
     expect([...lanes.map((l) => l.label)].sort((x, y) => x.localeCompare(y, 'th'))).not.toEqual(
       lanes.map((l) => l.label),
     );
+  });
+
+  /**
+   * **หัวคอลัมน์ในเลน ต้องบอกจำนวนของเลนนั้น**
+   *
+   * `count` ของคอลัมน์ทั้งใบมาจากคิวรีนับของเซิร์ฟเวอร์ และใหญ่กว่าจำนวน
+   * การ์ดที่ดึงมาได้ · ถ้าคัดลอกไปทุกเลน ทุกเลนจะขึ้นเลขเดียวกันหมด
+   * และไม่มีเลนไหนตรงกับสิ่งที่ตาเห็น — **ตัวเลขที่ผิดแย่กว่าไม่มีตัวเลข**
+   */
+  it('**count ของเลนคือจำนวนการ์ดในเลนนั้น ไม่ใช่ของทั้งคอลัมน์**', () => {
+    for (const lane of splitLanes(columns, 'assignee')) {
+      for (const col of lane.columns) {
+        expect(col.count, `เลน ${lane.label} คอลัมน์ ${col.name} คัดลอก count มา`).toBe(
+          col.cards.length,
+        );
+      }
+    }
+  });
+
+  it('ไม่แบ่งเลน — count ของคอลัมน์ยังเป็นจำนวนจริงจากเซิร์ฟเวอร์', () => {
+    const [only] = splitLanes(columns, 'none');
+    expect(only?.columns[0]?.count, 'ถูกเขียนทับด้วยจำนวนการ์ดที่แสดง').toBe(999);
   });
 
   it('กระดานเปล่า ได้เลนเปล่า ไม่ใช่พัง', () => {

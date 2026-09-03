@@ -196,6 +196,7 @@ export default async function BoardPage({
               projectKey={data.projectKey}
               columns={l.columns}
               showHelp={i === 0}
+              showWip={false}
               laneLabel={l.label}
             />
           </section>
