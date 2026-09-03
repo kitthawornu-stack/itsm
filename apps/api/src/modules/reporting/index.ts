@@ -7,3 +7,4 @@ export * from './latency-stats';
 export * from './pivot';
 export * from './pivot.service';
 export * from './schedule';
+export * from './schedule.service';

@@ -72,6 +72,7 @@ model Tenant {
   boardWipLimits            BoardWipLimit[]
   boardQuickFilters         BoardQuickFilter[]
   boardCardPrefs            BoardCardPref[]
+  reportSchedules           ReportSchedule[]
   projectVersions           ProjectVersion[]
   workItemVersions          WorkItemVersion[]
 
@@ -120,6 +121,7 @@ model User {
   changeReviews           ChangeReview[]
   workLogs                WorkLog[]
   boardCardPrefs          BoardCardPref[]
+  reportSchedules         ReportSchedule[]
 
   @@unique([tenantId, email])
   @@index([tenantId, isActive])
@@ -343,6 +345,7 @@ model Project {
   boardWipLimits            BoardWipLimit[]
   boardQuickFilters         BoardQuickFilter[]
   boardCardPrefs            BoardCardPref[]
+  reportSchedules           ReportSchedule[]
   versions                  ProjectVersion[]
 
   @@unique([tenantId, key])
@@ -2181,4 +2184,54 @@ model BoardCardPref {
   @@unique([userId, projectId])
   @@index([tenantId, userId])
   @@map("board_card_pref")
+}
+
+/// ตารางเวลาส่งรายงานเป็นไฟล์
+///
+/// **ไม่เก็บ `nextRunAt`** · เวลาถัดไปคำนวณจาก `schedule.ts` ทุกครั้งที่ถาม
+/// — ค่าที่เก็บไว้จะเพี้ยนจากเอนจินในวันที่กติกาเปลี่ยน แล้วไม่มีใครรู้ว่า
+/// อันไหนถูก · ที่นี่มีผู้ใช้ไม่ถึงร้อยคน การคำนวณทุกแถวจึงถูกกว่าการมี
+/// สองแหล่งความจริง (ถ้าวันหนึ่งแถวเยอะจนต้องมีดัชนี ให้เก็บเป็น
+/// คอลัมน์ที่ *สร้างจากเอนจิน* พร้อมเทสต์ที่เทียบสองฝั่ง ไม่ใช่เขียนสูตรซ้ำ)
+///
+/// **ส่งให้เจ้าของตารางคนเดียว** · "ส่งให้ทีม" เป็นคำที่ไม่มีใครนิยาม
+/// และคำที่ไม่มีใครนิยามจะกลายเป็น "ทุกคน" ในโค้ดเสมอ (CLAUDE.md) ·
+/// ผู้รับหลายคนต้องมาเป็นแถวที่ระบุตัวบุคคลชัดเจน ไม่ใช่คำว่าทีม
+model ReportSchedule {
+  id        BigInt @id @default(autoincrement())
+  tenantId  BigInt @map("tenant_id")
+  /// เจ้าของ = ผู้รับ · ส่งด้วยขอบเขตสิทธิ์ของคนนี้เสมอ
+  ownerId   BigInt @map("owner_id")
+  /// โปรเจกต์ที่ส่งออก · ตารางนี้ส่งได้ทีละโปรเจกต์เท่านั้นในรุ่นแรก
+  projectId BigInt @map("project_id")
+  name      String @db.VarChar(128)
+
+  /// "daily" | "weekly" | "monthly" — ตรงกับ Schedule ใน schedule.ts
+  kind    String @db.VarChar(16)
+  /// เวลา **ตามนาฬิกาไทย** ไม่ใช่ UTC — ผู้ใช้ตั้งเวลาที่เขามองเห็น
+  hour    Int
+  minute  Int
+  /// 0 = อาทิตย์ … 6 = เสาร์ · ใช้เฉพาะ kind = weekly
+  weekday Int?
+  /// 1–31 · ใช้เฉพาะ kind = monthly · เดือนที่ไม่มีวันนั้นใช้วันสุดท้าย
+  day     Int?
+
+  /// ปิดไว้ = ตั้งค่าไว้แต่ยังไม่ให้ทำงาน · ต่างจากลบทิ้ง
+  isEnabled Boolean @default(true) @map("is_enabled")
+
+  /// ครั้งล่าสุดที่ส่งสำเร็จ · null = ยังไม่เคยส่ง (ไม่นับว่าตกรอบ)
+  lastRunAt DateTime? @map("last_run_at") @db.DateTime(3)
+  /// เหตุผลที่ครั้งล่าสุดล้ม · null = ครั้งล่าสุดสำเร็จหรือยังไม่เคยส่ง
+  lastError String?   @map("last_error") @db.VarChar(500)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.DateTime(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.DateTime(3)
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  owner   User    @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([ownerId, projectId, name])
+  @@index([tenantId, isEnabled])
+  @@map("report_schedule")
 }
