@@ -3786,6 +3786,24 @@ tr[data-state='completed'] td {
   font-weight: 600;
 }
 
+/* ช่องตั้งเพดาน — อยู่ใต้หัวคอลัมน์ ไม่ใช่ในหน้าตั้งค่าแยก */
+.wip-edit {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-2);
+}
+
+.wip-edit-error {
+  margin: 0;
+  flex-basis: 100%;
+  color: var(--status-critical);
+  font-size: 12px;
+  line-height: var(--line-height-body);
+  overflow-wrap: anywhere;
+}
+
 .board-lane-title {
   font-family: var(--font-display);
   font-size: 15px;

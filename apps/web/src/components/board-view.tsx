@@ -5,6 +5,7 @@ import { useRef, useState, type ReactNode } from 'react';
 import { Alert, StatusPill, type PriorityRank, type StatusCategory } from '@itsm/ui';
 
 import { planDrop } from '@/lib/board-drop';
+import { WipLimitEditor } from './wip-limit-editor';
 
 export interface BoardCard {
   itemKey: string;
@@ -36,6 +37,16 @@ export interface BoardColumn {
    */
   count: number;
   wip: WipState;
+}
+
+/** เพดานที่ตั้งไว้ตอนนี้ · `null` เมื่อยังไม่ได้ตั้งหรือตั้งไว้ไม่ตรงกัน */
+function currentLimit(w: WipState): number | null {
+  /*
+    กรณี `ambiguous` คืน `null` โดยตั้งใจ — ช่องกรอกที่เติมค่ามาให้อันหนึ่ง
+    จากหลายค่าที่ขัดกัน จะทำให้คนกดบันทึกแล้วเชื่อว่ายืนยันของเดิม
+    ทั้งที่เพิ่งทับค่าของอีกฝั่งไป
+  */
+  return w.kind === 'under' || w.kind === 'at' || w.kind === 'over' ? w.max : null;
 }
 
 /**
@@ -111,6 +122,7 @@ export function BoardView({
   columns,
   showHelp = true,
   showWip = true,
+  canManage = false,
   laneLabel = null,
 }: {
   apiBase: string;
@@ -131,6 +143,14 @@ export function BoardView({
    * เหนือเลนที่มีการ์ดใบเดียว อ่านแล้วขัดกับสิ่งที่ตาเห็น
    */
   showWip?: boolean;
+  /**
+   * ผู้ใช้ตั้งเพดานได้หรือไม่ — **ค่าปริยายคือไม่ได้**
+   *
+   * ค่าปริยายที่เปิดไว้จะทำให้หน้าจอใหม่ที่ลืมส่งค่านี้ แสดงช่องกรอก
+   * ให้ทุกคน แล้วคนที่กดจะได้ 403 · การไม่รู้ต้องแปลว่าไม่ได้
+   * เหมือนกับกติกาสิทธิ์ทุกข้อในโปรเจกต์นี้
+   */
+  canManage?: boolean;
   /**
    * ชื่อเลนที่กระดานนี้อยู่ · ใช้ต่อท้าย `aria-label` ของคอลัมน์
    *
@@ -293,6 +313,17 @@ export function BoardView({
               ห้ารอบ และตัวเลขจะไม่ตรงกับจำนวนการ์ดที่เห็นในเลนนั้นด้วย
             */}
             {showWip ? wipNote(col) : null}
+            {showWip && canManage ? (
+              <WipLimitEditor
+                apiBase={apiBase}
+                projectKey={projectKey}
+                column={col.name}
+                current={currentLimit(col.wip)}
+                onSaved={() => {
+                  router.refresh();
+                }}
+              />
+            ) : null}
 
             {col.cards.length === 0 ? (
               <p className="board-empty">ไม่มีเรื่องในคอลัมน์นี้</p>

@@ -20,6 +20,7 @@ interface Board {
   mode: 'kanban' | 'scrum';
   scope: Scope;
   columns: BoardColumn[];
+  canManage: boolean;
 }
 
 /**
@@ -173,7 +174,12 @@ export default async function BoardPage({
       </p>
 
       {laneMode === 'none' ? (
-        <BoardView apiBase={API_BASE} projectKey={data.projectKey} columns={data.columns} />
+        <BoardView
+          apiBase={API_BASE}
+          projectKey={data.projectKey}
+          columns={data.columns}
+          canManage={data.canManage}
+        />
       ) : (
         lanes.map((l, i) => (
           <section key={l.key} className="board-lane">

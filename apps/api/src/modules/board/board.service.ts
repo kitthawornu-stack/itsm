@@ -22,7 +22,7 @@ import { between, needsRebalance, distribute, compareRank } from '@itsm/lexorank
 
 import { auditedTransaction, change } from '../../infrastructure/audit/audited-transaction';
 import { tenantScoped } from '../../infrastructure/prisma/tenant-scope';
-import { assertCan, browsableProjectIds } from '../permission';
+import { assertCan, browsableProjectIds, can } from '../permission';
 import { applyTransition, availableTransitions } from '../workflow';
 
 import { scrumScopeOf, type ScrumScope } from './scrum-scope';
@@ -73,6 +73,13 @@ export interface BoardView {
   /** ขอบเขตที่ใช้จริง — โหมด kanban ได้ `not-scrum` เสมอ เพราะไม่จำกัดด้วยรอบ */
   scope: ScrumScope;
   columns: BoardColumn[];
+  /**
+   * ผู้เรียกตั้งเพดานของโปรเจกต์นี้ได้หรือไม่
+   *
+   * **มีไว้ซ่อนปุ่มเท่านั้น ไม่ใช่การป้องกัน** — `setWipLimit` ตรวจสิทธิ์เอง
+   * ทุกครั้ง · ค่านี้มีไว้ไม่ให้ผู้ใช้เห็นช่องกรอกที่กดแล้วได้ 403
+   */
+  canManage: boolean;
 }
 
 export interface BoardColumn {
@@ -172,7 +179,13 @@ export async function boardOf(
       อะไรเลย ไม่ใช่เห็นทุกอย่าง (CLAUDE.md)
     */
     if (scope.kind !== 'sprint') {
-      return { projectKey: project.key, mode, scope, columns: [] };
+      return {
+        projectKey: project.key,
+        mode,
+        scope,
+        columns: [],
+        canManage: await can(ctx, project.id, 'MANAGE_PROJECT'),
+      };
     }
   }
   const sprintFilter = scope.kind === 'sprint' ? { sprintId: BigInt(scope.sprintId) } : {};
@@ -229,7 +242,13 @@ export async function boardOf(
     });
   }
 
-  return { projectKey: project.key, mode, scope, columns };
+  return {
+    projectKey: project.key,
+    mode,
+    scope,
+    columns,
+    canManage: await can(ctx, project.id, 'MANAGE_PROJECT'),
+  };
 }
 
 export interface MoveInput {

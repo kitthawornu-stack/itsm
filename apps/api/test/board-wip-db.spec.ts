@@ -296,7 +296,22 @@ describe('D · สิทธิ์', () => {
   });
 });
 
-describe('E · ร่องรอย', () => {
+describe('E · หน้าจอรู้ว่าจะซ่อนปุ่มไหม', () => {
+  /**
+   * `canManage` **มีไว้ซ่อนปุ่มเท่านั้น ไม่ใช่การป้องกัน** — `setWipLimit`
+   * ตรวจสิทธิ์เองทุกครั้ง (หมวด D) · ค่านี้มีไว้ไม่ให้ผู้ใช้เห็นช่องกรอก
+   * ที่กดแล้วได้ 403 ซึ่งเป็นคนละเรื่องกับการกันไม่ให้ทำ
+   */
+  it('คนที่มี MANAGE_PROJECT ได้ canManage เป็นจริง', async () => {
+    expect((await boardOf(lead, projectKey)).canManage).toBe(true);
+  });
+
+  it('**คนที่เห็นกระดานได้แต่ไม่มีสิทธิ์จัดการ ได้ canManage เป็นเท็จ**', async () => {
+    expect((await boardOf(member, projectKey)).canManage).toBe(false);
+  });
+});
+
+describe('F · ร่องรอย', () => {
   /**
    * ทุก mutation ต้องเขียน audit ในทรานแซกชันเดียวกัน (INVARIANT 2) ·
    * **การถอดเพดานก็เป็นการเปลี่ยนแปลง** — เพดานที่หายไปโดยไม่มีใครรู้ว่า
