@@ -26,6 +26,7 @@ import { assertCan, browsableProjectIds } from '../permission';
 import { applyTransition, availableTransitions } from '../workflow';
 
 import { scrumScopeOf, type ScrumScope } from './scrum-scope';
+import { evaluateWip, wipLimitOf, type WipState } from './wip-limit';
 
 export class BoardItemNotFoundError extends Error {
   constructor() {
@@ -73,6 +74,16 @@ export interface BoardColumn {
   name: string;
   category: string;
   cards: BoardCard[];
+  /**
+   * จำนวนงานจริงในคอลัมน์นี้ · **ไม่ใช่ `cards.length`**
+   *
+   * `cards` ถูกตัดที่ `limitPerColumn` (100) · คอลัมน์ที่มีงานจริง 150 ใบ
+   * จะมี `cards.length === 100` แต่ `count === 150` · เพดาน WIP ตัดสิน
+   * จากตัวเลขนี้เท่านั้น มิฉะนั้นคอลัมน์ที่ล้นจริงจะเงียบตั้งแต่ใบที่ 101
+   */
+  count: number;
+  /** ผลการตัดสินเพดานงานที่ทำพร้อมกัน — `no-limit` เมื่อยังไม่ได้ตั้ง */
+  wip: WipState;
 }
 
 /**
@@ -160,6 +171,25 @@ export async function boardOf(
   }
   const sprintFilter = scope.kind === 'sprint' ? { sprintId: BigInt(scope.sprintId) } : {};
 
+  /*
+    **นับจำนวนจริงด้วยคิวรีของตัวเอง ไม่ใช่จาก `cards.length`**
+
+    คิวรีเดียวสำหรับทั้งกระดาน แล้วรวมตามสถานะที่ยุบเข้าคอลัมน์เดียวกัน —
+    ถูกกว่าการนับทีละคอลัมน์ และให้คำตอบที่ไม่ขึ้นกับเพดานการแสดงผล
+  */
+  const grouped = await db.workItem.groupBy({
+    by: ['statusId'],
+    where: { projectId: project.id, ...sprintFilter },
+    _count: { _all: true },
+  });
+  const countByStatus = new Map(grouped.map((g) => [g.statusId.toString(), g._count._all]));
+
+  const limitRows = await db.boardWipLimit.findMany({
+    where: { projectId: project.id },
+    select: { statusId: true, maxCards: true },
+  });
+  const limitByStatus = new Map(limitRows.map((r) => [r.statusId.toString(), r.maxCards]));
+
   const columns: BoardColumn[] = [];
   for (const [name, e] of byName) {
     const rows = await db.workItem.findMany({
@@ -175,10 +205,14 @@ export async function boardOf(
         priority: { select: { rank: true, name: true } },
       },
     });
+    const ids = e.ids.map((i) => i.toString());
+    const count = ids.reduce((n, id) => n + (countByStatus.get(id) ?? 0), 0);
     columns.push({
       statusId: (e.ids[0] ?? 0n).toString(),
       name,
       category: e.category,
+      count,
+      wip: evaluateWip(count, wipLimitOf(ids, limitByStatus)),
       cards: rows.map((r) => ({
         itemKey: r.itemKey,
         summary: r.summary,

@@ -69,6 +69,7 @@ model Tenant {
   webhooks                  Webhook[]
   webhookDeliveries         WebhookDelivery[]
   sprints                   Sprint[]
+  boardWipLimits            BoardWipLimit[]
   projectVersions           ProjectVersion[]
   workItemVersions          WorkItemVersion[]
 
@@ -336,7 +337,8 @@ model Project {
   dashboardGadgets          DashboardGadget[]
   notificationAudienceRules NotificationAudienceRule[]
   sprints                   Sprint[]
-  versions                ProjectVersion[]
+  boardWipLimits            BoardWipLimit[]
+  versions                  ProjectVersion[]
 
   @@unique([tenantId, key])
   @@index([tenantId, isArchived])
@@ -454,6 +456,7 @@ model WorkflowStatus {
   transitionsFrom WorkflowTransition[] @relation("TransitionFrom")
   transitionsTo   WorkflowTransition[] @relation("TransitionTo")
   workItems       WorkItem[]
+  wipLimits       BoardWipLimit[]
 
   @@unique([workflowId, name])
   @@index([tenantId, workflowId, position])
@@ -2058,19 +2061,19 @@ model Sprint {
 /// **ไม่มีแถว = เก็บตลอดไป** — ไม่ใช่ "ใช้ค่าปริยายแล้วลบ" · การไม่กรอง
 /// คือค่าปริยายของทุกคิวรี ถ้าเผลอตรงนี้ องค์กรที่ไม่เคยตั้งอะไรจะถูกลบข้อมูลทิ้ง
 model RetentionPolicy {
-  id       BigInt @id @default(autoincrement())
-  tenantId BigInt @map("tenant_id")
+  id        BigInt  @id @default(autoincrement())
+  tenantId  BigInt  @map("tenant_id")
   /// ชื่อตารางจริง — ตรงกับ RETENTION_TARGETS ใน retention.ts (เทสต์เทียบสองฝั่ง)
-  target   String @db.VarChar(64)
+  target    String  @db.VarChar(64)
   /// จำนวนวันที่เก็บ · ขั้นต่ำต่างกันตามตาราง บังคับที่ `cutoffFor()`
-  keepDays Int    @map("keep_days")
+  keepDays  Int     @map("keep_days")
   /// ปิดไว้ = ตั้งค่าไว้แต่ยังไม่ให้ทำงาน · ต่างจากไม่มีแถว ซึ่งแปลว่ายังไม่เคยตั้ง
   isEnabled Boolean @default(false) @map("is_enabled")
 
   /// ครั้งล่าสุดที่ลบจริงตามนโยบายนี้ · null = ยังไม่เคยลบเลยสักครั้ง
-  lastRunAt    DateTime? @map("last_run_at") @db.DateTime(3)
+  lastRunAt   DateTime? @map("last_run_at") @db.DateTime(3)
   /// จำนวนแถวที่ลบไปในครั้งล่าสุด — ตัวเลขที่ตอบได้ว่าเกิดอะไรขึ้นจริง
-  lastDeleted  Int?      @map("last_deleted")
+  lastDeleted Int?      @map("last_deleted")
 
   updatedAt DateTime @updatedAt @map("updated_at") @db.DateTime(3)
 
@@ -2079,4 +2082,35 @@ model RetentionPolicy {
   /// หนึ่งตารางหนึ่งนโยบาย — สองแถวที่ค่าต่างกัน ตอบไม่ได้ว่าอันไหนจริง
   @@unique([tenantId, target])
   @@map("retention_policy")
+}
+
+/// เพดานงานที่ทำพร้อมกันของคอลัมน์บนกระดาน (WIP Limit)
+///
+/// **ไม่มีแถว = ไม่มีเพดาน** · เก็บ `maxCards` ขั้นต่ำ 1 เสมอ — ค่า 0
+/// ตั้งไม่ได้ เพราะ `if (!max)` ใน JavaScript อ่าน 0 เหมือน "ไม่ได้ตั้ง"
+/// แล้วเพดานที่เข้มที่สุดจะกลายเป็นไม่มีเพดานโดยไม่มีอะไรส่งเสียง
+/// (บังคับที่ `isValidWipLimit` ใน wip-limit.ts)
+///
+/// ผูกกับ **สถานะ** ไม่ใช่ชื่อคอลัมน์ — ชื่อเปลี่ยนได้ แล้วเพดานจะกำพร้าเงียบ ๆ
+/// · กระดานยุบสถานะชื่อซ้ำจากหลาย workflow เป็นคอลัมน์เดียว ถ้าสถานะเหล่านั้น
+/// ตั้งไม่ตรงกัน `wipLimitOf()` คืน "กำกวม" ไม่ใช่เลือกมาอันหนึ่ง
+model BoardWipLimit {
+  id        BigInt @id @default(autoincrement())
+  tenantId  BigInt @map("tenant_id")
+  projectId BigInt @map("project_id")
+  statusId  BigInt @map("status_id")
+  /// จำนวนสูงสุดที่ตกลงกันไว้ · 1..999
+  maxCards  Int    @map("max_cards")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.DateTime(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.DateTime(3)
+
+  tenant  Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  project Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  status  WorkflowStatus @relation(fields: [statusId], references: [id], onDelete: Cascade)
+
+  /// เพดานเดียวต่อ (โปรเจกต์, สถานะ) — สองแถวที่ขัดกันคือคำตอบที่ตอบไม่ได้
+  @@unique([projectId, statusId])
+  @@index([tenantId, projectId])
+  @@map("board_wip_limit")
 }
