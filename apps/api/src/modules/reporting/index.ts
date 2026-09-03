@@ -4,3 +4,4 @@ export * from './dashboard.service';
 export * from './report.service';
 export * from './time-report.service';
 export * from './latency-stats';
+export * from './pivot';
