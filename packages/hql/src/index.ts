@@ -526,3 +526,204 @@ export function compile(input: string, scope: CompileScope): CompiledQuery {
     sort,
   };
 }
+
+// ============================================================
+// เป้าหมายที่สอง — เงื่อนไข `where` ของ Prisma
+// ============================================================
+
+/**
+ * แปล HQL เป็นเงื่อนไข `where` ของ Prisma
+ *
+ * ## ทำไมต้องมีเป้าหมายที่สอง
+ *
+ * HQL แปลเป็น OpenSearch DSL อยู่แล้ว และหน้าค้นหาใช้ทางนั้น · แต่ **กระดาน
+ * อ่านจาก MySQL** ซึ่งเป็นแหล่งความจริง · ตัวกรองที่ตัดสินว่าการ์ดใบไหน
+ * ปรากฏบนกระดาน ต้องเห็นข้อมูลชุดเดียวกับที่กระดานเห็น
+ *
+ * ถ้าให้ตัวกรองเดินผ่านดัชนีแล้วเอาคีย์กลับมากรอง จะได้ปัญหาสองชั้น: ดัชนี
+ * ตามหลัง MySQL อยู่เสมอ (งานที่เพิ่งสร้างจะหายจากกระดานเงียบ ๆ) และรายการ
+ * คีย์ที่ตรงมีได้เป็นพัน ซึ่งไม่มีเพดานที่ปลอดภัย
+ *
+ * ## สิ่งที่แปลไม่ได้ ต้องปฏิเสธ ไม่ใช่แปลแบบพอไหว
+ *
+ * ฟิลด์ข้อความแปลไม่ได้เพราะ MySQL FULLTEXT ตัดคำไทยไม่ได้ (ADR-005) และ
+ * `LIKE '%…%'` ให้ผลคนละแบบกับหน้าค้นหา · **ตัวกรองชื่อเดียวกันที่ตอบ
+ * คนละอย่างในสองที่ แย่กว่าไม่มีตัวกรอง** เพราะคนจะเชื่อผลที่เห็นทั้งสองที่
+ */
+/** ฟิลด์ที่คิวรีบนหน้าค้นหาได้ แต่แปลเป็นเงื่อนไขของฐานข้อมูลไม่ได้ */
+export const PRISMA_UNSUPPORTED_FIELDS: readonly string[] = [
+  'summary',
+  'description',
+  // เก็บใน EAV (ADR-001) จึงไม่ใช่คอลัมน์ที่กรองตรง ๆ ได้
+  'label',
+] as const;
+
+/** ฟิลด์ที่ใช้กับหน้าค้นหาได้ แต่ใช้เป็นตัวกรองบนกระดานไม่ได้ */
+export class HqlUnsupportedInPrismaError extends Error {
+  constructor(field: string) {
+    super(
+      `ฟิลด์ "${field}" ใช้เป็นตัวกรองบนกระดานไม่ได้ — ใช้ที่หน้าค้นหาแทน` +
+        ' · กระดานอ่านจากฐานข้อมูลโดยตรง ซึ่งค้นข้อความไทยไม่ได้',
+    );
+  }
+}
+
+/** เปรียบเทียบได้เฉพาะ "มีค่า/ไม่มีค่า" ไม่ใช่เท่ากับค่าใดค่าหนึ่ง */
+export class HqlComparisonUnsupportedError extends Error {
+  constructor(field: string) {
+    super(
+      `ฟิลด์ "${field}" เทียบเท่ากับค่าใดค่าหนึ่งไม่ได้ — ใช้ได้แค่ IS EMPTY` +
+        ' หรือ IS NOT EMPTY · การเทียบวันเวลาแบบตรงวินาทีไม่เคยตรงกับอะไร',
+    );
+  }
+}
+
+/** ค่าที่ใส่ในเงื่อนไขได้ — ครอบเท่าที่เป้าหมายนี้สร้างจริง */
+type Scalar = string | number | bigint | null;
+/** เงื่อนไขหนึ่งชั้นของ Prisma · โครงสร้างซ้อนได้ไม่จำกัดชั้น */
+export interface PrismaWhere {
+  [key: string]: Scalar | PrismaWhere | PrismaWhere[] | Scalar[] | undefined;
+}
+
+interface ColumnSpec {
+  /** ชื่อคอลัมน์ หรือ `[ชื่อความสัมพันธ์, ชื่อฟิลด์ในนั้น]` */
+  path: string | [string, string];
+  /** แปลงค่าที่ผู้ใช้พิมพ์ (สตริงเสมอ) เป็นชนิดที่คอลัมน์ใช้ */
+  cast: (v: string) => Scalar;
+  /**
+   * คอลัมน์นี้เป็น `NULL` ได้หรือไม่
+   *
+   * ใช้ตัดสินว่า `!=` ต้องเผื่อแถวที่เป็น NULL ด้วยไหม — ดู `negate()`
+   */
+  nullable: boolean;
+  /** เทียบเท่ากับค่าไม่ได้ ใช้ได้แค่ IS EMPTY / IS NOT EMPTY */
+  emptyOnly?: boolean;
+}
+
+const bigint = (v: string): bigint => {
+  if (!/^\d+$/.test(v)) throw new HqlValueError(`ค่า "${v}" ต้องเป็นรหัสที่เป็นตัวเลข`);
+  return BigInt(v);
+};
+const int = (v: string): number => {
+  if (!/^\d+$/.test(v)) throw new HqlValueError(`ค่า "${v}" ต้องเป็นตัวเลข`);
+  return Number(v);
+};
+const str = (v: string): string => v;
+
+/**
+ * ฟิลด์ที่แปลได้ — **allow-list เหมือนฝั่ง OpenSearch**
+ *
+ * ปล่อยให้พิมพ์ชื่ออะไรก็ได้ แปลว่าคนที่รู้ชื่อคอลัมน์ภายในจะกรองด้วยฟิลด์
+ * ที่ไม่ควรถูกกรอง และรู้ได้ว่ามีข้อมูลอะไรอยู่จากจำนวนผลลัพธ์
+ */
+const COLUMNS: Record<string, ColumnSpec> = {
+  status: { path: ['status', 'name'], cast: str, nullable: false },
+  category: { path: ['status', 'category'], cast: str, nullable: false },
+  priority: { path: ['priority', 'rank'], cast: int, nullable: true },
+  assignee: { path: 'assigneeId', cast: bigint, nullable: true },
+  reporter: { path: 'reporterId', cast: bigint, nullable: false },
+  project: { path: ['project', 'key'], cast: str, nullable: false },
+  type: { path: ['issueType', 'name'], cast: str, nullable: false },
+  key: { path: 'itemKey', cast: str, nullable: false },
+  parent: { path: 'parentId', cast: bigint, nullable: true },
+  /*
+    วันเวลาใช้ได้แค่ "มีค่า/ไม่มีค่า" · `resolved IS EMPTY` = ยังไม่ปิด
+    ซึ่งเป็นตัวกรองที่ใช้จริงบนกระดาน · ส่วน `resolved = "..."` ต้องตรง
+    ระดับมิลลิวินาที จึงไม่เคยตรงกับอะไรและอ่านเหมือนตัวกรองพัง
+  */
+  resolved: { path: 'resolvedAt', cast: str, nullable: true, emptyOnly: true },
+};
+
+const isUnsupported = (field: string): boolean => PRISMA_UNSUPPORTED_FIELDS.includes(field);
+
+function columnOf(field: string): ColumnSpec {
+  if (isUnsupported(field)) throw new HqlUnsupportedInPrismaError(field);
+  const c = COLUMNS[field];
+  if (c === undefined) throw new HqlFieldError(field);
+  return c;
+}
+
+/** ห่อค่าให้อยู่ในรูปเงื่อนไขตามเส้นทางของคอลัมน์ */
+function at(spec: ColumnSpec, value: Scalar | PrismaWhere): PrismaWhere {
+  if (typeof spec.path === 'string') return { [spec.path]: value };
+  const [rel, field] = spec.path;
+  return { [rel]: { [field]: value } };
+}
+
+/**
+ * ปฏิเสธค่าหนึ่ง โดย **เผื่อแถวที่เป็น NULL ด้วยเมื่อคอลัมน์เป็น NULL ได้**
+ *
+ * `assignee != "7"` ใน SQL ตรง ๆ จะไม่คืนแถวที่ `assignee_id` เป็น NULL
+ * เพราะ `NULL != 7` ได้ UNKNOWN ไม่ใช่ TRUE · แต่คนที่พิมพ์ "ไม่ใช่คนนี้"
+ * คาดว่าจะเห็นงานที่ยังไม่มีผู้รับผิดชอบด้วย — ซึ่งบนกระดานศูนย์บริการ
+ * คือกองที่สำคัญที่สุด และถ้าหายไปจะไม่มีอะไรบอกเลย
+ */
+function negate(spec: ColumnSpec, inner: PrismaWhere): PrismaWhere {
+  if (!spec.nullable) return at(spec, inner);
+  return { OR: [at(spec, inner), at(spec, null)] };
+}
+
+function clauseOf(node: Node): PrismaWhere {
+  switch (node.kind) {
+    case 'and':
+      return { AND: [clauseOf(node.left), clauseOf(node.right)] };
+    case 'or':
+      return { OR: [clauseOf(node.left), clauseOf(node.right)] };
+    case 'not':
+      return { NOT: clauseOf(node.child) };
+    case 'empty': {
+      const spec = columnOf(node.field);
+      return at(spec, node.not ? { not: null } : null);
+    }
+    case 'cmp': {
+      const spec = columnOf(node.field);
+      /*
+        `~` คือการค้นด้วยการวิเคราะห์คำ ซึ่งไม่มีอยู่ในฐานข้อมูลนี้ ·
+        ฟิลด์ที่ใช้ `~` ได้ทั้งหมดอยู่ในรายการที่ปฏิเสธไปแล้วข้างบน
+        แต่กันไว้อีกชั้นเผื่อมีฟิลด์ใหม่
+      */
+      if (node.op === '~') throw new HqlUnsupportedInPrismaError(node.field);
+      if (spec.emptyOnly === true) throw new HqlComparisonUnsupportedError(node.field);
+      const v = spec.cast(node.value);
+      return node.op === '=' ? at(spec, v) : negate(spec, { not: v });
+    }
+    case 'in': {
+      const spec = columnOf(node.field);
+      if (spec.emptyOnly === true) throw new HqlComparisonUnsupportedError(node.field);
+      const vs = node.values.map((v) => spec.cast(v));
+      return node.not ? negate(spec, { notIn: vs }) : at(spec, { in: vs });
+    }
+  }
+}
+
+/** ขอบเขตที่ผู้เรียกต้องบอก — เหมือนฝั่ง OpenSearch ทุกประการ */
+export interface PrismaScope {
+  tenantId: string;
+  /** โปรเจกต์ที่ผู้ใช้คนนี้เปิดดูได้ — **รายการว่าง = ไม่เห็นอะไรเลย** */
+  browsableProjectIds: string[];
+}
+
+/**
+ * แปลคิวรีเป็นเงื่อนไข `where`
+ *
+ * **ขอบเขต tenant และโปรเจกต์ถูกใส่เสมอ** ไม่ว่าคิวรีจะเขียนว่าอะไร
+ * (INVARIANT 1) · และรายการโปรเจกต์ว่างแปลว่าไม่เห็นอะไรเลย ไม่ใช่ไม่จำกัด
+ * — การไม่กรองคือค่าปริยายของทุกคิวรี ซึ่งเป็นวิธีที่ระบบสิทธิ์รั่วบ่อยที่สุด
+ *
+ * คิวรีว่างเปล่าไม่ใช่ error ที่นี่ (ต่างจาก `compile`) เพราะ "ไม่กรองอะไรเพิ่ม"
+ * เป็นสถานะที่ใช้จริงของตัวกรองบนกระดาน
+ */
+export function compilePrisma(input: string, scope: PrismaScope): PrismaWhere {
+  const base: PrismaWhere = {
+    tenantId: BigInt(scope.tenantId),
+    projectId: { in: scope.browsableProjectIds.map((p) => BigInt(p)) },
+  };
+  const tokens = tokenize(input);
+  const { where } = Parser.splitOrderBy(tokens);
+  /*
+    คิวรีว่างเปล่าไม่ใช่ error ที่นี่ (ต่างจาก `compile`) เพราะ
+    "ไม่กรองอะไรเพิ่ม" เป็นสถานะที่ใช้จริงของตัวกรองบนกระดาน
+  */
+  if (where.length <= 1) return base;
+  return { ...base, AND: [clauseOf(new Parser(where).parse())] };
+}
