@@ -171,6 +171,8 @@ import {
   uploadAttachment,
 } from './attachment.service';
 import { MAX_SIZE_BYTES, decodeMultipartFilename } from './attachment-policy';
+import { NOT_COPIED } from './clone-plan';
+import { cloneWorkItem, WorkItemNotFoundForCloneError } from './clone.service';
 import { UploadErrorFilter } from '../../infrastructure/http/upload-error.filter';
 
 export interface WorkItemListRow {
@@ -1816,6 +1818,52 @@ export class WorkItemController {
    * `403` ทั้งกรณี "ไม่ใช่ผู้แจ้ง" และ "ไม่พบเรื่อง" — service ตั้งใจตอบเหมือนกัน
    * เพื่อไม่ยืนยันว่าเลขที่เรื่องนั้นมีอยู่จริง
    */
+  /**
+   * คัดลอกเรื่อง
+   *
+   * **สำเนาเดินผ่านเส้นทางเดียวกับการแจ้งเรื่องปกติ** — ตรวจฟิลด์บังคับ
+   * ออกคีย์ ตั้งนาฬิกา SLA และเขียน audit เหมือนกันทุกประการ ·
+   * คำตอบมี `notCopied` ที่บอกว่าอะไรไม่ติดไปด้วยและทำไม เพื่อให้หน้าจอ
+   * แสดงตรงกับที่โค้ดทำจริง ไม่ใช่ให้คนเขียนหน้าจอเดาเอง
+   */
+  @Post(':key/clone')
+  @HttpCode(HttpStatus.CREATED)
+  async clone(
+    @Ctx() ctx: TenantContext,
+    @Param('key') key: string,
+  ): Promise<{ id: string; itemKey: string; status: string; notCopied: typeof NOT_COPIED }> {
+    try {
+      const created = await cloneWorkItem(ctx, key);
+      return {
+        id: created.id.toString(),
+        itemKey: created.itemKey,
+        status: created.statusName,
+        notCopied: NOT_COPIED,
+      };
+    } catch (e) {
+      if (e instanceof WorkItemNotFoundForCloneError) {
+        throw new HttpException({ error: 'not_found', message: e.message }, HttpStatus.NOT_FOUND);
+      }
+      if (e instanceof RequiredFieldsMissingError) {
+        /*
+          เกิดได้จริงเมื่อฟิลด์บังคับถูกเพิ่มหลังจากใบต้นทางถูกสร้าง ·
+          บอกว่าขาดอะไร เพื่อให้คนไปเติมที่ใบต้นทางหรือกรอกเองได้
+        */
+        throw new HttpException(
+          { error: 'validation_failed', message: e.message, missingFields: e.fields },
+          HttpStatus.UNPROCESSABLE_ENTITY,
+        );
+      }
+      if (e instanceof UnknownFieldOptionError) {
+        throw new HttpException(
+          { error: 'validation_failed', message: e.message },
+          HttpStatus.UNPROCESSABLE_ENTITY,
+        );
+      }
+      throw e;
+    }
+  }
+
   @Post(':key/rating')
   @HttpCode(HttpStatus.OK)
   async rate(

@@ -26,3 +26,5 @@ export * from './change-review';
 export * from './change-review.service';
 export * from './change-risk';
 export * from './change-risk.service';
+export * from './clone-plan';
+export * from './clone.service';

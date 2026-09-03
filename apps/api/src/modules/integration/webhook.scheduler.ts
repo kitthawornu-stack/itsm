@@ -24,6 +24,8 @@ import { systemClock } from '@itsm/types';
 import { withSystemScope } from '../../infrastructure/prisma/tenant-scope';
 import { dispatchDue } from './webhook.service';
 
+import { schedulersEnabled } from '../../infrastructure/scheduler/enabled';
+
 /** หน่วงก่อนรอบแรก — ให้ระบบขึ้นครบก่อน */
 export const FIRST_DISPATCH_DELAY_MS = 15 * 1000;
 /** ระยะห่างระหว่างรอบ — ถี่กว่านี้ไม่ได้อะไร เพราะระยะรอลองใหม่สั้นสุดคือ 30 วินาที */
@@ -37,6 +39,15 @@ export class WebhookScheduler implements OnModuleInit, OnModuleDestroy {
   private running = false;
 
   onModuleInit(): void {
+    /*
+      สวิตช์รวมของงานเบื้องหลัง — ปิดพร้อมกันทุกตัวด้วย `SCHEDULERS=off`
+      เทสต์ที่ยกแอปขึ้นทั้งตัวใช้สิ่งนี้ เพื่อไม่ให้ตัวตั้งเวลาไปแตะฐานข้อมูล
+      ที่ไฟล์เทสต์อื่นกำลังใช้อยู่ (ดูเหตุผลเต็มใน `infrastructure/scheduler/enabled.ts`)
+    */
+    if (!schedulersEnabled()) {
+      this.log.log('ปิดงานเบื้องหลังไว้ (SCHEDULERS=off)');
+      return;
+    }
     this.log.log(
       `ตัวส่ง webhook ทำงานทุก ${String(Math.round(DISPATCH_INTERVAL_MS / 1000))} วินาที`,
     );

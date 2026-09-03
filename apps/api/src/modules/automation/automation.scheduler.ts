@@ -27,6 +27,8 @@ import { systemClock } from '@itsm/types';
 import { withSystemScope } from '../../infrastructure/prisma/tenant-scope';
 import { scanIdleItems } from './automation-scan';
 
+import { schedulersEnabled } from '../../infrastructure/scheduler/enabled';
+
 /**
  * ทุก 5 นาที — เท่ากับ `sla-reconciler`
  *
@@ -47,6 +49,15 @@ export class AutomationScheduler implements OnModuleInit, OnModuleDestroy {
   private running = false;
 
   onModuleInit(): void {
+    /*
+      สวิตช์รวมของงานเบื้องหลัง — ปิดพร้อมกันทุกตัวด้วย `SCHEDULERS=off`
+      เทสต์ที่ยกแอปขึ้นทั้งตัวใช้สิ่งนี้ เพื่อไม่ให้ตัวตั้งเวลาไปแตะฐานข้อมูล
+      ที่ไฟล์เทสต์อื่นกำลังใช้อยู่ (ดูเหตุผลเต็มใน `infrastructure/scheduler/enabled.ts`)
+    */
+    if (!schedulersEnabled()) {
+      this.log.log('ปิดงานเบื้องหลังไว้ (SCHEDULERS=off)');
+      return;
+    }
     /*
       ปิดได้ด้วย env — เครื่องของนักพัฒนาที่รัน `pnpm dev` ค้างไว้ทั้งวัน
       ไม่ควรแตะข้อมูลเองทุกห้านาที · และเทสต์ที่ยกทั้งแอปขึ้นมาก็ไม่ควรถูก

@@ -22,6 +22,8 @@ import { Injectable, Logger, type OnModuleDestroy, type OnModuleInit } from '@ne
 import { indexHealthOfAll } from './indexer.service';
 import { needsAttention, type IndexHealthState } from './index-health';
 
+import { schedulersEnabled } from '../../infrastructure/scheduler/enabled';
+
 /** ทุก 5 นาที — เท่ากับ sla-reconciler และตัวกวาดกฎอัตโนมัติ */
 export const WATCH_INTERVAL_MS = 5 * 60 * 1000;
 
@@ -37,6 +39,15 @@ export class IndexWatchScheduler implements OnModuleInit, OnModuleDestroy {
   private readonly last = new Map<string, IndexHealthState>();
 
   onModuleInit(): void {
+    /*
+      สวิตช์รวมของงานเบื้องหลัง — ปิดพร้อมกันทุกตัวด้วย `SCHEDULERS=off`
+      เทสต์ที่ยกแอปขึ้นทั้งตัวใช้สิ่งนี้ เพื่อไม่ให้ตัวตั้งเวลาไปแตะฐานข้อมูล
+      ที่ไฟล์เทสต์อื่นกำลังใช้อยู่ (ดูเหตุผลเต็มใน `infrastructure/scheduler/enabled.ts`)
+    */
+    if (!schedulersEnabled()) {
+      this.log.log('ปิดงานเบื้องหลังไว้ (SCHEDULERS=off)');
+      return;
+    }
     if (process.env.INDEX_WATCH === 'off') {
       this.log.log('ปิดการเฝ้าระวังดัชนีไว้ (INDEX_WATCH=off)');
       return;

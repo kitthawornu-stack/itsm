@@ -45,6 +45,7 @@ import { PATH_METADATA, METHOD_METADATA } from '@nestjs/common/constants';
 import { RequestMethod } from '@nestjs/common';
 
 import { AppModule } from '../src/app.module';
+import { SCHEDULERS_OFF } from '../src/infrastructure/scheduler/enabled';
 import { prismaClient } from '../src/infrastructure/prisma/client';
 import { hashPassword } from '../src/modules/identity/password';
 import type { PermissionKey } from '../src/modules/permission';
@@ -105,6 +106,15 @@ function substitute(path: string): string | null {
 }
 
 beforeAll(async () => {
+  /*
+    **ปิดงานเบื้องหลังก่อนยกแอปขึ้น**
+
+    การยกแอปสตาร์ตตัวตั้งเวลาทุกตัว ซึ่งแตะฐานข้อมูลเดียวกับที่ไฟล์เทสต์อื่น
+    ใช้อยู่ · `automation.scheduler` เรียก `scanIdleItems` ตามเวลา ซึ่งเป็น
+    ฟังก์ชันเดียวกับที่ `automation-scan.spec.ts` ทดสอบ — ทำให้ CI แดง
+    เป็นบางครั้งด้วยเหตุผลที่ไม่เกี่ยวกับโค้ดที่เพิ่งแก้
+  */
+  process.env['SCHEDULERS'] = SCHEDULERS_OFF;
   app = await NestFactory.create(AppModule, { logger: false });
   app.setGlobalPrefix('api/v1');
   app.use(cookieParser());

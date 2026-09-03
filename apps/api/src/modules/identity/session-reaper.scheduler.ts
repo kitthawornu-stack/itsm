@@ -12,6 +12,8 @@ import { systemClock } from '@itsm/types';
 
 import { reapSessions } from './session-reaper.service';
 
+import { schedulersEnabled } from '../../infrastructure/scheduler/enabled';
+
 /** หน่วงก่อนรอบแรก — ให้ระบบขึ้นครบก่อน */
 export const FIRST_REAP_DELAY_MS = 60 * 1000;
 export const REAP_INTERVAL_MS = 6 * 60 * 60 * 1000;
@@ -24,6 +26,15 @@ export class SessionReaperScheduler implements OnModuleInit, OnModuleDestroy {
   private running = false;
 
   onModuleInit(): void {
+    /*
+      สวิตช์รวมของงานเบื้องหลัง — ปิดพร้อมกันทุกตัวด้วย `SCHEDULERS=off`
+      เทสต์ที่ยกแอปขึ้นทั้งตัวใช้สิ่งนี้ เพื่อไม่ให้ตัวตั้งเวลาไปแตะฐานข้อมูล
+      ที่ไฟล์เทสต์อื่นกำลังใช้อยู่ (ดูเหตุผลเต็มใน `infrastructure/scheduler/enabled.ts`)
+    */
+    if (!schedulersEnabled()) {
+      this.log.log('ปิดงานเบื้องหลังไว้ (SCHEDULERS=off)');
+      return;
+    }
     this.log.log(
       `เก็บกวาดเซสชันทุก ${String(Math.round(REAP_INTERVAL_MS / 3_600_000))} ชั่วโมง`,
     );

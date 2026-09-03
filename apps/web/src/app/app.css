@@ -3753,6 +3753,29 @@ tr[data-state='completed'] td {
   max-width: 60rem;
 }
 
+/*
+  กล่องยืนยันการคัดลอก
+
+  รายการ "สิ่งที่ไม่ติดไปด้วย" อ่านเป็นย่อหน้าปกติ ไม่ใช่ตัวเล็กจาง ๆ —
+  มันคือสิ่งที่คนคาดผิดบ่อยที่สุด จึงต้องอ่านง่ายที่สุด
+*/
+.clone-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.clone-note {
+  margin: 0;
+}
+
+.clone-list {
+  margin: 0;
+  padding-left: var(--space-4);
+  color: var(--text-muted);
+  max-width: 42rem;
+}
+
 .mydata {
   display: flex;
   flex-direction: column;

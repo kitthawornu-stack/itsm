@@ -18,6 +18,7 @@ import { AttachmentPanel } from '@/components/attachment-panel';
 import { ChangeReviewPanel } from '@/components/change-review-panel';
 import { ChangeRiskPanel } from '@/components/change-risk-panel';
 import { ChangeWindowPanel } from '@/components/change-window-panel';
+import { CloneItem } from '@/components/clone-item';
 import { RatingForm, type Satisfaction } from '@/components/rating-form';
 import { toSlaBar, type SlaSnapshotView } from '@/lib/sla-label';
 
@@ -52,7 +53,7 @@ interface Detail {
   priority: { rank: number; name: string } | null;
   assignee: string | null;
   description: string | null;
-  permissions?: { canAssign: boolean; canEdit: boolean; canLink?: boolean };
+  permissions?: { canAssign: boolean; canEdit: boolean; canLink?: boolean; canCreate?: boolean };
   priorities?: Array<{ rank: number; name: string }>;
   reporter: string;
   createdAt: string;
@@ -161,6 +162,14 @@ export default async function WorkItemDetail({
           </div>
           <div className="detail-title-row">
             <h1 className="detail-title">{detail.summary}</h1>
+            {/*
+              ปุ่มคัดลอกขึ้นกับ `canCreate` ไม่ใช่ `canEdit` — คัดลอกคือการ
+              **สร้างใบใหม่** ไม่ใช่การแก้ใบนี้ · การซ่อนปุ่มไม่ใช่การป้องกัน
+              เซิร์ฟเวอร์ปฏิเสธเองอยู่แล้ว นี่มีไว้ไม่ให้คนเห็นปุ่มที่กดแล้วได้ 403
+            */}
+            {detail.permissions?.canCreate === true ? (
+              <CloneItem apiBase={API} itemKey={detail.itemKey} />
+            ) : null}
             {detail.permissions?.canEdit === true ? (
               <EditItem
                 apiBase={API}

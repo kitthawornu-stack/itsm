@@ -17,6 +17,8 @@ import { runEmailIntake } from './email-intake.service';
 import { readIntakeConfig, type IntakeConfig } from './intake-config';
 import { MailpitSource } from './mail-source';
 
+import { schedulersEnabled } from '../../infrastructure/scheduler/enabled';
+
 /** หน่วงก่อนรอบแรก — ให้ระบบขึ้นครบก่อน */
 export const FIRST_INTAKE_DELAY_MS = 25 * 1000;
 
@@ -32,6 +34,15 @@ export class EmailIntakeScheduler implements OnModuleInit, OnModuleDestroy {
   private config: IntakeConfig | null = null;
 
   onModuleInit(): void {
+    /*
+      สวิตช์รวมของงานเบื้องหลัง — ปิดพร้อมกันทุกตัวด้วย `SCHEDULERS=off`
+      เทสต์ที่ยกแอปขึ้นทั้งตัวใช้สิ่งนี้ เพื่อไม่ให้ตัวตั้งเวลาไปแตะฐานข้อมูล
+      ที่ไฟล์เทสต์อื่นกำลังใช้อยู่ (ดูเหตุผลเต็มใน `infrastructure/scheduler/enabled.ts`)
+    */
+    if (!schedulersEnabled()) {
+      this.log.log('ปิดงานเบื้องหลังไว้ (SCHEDULERS=off)');
+      return;
+    }
     const result = readIntakeConfig(process.env);
     if (!result.ready) {
       // บอกเหตุผลเสมอ · ความเงียบตรงนี้แปลว่าคำขอของคนหายไปโดยไม่มีใครรู้
