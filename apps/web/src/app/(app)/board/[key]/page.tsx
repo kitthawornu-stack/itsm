@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { Alert, PageHeader, TextLink } from '@itsm/ui';
 
 import { BoardView, type BoardColumn } from '@/components/board-view';
+import { splitLanes, type LaneMode } from '@/lib/swimlanes';
 import { API_BASE, apiFetch } from '@/lib/api';
 
 export const dynamic = 'force-dynamic';
@@ -71,11 +72,16 @@ export default async function BoardPage({
   searchParams,
 }: {
   params: Promise<{ key: string }>;
-  searchParams: Promise<{ mode?: string }>;
+  searchParams: Promise<{ mode?: string; lane?: string }>;
 }): Promise<ReactNode> {
   const { key } = await params;
-  const { mode } = await searchParams;
+  const { mode, lane } = await searchParams;
   const scrum = mode === 'scrum';
+  /*
+    ค่าที่พิมพ์ผิดตกไปเป็น "ไม่แบ่งเลน" — เหมือนกับโหมดกระดาน · การแบ่งเลน
+    โดยไม่ตั้งใจทำให้กระดานหน้าตาเปลี่ยนไปโดยไม่มีใครสั่ง
+  */
+  const laneMode: LaneMode = lane === 'assignee' || lane === 'priority' ? lane : 'none';
 
   let data: Board | null = null;
   let error: string | null = null;
@@ -102,6 +108,7 @@ export default async function BoardPage({
   const total = data.columns.reduce((n, c) => n + c.cards.length, 0);
   const note = scrum ? scopeNote(data.scope) : null;
   const sprintName = data.scope.kind === 'sprint' ? data.scope.name : null;
+  const lanes = splitLanes(data.columns, laneMode);
   const goal = data.scope.kind === 'sprint' ? data.scope.goal : null;
 
   return (
@@ -139,7 +146,61 @@ export default async function BoardPage({
 
       {note === null ? null : <Alert tone={note.tone}>{note.text}</Alert>}
 
-      <BoardView apiBase={API_BASE} projectKey={data.projectKey} columns={data.columns} />
+      {/*
+        แถบเลือกเลน · อยู่ใน URL เหมือนโหมดกระดาน จึงแชร์ลิงก์และกดย้อนกลับได้
+      */}
+      <p className="board-modes">
+        {(
+          [
+            ['none', 'ไม่แบ่งเลน'],
+            ['assignee', 'แบ่งตามผู้รับผิดชอบ'],
+            ['priority', 'แบ่งตามความสำคัญ'],
+          ] as const
+        )
+          .filter(([v]) => v !== laneMode)
+          .map(([v, label]) => (
+            <span key={v} className="board-lane-link">
+              <TextLink
+                href={`/board/${encodeURIComponent(data.projectKey)}?${new URLSearchParams({
+                  ...(scrum ? { mode: 'scrum' } : {}),
+                  ...(v === 'none' ? {} : { lane: v }),
+                }).toString()}`}
+              >
+                {label}
+              </TextLink>
+            </span>
+          ))}
+      </p>
+
+      {laneMode === 'none' ? (
+        <BoardView apiBase={API_BASE} projectKey={data.projectKey} columns={data.columns} />
+      ) : (
+        lanes.map((l, i) => (
+          <section key={l.key} className="board-lane">
+            {/*
+              จำนวนการ์ดต่อเลนแสดงเสมอ — เลนที่ว่างเปล่ายังต้องมีหัวเลน
+              มิฉะนั้นคนจะไม่รู้ว่าคนคนนั้นไม่มีงานอยู่ ต่างจากไม่มีคนคนนั้น
+            */}
+            <h2 className="board-lane-title">
+              {l.label}{' '}
+              <span className="board-lane-count">
+                {l.columns.reduce((n, c) => n + c.cards.length, 0).toLocaleString('th-TH')} เรื่อง
+              </span>
+            </h2>
+            {/*
+              คำอธิบายปุ่มลัดแสดงครั้งเดียว · ซ้ำทุกเลนเป็นเสียงรบกวน
+              และดันการ์ดของเลนถัดไปให้ต่ำลงโดยไม่ได้ให้ข้อมูลอะไรเพิ่ม
+            */}
+            <BoardView
+              apiBase={API_BASE}
+              projectKey={data.projectKey}
+              columns={l.columns}
+              showHelp={i === 0}
+              laneLabel={l.label}
+            />
+          </section>
+        ))
+      )}
     </section>
   );
 }

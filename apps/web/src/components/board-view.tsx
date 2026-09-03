@@ -54,10 +54,27 @@ export function BoardView({
   apiBase,
   projectKey,
   columns,
+  showHelp = true,
+  laneLabel = null,
 }: {
   apiBase: string;
   projectKey: string;
   columns: BoardColumn[];
+  /**
+   * แสดงคำอธิบายปุ่มลัดหรือไม่
+   *
+   * เมื่อกระดานถูกแบ่งเป็นเลน จะมี `BoardView` หลายตัวบนหน้าเดียว ·
+   * คำอธิบายชุดเดียวกันซ้ำห้ารอบเป็นเสียงรบกวน ไม่ใช่ความช่วยเหลือ
+   */
+  showHelp?: boolean;
+  /**
+   * ชื่อเลนที่กระดานนี้อยู่ · ใช้ต่อท้าย `aria-label` ของคอลัมน์
+   *
+   * เมื่อแบ่งเลน ทุกเลนมีคอลัมน์ชื่อเดียวกันหมด · คนที่ไล่ด้วยคีย์บอร์ด
+   * จะได้ยิน "รอตรวจสอบ" ห้าครั้งโดยไม่รู้ว่าอันไหนของใคร — เป็นอาการเดียว
+   * กับปุ่ม "ถอด" ที่เหมือนกันทุกบรรทัดใน CLAUDE.md
+   */
+  laneLabel?: string | null;
 }): ReactNode {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -168,10 +185,12 @@ export function BoardView({
 
   return (
     <>
+      {showHelp ? (
       <p className="board-help">
         ลากการ์ดด้วยเมาส์ได้ · หรือโฟกัสที่การ์ดแล้วกด <kbd>Alt</kbd> + <kbd>←</kbd> <kbd>→</kbd>{' '}
         เพื่อย้ายคอลัมน์ · <kbd>Alt</kbd> + <kbd>↑</kbd> <kbd>↓</kbd> เพื่อเลื่อนลำดับ
       </p>
+      ) : null}
 
       {error === null ? null : <Alert tone="error">{error}</Alert>}
 
@@ -185,7 +204,7 @@ export function BoardView({
           <section
             key={col.statusId}
             className="board-col"
-            aria-label={col.name}
+            aria-label={laneLabel === null ? col.name : `${col.name} · ${laneLabel}`}
             data-over={dropAt?.col === ci ? 'true' : undefined}
             onDragOver={(e) => {
               // ไม่เรียก preventDefault = เบราว์เซอร์ไม่ยอมให้ปล่อย และไม่มีอะไรบอกว่าทำไม

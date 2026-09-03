@@ -3743,6 +3743,41 @@ tr[data-state='completed'] td {
   เป้าหมายอยู่เหนือคอลัมน์ ไม่ใช่ใน tooltip — ประโยคเดียวที่ตอบว่า
   "รอบนี้เราจะได้อะไร" ต้องอ่านได้โดยไม่ต้องเอาเมาส์ไปชี้
 */
+/*
+  เลนบนกระดาน
+
+  หัวเลนเป็นจุดยึดสายตาเวลาเลื่อนยาว ๆ จึงต้องหนากว่าข้อความทั่วไป ·
+  จำนวนอยู่ข้างชื่อเสมอ ไม่ใช่ให้คนนับการ์ดเอง
+*/
+.board-lane {
+  margin-bottom: var(--space-6);
+}
+
+.board-lane-title {
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 600;
+  /*
+    ใช้ line-height ของ *เนื้อหา* ไม่ใช่ของหัวเรื่อง — หัวเลนเป็นข้อความเล็ก
+    (15px) ที่มีชื่อคนภาษาไทยกับจำนวนอยู่บรรทัดเดียวกัน จึงตัดบรรทัดได้จริง
+    บนจอแคบ · ที่ 1.3 สระบนกับวรรณยุกต์ของบรรทัดล่างจะชนบรรทัดบน
+    ซึ่งเป็นเหตุผลที่ §5 ตั้งขั้นต่ำไว้ 1.6 · token ของหัวเรื่องมีไว้สำหรับ
+    ตัวใหญ่ที่ไม่ตัดบรรทัด
+  */
+  line-height: var(--line-height-body);
+  margin: 0 0 var(--space-2);
+}
+
+.board-lane-count {
+  font-weight: 400;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.board-lane-link + .board-lane-link {
+  margin-left: var(--space-4);
+}
+
 .board-modes {
   margin: 0 0 var(--space-2);
 }
