@@ -70,6 +70,7 @@ model Tenant {
   webhookDeliveries         WebhookDelivery[]
   sprints                   Sprint[]
   boardWipLimits            BoardWipLimit[]
+  boardQuickFilters         BoardQuickFilter[]
   projectVersions           ProjectVersion[]
   workItemVersions          WorkItemVersion[]
 
@@ -338,6 +339,7 @@ model Project {
   notificationAudienceRules NotificationAudienceRule[]
   sprints                   Sprint[]
   boardWipLimits            BoardWipLimit[]
+  boardQuickFilters         BoardQuickFilter[]
   versions                  ProjectVersion[]
 
   @@unique([tenantId, key])
@@ -2113,4 +2115,37 @@ model BoardWipLimit {
   @@unique([projectId, statusId])
   @@index([tenantId, projectId])
   @@map("board_wip_limit")
+}
+
+/// ตัวกรองด่วนของกระดาน — คิวรี HQL ที่ตั้งชื่อไว้
+///
+/// **เก็บข้อความคิวรี ไม่ใช่เงื่อนไขที่แปลแล้ว** · การแปลเปลี่ยนได้เมื่อ
+/// ตัวแปลเปลี่ยน แต่สิ่งที่ผู้ใช้เขียนคือเจตนา ซึ่งไม่ควรถูกเขียนทับด้วย
+/// ผลการแปลของวันที่บันทึก
+///
+/// คิวรีถูกตรวจว่าแปลเป็นเงื่อนไขของฐานข้อมูลได้ **ตอนบันทึก** ไม่ใช่ตอนใช้ —
+/// ตัวกรองที่พังตอนกดใช้ ทำให้กระดานทั้งหน้าใช้ไม่ได้โดยที่คนกดไม่รู้ว่า
+/// ต้นเหตุอยู่ที่การตั้งค่าเมื่อเดือนก่อน
+model BoardQuickFilter {
+  id        BigInt @id @default(autoincrement())
+  tenantId  BigInt @map("tenant_id")
+  projectId BigInt @map("project_id")
+  /// ชื่อที่ขึ้นบนปุ่ม — ภาษาคน ไม่ใช่คิวรี
+  name      String @db.VarChar(64)
+  /// ข้อความ HQL ตามที่ผู้ใช้เขียน
+  hql       String @db.VarChar(1000)
+  /// ลำดับบนแถบปุ่ม — เลขซ้ำกันได้ เรียงต่อด้วย id เพื่อให้ผลคงที่
+  position  Int    @default(0)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.DateTime(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.DateTime(3)
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  /// ชื่อซ้ำในโปรเจกต์เดียวกันไม่ได้ — ปุ่มสองปุ่มที่เขียนเหมือนกัน
+  /// แต่กรองคนละอย่าง คือหน้าจอที่โกหก
+  @@unique([projectId, name])
+  @@index([tenantId, projectId, position])
+  @@map("board_quick_filter")
 }

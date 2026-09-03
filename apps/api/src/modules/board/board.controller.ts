@@ -29,6 +29,16 @@ import {
   rebalanceColumn,
   setWipLimit,
 } from './board.service';
+import {
+  InvalidQuickFilterError,
+  QuickFilterNotFoundError,
+  QuickFilterProjectNotFoundError,
+  TooManyQuickFiltersError,
+  createQuickFilter,
+  deleteQuickFilter,
+  listQuickFilters,
+  type QuickFilterRow,
+} from './quick-filter.service';
 
 function toHttp(e: unknown): unknown {
   if (e instanceof BoardItemNotFoundError) {
@@ -43,6 +53,16 @@ function toHttp(e: unknown): unknown {
       { error: 'no_transition', message: e.message },
       HttpStatus.UNPROCESSABLE_ENTITY,
     );
+  }
+  if (e instanceof QuickFilterProjectNotFoundError || e instanceof QuickFilterNotFoundError) {
+    return new HttpException({ message: e.message }, HttpStatus.NOT_FOUND);
+  }
+  if (e instanceof InvalidQuickFilterError || e instanceof TooManyQuickFiltersError) {
+    /*
+      422 — คำขอถูกรูปแบบ แต่เนื้อหาใช้ไม่ได้ · ข้อความมาจากตัวแปล HQL
+      ตรง ๆ เพราะมันรู้ว่าผิดตรงไหน ส่วนเราไม่รู้
+    */
+    return new HttpException({ message: e.message }, HttpStatus.UNPROCESSABLE_ENTITY);
   }
   if (e instanceof BoardColumnNotFoundError) {
     return new HttpException({ message: e.message }, HttpStatus.NOT_FOUND);
@@ -76,9 +96,21 @@ export class BoardController {
     @Ctx() ctx: TenantContext,
     @Param('projectKey') projectKey: string,
     @Query('mode') mode?: string,
+    @Query('filter') filter?: string,
   ): Promise<BoardView> {
     try {
-      return await boardOf(ctx, projectKey, undefined, mode === 'scrum' ? 'scrum' : 'kanban');
+      /*
+        ตัวกรองที่ระบุมาแล้วหาไม่เจอ ต้องได้ 404 ไม่ใช่กระดานที่ไม่ได้กรอง ·
+        กระดานที่ดูเหมือนกรองแล้วแต่ไม่ได้กรอง ทำให้คนเชื่อว่างานที่เห็น
+        คือทั้งหมดที่ตรงเงื่อนไข
+      */
+      return await boardOf(
+        ctx,
+        projectKey,
+        undefined,
+        mode === 'scrum' ? 'scrum' : 'kanban',
+        filter === undefined || filter === '' ? null : filter,
+      );
     } catch (e) {
       throw toHttp(e);
     }
@@ -173,6 +205,60 @@ export class BoardController {
     const maxCards = raw === null || raw === undefined ? null : Number(raw);
     try {
       return await setWipLimit(ctx, projectKey, column, maxCards);
+    } catch (e) {
+      throw toHttp(e);
+    }
+  }
+
+  /** ตัวกรองด่วนของโปรเจกต์ — อ่านได้ทุกคนที่เปิดดูกระดานได้ */
+  @Get(':projectKey/quick-filters')
+  async quickFilters(
+    @Ctx() ctx: TenantContext,
+    @Param('projectKey') projectKey: string,
+  ): Promise<{ rows: QuickFilterRow[] }> {
+    try {
+      return { rows: await listQuickFilters(ctx, projectKey) };
+    } catch (e) {
+      throw toHttp(e);
+    }
+  }
+
+  /**
+   * สร้างตัวกรองด่วน
+   *
+   * คิวรีถูกตรวจว่าแปลเป็นเงื่อนไขของฐานข้อมูลได้ **ตอนนี้** ไม่ใช่ตอนกดใช้ —
+   * ตัวกรองที่พังตอนกดใช้ ทำให้กระดานทั้งหน้าใช้ไม่ได้โดยที่คนกดไม่รู้ว่า
+   * ต้นเหตุอยู่ที่การตั้งค่าเมื่อเดือนก่อน
+   */
+  @Post(':projectKey/quick-filters')
+  @HttpCode(HttpStatus.CREATED)
+  async addQuickFilter(
+    @Ctx() ctx: TenantContext,
+    @Param('projectKey') projectKey: string,
+    @Body() body: { name?: unknown; hql?: unknown },
+  ): Promise<QuickFilterRow> {
+    const str = (v: unknown): string => (typeof v === 'string' ? v : '');
+    try {
+      return await createQuickFilter(ctx, projectKey, {
+        name: str(body.name),
+        hql: str(body.hql),
+      });
+    } catch (e) {
+      throw toHttp(e);
+    }
+  }
+
+  /** ลบตัวกรองด่วน */
+  @Post(':projectKey/quick-filters/:id/delete')
+  @HttpCode(HttpStatus.OK)
+  async removeQuickFilter(
+    @Ctx() ctx: TenantContext,
+    @Param('projectKey') projectKey: string,
+    @Param('id') id: string,
+  ): Promise<{ ok: true }> {
+    try {
+      await deleteQuickFilter(ctx, projectKey, id);
+      return { ok: true };
     } catch (e) {
       throw toHttp(e);
     }

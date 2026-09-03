@@ -718,12 +718,24 @@ export function compilePrisma(input: string, scope: PrismaScope): PrismaWhere {
     tenantId: BigInt(scope.tenantId),
     projectId: { in: scope.browsableProjectIds.map((p) => BigInt(p)) },
   };
-  const tokens = tokenize(input);
-  const { where } = Parser.splitOrderBy(tokens);
-  /*
-    คิวรีว่างเปล่าไม่ใช่ error ที่นี่ (ต่างจาก `compile`) เพราะ
-    "ไม่กรองอะไรเพิ่ม" เป็นสถานะที่ใช้จริงของตัวกรองบนกระดาน
-  */
-  if (where.length <= 1) return base;
-  return { ...base, AND: [clauseOf(new Parser(where).parse())] };
+  const clause = compilePrismaClause(input);
+  return clause === null ? base : { ...base, AND: [clause] };
+}
+
+/**
+ * แปลเฉพาะ **เงื่อนไขของคิวรี** ไม่ใส่ขอบเขต tenant หรือโปรเจกต์
+ *
+ * `null` = คิวรีว่างเปล่า แปลว่าไม่กรองอะไรเพิ่ม — ไม่ใช่ error ที่นี่
+ * (ต่างจาก `compile`) เพราะเป็นสถานะที่ใช้จริงของตัวกรองบนกระดาน
+ *
+ * **ผู้เรียกต้องใส่ขอบเขตเอง** · มีไว้ให้ที่ที่มีขอบเขตของตัวเองอยู่แล้ว
+ * — กระดานจำกัดอยู่ที่โปรเจกต์เดียวและเดินผ่าน `tenantScoped()` ซึ่งใส่
+ * `tenantId` ให้ · ถ้าใช้ `compilePrisma` ที่นั่นจะได้คีย์ `projectId`
+ * สองอันในอ็อบเจ็กต์เดียวกัน ซึ่งอันหลังทับอันแรกเงียบ ๆ แล้วขอบเขต
+ * ของกระดานจะกว้างกว่าที่ตั้งใจ
+ */
+export function compilePrismaClause(input: string): PrismaWhere | null {
+  const { where } = Parser.splitOrderBy(tokenize(input));
+  if (where.length <= 1) return null;
+  return clauseOf(new Parser(where).parse());
 }

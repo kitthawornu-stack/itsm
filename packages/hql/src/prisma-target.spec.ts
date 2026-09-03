@@ -30,6 +30,7 @@ import {
   HqlFieldError,
   HqlUnsupportedInPrismaError,
   compilePrisma,
+  compilePrismaClause,
   PRISMA_UNSUPPORTED_FIELDS,
 } from './index';
 
@@ -202,7 +203,31 @@ describe('แปล HQL เป็นเงื่อนไข Prisma', () => {
     });
   });
 
-  describe('E · ไม่กระทบเป้าหมายเดิม', () => {
+  describe('E · เงื่อนไขล้วน สำหรับที่ที่มีขอบเขตของตัวเองแล้ว', () => {
+    /**
+     * **เงื่อนไขล้วนต้องไม่มีขอบเขตติดมาด้วย**
+     *
+     * กระดานจำกัดอยู่ที่โปรเจกต์เดียวอยู่แล้ว · ถ้าเงื่อนไขพา `projectId`
+     * ของตัวเองมา จะได้คีย์ซ้ำในอ็อบเจ็กต์เดียวกัน ซึ่งอันหลังทับอันแรก
+     * **เงียบ ๆ** แล้วขอบเขตของกระดานจะกว้างกว่าที่ตั้งใจ โดยไม่มี error
+     */
+    it('**ไม่มี tenantId และ projectId ติดมากับเงื่อนไข**', () => {
+      const c = compilePrismaClause('status = "New"');
+      expect(c).not.toBeNull();
+      expect(Object.keys(c ?? {})).toEqual(['status']);
+    });
+
+    it('คิวรีว่างเปล่าได้ null — "ไม่กรองอะไรเพิ่ม" ไม่ใช่ error', () => {
+      expect(compilePrismaClause('')).toBeNull();
+      expect(compilePrismaClause('   ')).toBeNull();
+    });
+
+    it('ยังปฏิเสธสิ่งที่ปฏิเสธเหมือนกัน', () => {
+      expect(() => compilePrismaClause('summary ~ "x"')).toThrow(HqlUnsupportedInPrismaError);
+    });
+  });
+
+  describe('F · ไม่กระทบเป้าหมายเดิม', () => {
     /**
      * เป้าหมาย OpenSearch ต้องทำงานเหมือนเดิมทุกประการ · การเพิ่มเป้าหมาย
      * ที่สองแล้วเผลอเปลี่ยนพฤติกรรมของอันแรก จะทำให้หน้าค้นหาเพี้ยน

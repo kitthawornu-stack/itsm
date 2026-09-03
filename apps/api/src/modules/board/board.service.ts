@@ -25,6 +25,7 @@ import { tenantScoped } from '../../infrastructure/prisma/tenant-scope';
 import { assertCan, browsableProjectIds, can } from '../permission';
 import { applyTransition, availableTransitions } from '../workflow';
 
+import { quickFilterClause } from './quick-filter.service';
 import { scrumScopeOf, type ScrumScope } from './scrum-scope';
 import {
   evaluateWip,
@@ -117,6 +118,14 @@ export async function boardOf(
    * ต้องถูกขอ ไม่ใช่ได้มาเงียบ ๆ แล้วคนสงสัยว่างานหายไปไหน
    */
   mode: BoardMode = 'kanban',
+  /**
+   * รหัสตัวกรองด่วนที่กดอยู่ · `null` = ไม่กรองเพิ่ม
+   *
+   * ตัวกรองที่ระบุมาแล้วหาไม่เจอหรือแปลไม่ได้ **ต้องล้ม ไม่ใช่แสดงทั้งกระดาน**
+   * — กระดานที่ไม่ได้กรองแต่ดูเหมือนกรองแล้ว ทำให้คนเชื่อว่างานที่เหลือ
+   * คือทั้งหมดที่ตรงเงื่อนไข
+   */
+  quickFilterId: string | null = null,
 ): Promise<BoardView> {
   const allowed = await browsableProjectIds(ctx);
   const project =
@@ -191,6 +200,16 @@ export async function boardOf(
   const sprintFilter = scope.kind === 'sprint' ? { sprintId: BigInt(scope.sprintId) } : {};
 
   /*
+    **ใช้ `compilePrismaClause` ไม่ใช่ `compilePrisma`** — อันหลังพา
+    `tenantId` กับ `projectId` ของตัวเองมาด้วย ซึ่งจะได้คีย์ซ้ำใน
+    อ็อบเจ็กต์เดียวกันแล้วอันหลังทับอันแรกเงียบ ๆ · ที่นี่ขอบเขตมาจาก
+    `tenantScoped()` กับ `projectId` ของกระดานอยู่แล้ว
+  */
+  const filterClause =
+    quickFilterId === null ? null : await quickFilterClause(ctx, project.id, quickFilterId);
+  const filterWhere = filterClause === null ? {} : { AND: [filterClause] };
+
+  /*
     **นับจำนวนจริงด้วยคิวรีของตัวเอง ไม่ใช่จาก `cards.length`**
 
     คิวรีเดียวสำหรับทั้งกระดาน แล้วรวมตามสถานะที่ยุบเข้าคอลัมน์เดียวกัน —
@@ -198,7 +217,12 @@ export async function boardOf(
   */
   const grouped = await db.workItem.groupBy({
     by: ['statusId'],
-    where: { projectId: project.id, ...sprintFilter },
+    /*
+      **จำนวนต้องนับหลังกรองด้วย** · ถ้านับก่อนกรอง หัวคอลัมน์จะบอกเลขของ
+      ทั้งคอลัมน์ขณะที่การ์ดที่เห็นถูกกรองแล้ว — ตัวเลขที่ไม่ตรงกับสิ่งที่
+      ตาเห็นแย่กว่าไม่มีตัวเลข และเพดาน WIP จะตัดสินจากเลขที่ผิดด้วย
+    */
+    where: { projectId: project.id, ...sprintFilter, ...filterWhere },
     _count: { _all: true },
   });
   const countByStatus = new Map(grouped.map((g) => [g.statusId.toString(), g._count._all]));
@@ -212,7 +236,7 @@ export async function boardOf(
   const columns: BoardColumn[] = [];
   for (const [name, e] of byName) {
     const rows = await db.workItem.findMany({
-      where: { projectId: project.id, statusId: { in: e.ids }, ...sprintFilter },
+      where: { projectId: project.id, statusId: { in: e.ids }, ...sprintFilter, ...filterWhere },
       // `rank` ใช้ collation utf8mb4_bin — เรียงฝั่งฐานข้อมูลตรงกับ `compareRank`
       orderBy: { rank: 'asc' },
       take: limitPerColumn,
