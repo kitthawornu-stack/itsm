@@ -18,6 +18,8 @@
  * ว่าแถวไหนเข้าไปแล้ว · ให้แก้ไฟล์แล้วนำเข้าใหม่ทั้งไฟล์ดีกว่า
  */
 
+import { CSV_COLUMNS } from '@itsm/types';
+
 /**
  * อักขระแทนที่ของ Unicode (U+FFFD)
  *
@@ -29,13 +31,8 @@
 export const BROKEN_TEXT_MARKER = '�';
 
 /** คอลัมน์ที่ต้องมีในหัวตาราง — ขาดอันไหนคือไฟล์ผิดรูปแบบ ไม่ใช่แถวผิด */
-export const REQUIRED_COLUMNS = [
-  'externalKey',
-  'summary',
-  'status',
-  'priority',
-  'reporterEmail',
-] as const;
+/* ชุดเดียวกับขาออก — ดู `CSV_COLUMNS` ใน @itsm/types */
+export const REQUIRED_COLUMNS = CSV_COLUMNS;
 
 export interface CsvRow {
   /** เลขบรรทัดจริงในไฟล์ เริ่มที่ 1 — ใช้บอกคนว่าไปแก้ตรงไหน */
