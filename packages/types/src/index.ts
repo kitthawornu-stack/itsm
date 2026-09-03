@@ -126,3 +126,4 @@ export type Seconds = number;
 /** สถานะที่ Board, Burndown และ SLA ใช้ — ไม่ใช่ชื่อสถานะ (ดู master-plan Part 03) */
 export const STATUS_CATEGORIES = ['TODO', 'IN_PROGRESS', 'DONE'] as const;
 export type StatusCategoryKey = (typeof STATUS_CATEGORIES)[number];
+export * from './card-fields';
