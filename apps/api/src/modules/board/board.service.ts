@@ -17,7 +17,7 @@
  * ปฏิเสธ** — งานจะถูกปิดโดยไม่มีผลการแก้ไข นาฬิกา SLA ไม่หยุด และไม่มี error
  * สักบรรทัด (บทเรียนเดียวกับการเปลี่ยนสถานะเป็นชุด)
  */
-import type { TenantContext } from '@itsm/types';
+import type { CardField, TenantContext } from '@itsm/types';
 import { between, needsRebalance, distribute, compareRank } from '@itsm/lexorank';
 
 import { auditedTransaction, change } from '../../infrastructure/audit/audited-transaction';
@@ -25,6 +25,7 @@ import { tenantScoped } from '../../infrastructure/prisma/tenant-scope';
 import { assertCan, browsableProjectIds, can } from '../permission';
 import { applyTransition, availableTransitions } from '../workflow';
 
+import { cardPrefOf } from './card-pref.service';
 import { quickFilterClause } from './quick-filter.service';
 import { scrumScopeOf, type ScrumScope } from './scrum-scope';
 import {
@@ -64,6 +65,17 @@ export interface BoardCard {
   assignee: string | null;
   priority: { rank: number; name: string } | null;
   rank: string;
+  /** ชื่อประเภทงาน — หน้าจอเลือกได้ว่าจะแสดงหรือไม่ */
+  issueType: string;
+  /** ชื่อรอบที่งานอยู่ · `null` = ยังไม่อยู่ในรอบไหน */
+  sprint: string | null;
+  /**
+   * เวลาที่แก้ล่าสุด เป็น **ISO UTC** ไม่ใช่ `Date`
+   *
+   * `JSON.stringify` แปลง `Date` ให้เองก็จริง แต่ชนิดที่ประกาศต้องตรงกับ
+   * สิ่งที่ผู้เรียกได้รับจริง — และการแปลงเขตเวลาทำที่ชั้นแสดงผลเท่านั้น
+   */
+  updatedAt: string;
 }
 
 export type BoardMode = 'kanban' | 'scrum';
@@ -81,6 +93,14 @@ export interface BoardView {
    * ทุกครั้ง · ค่านี้มีไว้ไม่ให้ผู้ใช้เห็นช่องกรอกที่กดแล้วได้ 403
    */
   canManage: boolean;
+  /**
+   * ฟิลด์ที่ **ผู้เรียกคนนี้** เลือกให้การ์ดแสดง
+   *
+   * เป็นค่าของแต่ละคน · คนสองคนที่เปิดกระดานเดียวกันได้คนละค่า
+   * ซึ่งถูกต้อง — คนที่ดูงานของตัวเองกับคนที่จัดคิวให้ทั้งทีม
+   * อยากเห็นคนละอย่าง
+   */
+  cardFields: CardField[];
 }
 
 export interface BoardColumn {
@@ -194,6 +214,7 @@ export async function boardOf(
         scope,
         columns: [],
         canManage: await can(ctx, project.id, 'MANAGE_PROJECT'),
+        cardFields: (await cardPrefOf(ctx, project.key)).fields,
       };
     }
   }
@@ -244,8 +265,11 @@ export async function boardOf(
         itemKey: true,
         summary: true,
         rank: true,
+        updatedAt: true,
         assignee: { select: { displayName: true } },
         priority: { select: { rank: true, name: true } },
+        issueType: { select: { name: true } },
+        sprint: { select: { name: true } },
       },
     });
     const ids = e.ids.map((i) => i.toString());
@@ -262,6 +286,9 @@ export async function boardOf(
         assignee: r.assignee?.displayName ?? null,
         priority: r.priority === null ? null : { rank: r.priority.rank, name: r.priority.name },
         rank: r.rank,
+        issueType: r.issueType.name,
+        sprint: r.sprint?.name ?? null,
+        updatedAt: r.updatedAt.toISOString(),
       })),
     });
   }
@@ -272,6 +299,7 @@ export async function boardOf(
     scope,
     columns,
     canManage: await can(ctx, project.id, 'MANAGE_PROJECT'),
+    cardFields: (await cardPrefOf(ctx, project.key)).fields,
   };
 }
 

@@ -71,6 +71,7 @@ model Tenant {
   sprints                   Sprint[]
   boardWipLimits            BoardWipLimit[]
   boardQuickFilters         BoardQuickFilter[]
+  boardCardPrefs            BoardCardPref[]
   projectVersions           ProjectVersion[]
   workItemVersions          WorkItemVersion[]
 
@@ -118,6 +119,7 @@ model User {
   importRecords           ImportRecord[]
   changeReviews           ChangeReview[]
   workLogs                WorkLog[]
+  boardCardPrefs          BoardCardPref[]
 
   @@unique([tenantId, email])
   @@index([tenantId, isActive])
@@ -340,6 +342,7 @@ model Project {
   sprints                   Sprint[]
   boardWipLimits            BoardWipLimit[]
   boardQuickFilters         BoardQuickFilter[]
+  boardCardPrefs            BoardCardPref[]
   versions                  ProjectVersion[]
 
   @@unique([tenantId, key])
@@ -2148,4 +2151,34 @@ model BoardQuickFilter {
   @@unique([projectId, name])
   @@index([tenantId, projectId, position])
   @@map("board_quick_filter")
+}
+
+/// ฟิลด์ที่ผู้ใช้คนหนึ่งเลือกให้การ์ดบนกระดานของโปรเจกต์หนึ่งแสดง
+///
+/// **เป็นค่าของแต่ละคน ไม่ใช่ของทั้งทีม** — คนที่ดูงานของตัวเองกับคนที่
+/// จัดคิวให้ทั้งทีม อยากเห็นคนละอย่างบนกระดานเดียวกัน · จึงไม่ต้องมี
+/// `MANAGE_PROJECT` และไม่มีใครแก้ของคนอื่นได้
+///
+/// **ไม่มีแถว = ยังไม่เคยตั้ง จึงใช้ค่าปริยาย** ต่างจาก `fields` ที่เป็น
+/// สตริงว่าง ซึ่งแปลว่าตั้งใจปิดทุกอย่าง · สองสถานะนี้ต้องแยกกันให้ขาด
+/// มิฉะนั้นคนที่ปิดทุกอย่างจะได้ค่าปริยายกลับมาแล้วเชื่อว่าปุ่มบันทึกพัง
+model BoardCardPref {
+  id        BigInt @id @default(autoincrement())
+  tenantId  BigInt @map("tenant_id")
+  userId    BigInt @map("user_id")
+  projectId BigInt @map("project_id")
+  /// ชื่อฟิลด์คั่นด้วยจุลภาค ตรงกับ ALL_CARD_FIELDS ใน @itsm/types
+  /// · สตริงว่าง = ตั้งใจไม่แสดงอะไรเลย ไม่ใช่ "ยังไม่ได้ตั้ง"
+  fields    String @db.VarChar(255)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.DateTime(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.DateTime(3)
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, projectId])
+  @@index([tenantId, userId])
+  @@map("board_card_pref")
 }

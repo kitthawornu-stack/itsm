@@ -29,6 +29,15 @@ import {
   rebalanceColumn,
   setWipLimit,
 } from './board.service';
+import { ALL_CARD_FIELDS, type CardField } from '@itsm/types';
+
+import {
+  CardPrefProjectNotFoundError,
+  NotSignedInError,
+  cardPrefOf,
+  setCardPref,
+  type CardPref,
+} from './card-pref.service';
 import {
   InvalidQuickFilterError,
   QuickFilterNotFoundError,
@@ -53,6 +62,12 @@ function toHttp(e: unknown): unknown {
       { error: 'no_transition', message: e.message },
       HttpStatus.UNPROCESSABLE_ENTITY,
     );
+  }
+  if (e instanceof CardPrefProjectNotFoundError) {
+    return new HttpException({ message: e.message }, HttpStatus.NOT_FOUND);
+  }
+  if (e instanceof NotSignedInError) {
+    return new HttpException({ message: e.message }, HttpStatus.UNAUTHORIZED);
   }
   if (e instanceof QuickFilterProjectNotFoundError || e instanceof QuickFilterNotFoundError) {
     return new HttpException({ message: e.message }, HttpStatus.NOT_FOUND);
@@ -259,6 +274,64 @@ export class BoardController {
     try {
       await deleteQuickFilter(ctx, projectKey, id);
       return { ok: true };
+    } catch (e) {
+      throw toHttp(e);
+    }
+  }
+
+  /** ฟิลด์บนการ์ดที่ **ผู้เรียกคนนี้** เลือกไว้ */
+  @Get(':projectKey/card-fields')
+  async cardFields(
+    @Ctx() ctx: TenantContext,
+    @Param('projectKey') projectKey: string,
+  ): Promise<CardPref & { available: readonly string[] }> {
+    try {
+      return { ...(await cardPrefOf(ctx, projectKey)), available: ALL_CARD_FIELDS };
+    } catch (e) {
+      throw toHttp(e);
+    }
+  }
+
+  /**
+   * ตั้งฟิลด์บนการ์ดของตัวเอง
+   *
+   * **`fields: []` แปลว่าตั้งใจไม่แสดงอะไรเลย ไม่ใช่กลับไปใช้ค่าปริยาย** ·
+   * ถ้าตีความเป็นค่าปริยาย ผู้ใช้ที่ปิดทุกอย่างจะได้ของเดิมกลับมา
+   * แล้วเชื่อว่าปุ่มบันทึกพัง
+   *
+   * ชื่อฟิลด์ที่ไม่รู้จักถูกปฏิเสธ ไม่ใช่ข้าม — คำขอที่ถูกทำครึ่งเดียว
+   * ทำให้ผู้ใช้เห็นผลไม่ตรงกับที่กด โดยไม่มีอะไรบอกว่าอะไรหายไป
+   */
+  @Post(':projectKey/card-fields')
+  @HttpCode(HttpStatus.OK)
+  async saveCardFields(
+    @Ctx() ctx: TenantContext,
+    @Param('projectKey') projectKey: string,
+    @Body() body: { fields?: unknown },
+  ): Promise<CardPref> {
+    /*
+      ประกาศเป็น `unknown[]` เอง · `Array.isArray` แคบเป็น `any[]` ซึ่งทำให้
+      lint เชื่อว่าสมาชิกเป็น `string` อยู่แล้วและฟ้องว่า `String()` ซ้ำซ้อน
+      — **ชนิดที่โกหกทำให้ lint โกหกตาม** (CLAUDE.md) · ของจริงคืออะไรก็ได้
+      เพราะมาจาก body ของคำขอ
+    */
+    const raw: unknown[] | null = Array.isArray(body.fields) ? (body.fields as unknown[]) : null;
+    if (raw === null) {
+      throw new HttpException(
+        { message: 'ต้องส่ง fields เป็นรายการ · รายการว่างแปลว่าไม่แสดงอะไรเลย' },
+        HttpStatus.UNPROCESSABLE_ENTITY,
+      );
+    }
+    const known = new Set<string>(ALL_CARD_FIELDS);
+    const bad = raw.filter((f) => typeof f !== 'string' || !known.has(f));
+    if (bad.length > 0) {
+      throw new HttpException(
+        { message: `ไม่รู้จักฟิลด์: ${bad.map((x) => String(x)).join(' · ')}` },
+        HttpStatus.UNPROCESSABLE_ENTITY,
+      );
+    }
+    try {
+      return await setCardPref(ctx, projectKey, raw as CardField[]);
     } catch (e) {
       throw toHttp(e);
     }
