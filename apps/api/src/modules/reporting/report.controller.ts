@@ -13,6 +13,15 @@ import { PermissionDeniedError } from '../permission';
 import { NoReportAccessError, reportSummary, type ReportSummary } from './report.service';
 import { NoTimeReportAccessError, timeReport, type TimeReport } from './time-report.service';
 import { RANGE_LABEL, windowFor, type RangeKey } from './report-window';
+import {
+  PIVOT_DIMENSIONS,
+  PIVOT_DIMENSION_LABEL,
+  SameDimensionError,
+  UnknownPivotDimensionError,
+  assertDimension,
+  pivotReport,
+  type PivotResult,
+} from './pivot.service';
 
 const RANGES = Object.keys(RANGE_LABEL) as RangeKey[];
 
@@ -85,6 +94,59 @@ export class ReportController {
       return { ...data, ranges: RANGES.map((r) => ({ key: r, label: RANGE_LABEL[r] })) };
     } catch (e) {
       if (e instanceof NoTimeReportAccessError || e instanceof PermissionDeniedError) {
+        throw new HttpException({ message: e.message }, HttpStatus.FORBIDDEN);
+      }
+      throw e;
+    }
+  }
+
+  /**
+   * ตารางไขว้ — จัดกลุ่มสองมิติพร้อมกัน
+   *
+   * แยก endpoint จาก `summary` เพราะคนละคำถามและคนละต้นทุน
+   *
+   * **มิติที่ไม่รู้จักถูกปฏิเสธ ไม่ใช่ตกกลับเป็นค่าปริยาย** — ต่างจาก `range`
+   * ที่ค่าพังมักมาจากลิงก์เก่า · มิติเป็นสิ่งที่ผู้ใช้เพิ่งเลือกจากเมนู
+   * ค่าที่ไม่รู้จักจึงแปลว่ามีอะไรผิด และการตกกลับเงียบ ๆ จะให้ตารางที่
+   * ตอบคนละคำถามกับที่กด โดยหน้าตายังดูปกติ
+   */
+  @Get('pivot')
+  async pivot(
+    @Ctx() ctx: TenantContext,
+    @Query('range') range?: string,
+    @Query('project') projectId?: string,
+    @Query('rows') rows?: string,
+    @Query('cols') cols?: string,
+  ): Promise<PivotResult & { dimensions: Array<{ key: string; label: string }> }> {
+    const key: RangeKey = RANGES.find((r) => r === range) ?? 'this-month';
+    const win = windowFor(key, systemClock.nowUtc());
+
+    let pid: bigint | undefined;
+    if (projectId !== undefined && projectId !== '') {
+      try {
+        pid = BigInt(projectId);
+      } catch {
+        throw new HttpException({ message: 'ไม่พบโปรเจกต์ที่ระบุ' }, HttpStatus.FORBIDDEN);
+      }
+    }
+
+    try {
+      const data = await pivotReport(
+        ctx,
+        win,
+        assertDimension(rows ?? 'assignee'),
+        assertDimension(cols ?? 'status'),
+        pid,
+      );
+      return {
+        ...data,
+        dimensions: PIVOT_DIMENSIONS.map((d) => ({ key: d, label: PIVOT_DIMENSION_LABEL[d] })),
+      };
+    } catch (e) {
+      if (e instanceof UnknownPivotDimensionError || e instanceof SameDimensionError) {
+        throw new HttpException({ message: e.message }, HttpStatus.UNPROCESSABLE_ENTITY);
+      }
+      if (e instanceof NoReportAccessError || e instanceof PermissionDeniedError) {
         throw new HttpException({ message: e.message }, HttpStatus.FORBIDDEN);
       }
       throw e;
