@@ -15,6 +15,13 @@ type Scope =
   | { kind: 'not-scrum' }
   | { kind: 'ambiguous'; names: string[] };
 
+interface QuickFilter {
+  id: string;
+  name: string;
+  hql: string;
+  position: number;
+}
+
 interface Board {
   projectKey: string;
   mode: 'kanban' | 'scrum';
@@ -60,6 +67,26 @@ function scopeNote(scope: Scope): { tone: 'info' | 'warning'; text: string } | n
 }
 
 /**
+ * ลิงก์ที่คงโหมดกระดานและเลนไว้ · เปลี่ยนเฉพาะตัวกรอง
+ *
+ * ตัวกรองที่กดแล้วรีเซ็ตมุมมองอื่นไปด้วย ทำให้คนต้องตั้งใหม่ทุกครั้ง
+ * แล้วเลิกใช้ตัวกรองไปเลย
+ */
+function filterHref(
+  projectKey: string,
+  scrum: boolean,
+  laneMode: LaneMode,
+  filterId: string | null,
+): string {
+  const qs = new URLSearchParams();
+  if (scrum) qs.set('mode', 'scrum');
+  if (laneMode !== 'none') qs.set('lane', laneMode);
+  if (filterId !== null) qs.set('filter', filterId);
+  const q = qs.toString();
+  return `/board/${encodeURIComponent(projectKey)}${q === '' ? '' : `?${q}`}`;
+}
+
+/**
  * กระดานของโปรเจกต์หนึ่ง
  *
  * คอลัมน์มาจาก workflow ที่โปรเจกต์นี้ใช้ ไม่ใช่รายการสถานะทั้งระบบ —
@@ -73,10 +100,19 @@ export default async function BoardPage({
   searchParams,
 }: {
   params: Promise<{ key: string }>;
-  searchParams: Promise<{ mode?: string; lane?: string }>;
+  searchParams: Promise<{ mode?: string; lane?: string; filter?: string }>;
 }): Promise<ReactNode> {
   const { key } = await params;
-  const { mode, lane } = await searchParams;
+  const { mode, lane, filter } = await searchParams;
+  /*
+    **ส่งค่าที่ผู้ใช้ให้มาต่อไปตามเดิม ไม่ตัดทิ้งเอง**
+
+    รอบแรกที่นี่กรองเฉพาะรหัสที่เป็นตัวเลข · ผลคือ `?filter=abc` ถูกทิ้งเงียบ ๆ
+    แล้วกระดานแสดงครบทุกใบเหมือนไม่ได้กรอง ขณะที่ `?filter=999` ขึ้น error —
+    **คำขอที่ใช้ไม่ได้เหมือนกัน แต่ล้มคนละแบบ** · คนที่เห็นกระดานเต็ม
+    จะเชื่อว่าตัวกรองทำงานแล้วไม่เจออะไรผิดปกติ · ให้เซิร์ฟเวอร์ตัดสินที่เดียว
+  */
+  const filterId = typeof filter === 'string' && filter !== '' ? filter : null;
   const scrum = mode === 'scrum';
   /*
     ค่าที่พิมพ์ผิดตกไปเป็น "ไม่แบ่งเลน" — เหมือนกับโหมดกระดาน · การแบ่งเลน
@@ -87,12 +123,29 @@ export default async function BoardPage({
   let data: Board | null = null;
   let error: string | null = null;
   try {
+    const qs = new URLSearchParams();
+    if (scrum) qs.set('mode', 'scrum');
+    if (filterId !== null) qs.set('filter', filterId);
+    const query = qs.toString();
     const res = await apiFetch(
-      `/api/v1/boards/${encodeURIComponent(key)}${scrum ? '?mode=scrum' : ''}`,
+      `/api/v1/boards/${encodeURIComponent(key)}${query === '' ? '' : `?${query}`}`,
     );
     if (res.ok) data = (await res.json()) as Board;
-    else if (res.status === 404) error = 'ไม่พบโปรเจกต์นี้ หรือคุณยังเปิดดูไม่ได้';
-    else error = `โหลดไม่สำเร็จ (HTTP ${String(res.status)})`;
+    else {
+      /*
+        **ใช้ข้อความของเซิร์ฟเวอร์ก่อนเสมอ** · 404 เดียวกันเกิดได้จากทั้ง
+        โปรเจกต์ที่ไม่มีและตัวกรองที่ไม่มี · ข้อความตายตัวว่า "ไม่พบโปรเจกต์นี้"
+        ส่งคนไปตรวจสิทธิ์ของโปรเจกต์ ทั้งที่ต้นเหตุคือรหัสตัวกรองใน URL
+        — **ข้อความที่มั่นใจแต่ผิด แย่กว่าข้อความกว้าง ๆ**
+      */
+      const body = (await res.json().catch(() => null)) as { message?: unknown } | null;
+      const said = typeof body?.message === 'string' ? body.message : null;
+      error =
+        said ??
+        (res.status === 404
+          ? 'ไม่พบโปรเจกต์นี้ หรือคุณยังเปิดดูไม่ได้'
+          : `โหลดไม่สำเร็จ (HTTP ${String(res.status)})`);
+    }
   } catch {
     error = 'เชื่อมต่อระบบไม่ได้';
   }
@@ -104,6 +157,18 @@ export default async function BoardPage({
         <Alert tone="error">{error ?? 'เชื่อมต่อระบบไม่ได้'}</Alert>
       </section>
     );
+  }
+
+  /*
+    รายการตัวกรองโหลดแยกจากกระดาน · ล้มแล้วไม่ทำให้กระดานหาย — แถบตัวกรอง
+    ที่โหลดไม่ได้ ควรหายไปเฉย ๆ ไม่ใช่พาทั้งหน้าไปด้วย
+  */
+  let filters: QuickFilter[] = [];
+  try {
+    const r = await apiFetch(`/api/v1/boards/${encodeURIComponent(key)}/quick-filters`);
+    if (r.ok) filters = ((await r.json()) as { rows: QuickFilter[] }).rows;
+  } catch {
+    filters = [];
   }
 
   const total = data.columns.reduce((n, c) => n + c.cards.length, 0);
@@ -146,6 +211,28 @@ export default async function BoardPage({
       )}
 
       {note === null ? null : <Alert tone={note.tone}>{note.text}</Alert>}
+
+      {/*
+        แถบตัวกรองด่วน · อยู่ใน URL เหมือนโหมดกระดานและเลน จึงแชร์ลิงก์
+        และกดย้อนกลับได้ · **ตัวที่กดอยู่ยังแสดงเป็นปุ่ม ไม่ใช่หายไป**
+        มิฉะนั้นคนจะไม่รู้ว่ากำลังกรองด้วยอะไรอยู่ ซึ่งอ่านเหมือนงานหายไป
+      */}
+      {filters.length === 0 ? null : (
+        <p className="board-filters">
+          <span className="board-filters-label">ตัวกรองด่วน</span>
+          <TextLink href={filterHref(data.projectKey, scrum, laneMode, null)}>
+            {filterId === null ? 'ทั้งหมด (กำลังใช้)' : 'ทั้งหมด'}
+          </TextLink>
+          {filters.map((f) => (
+            <TextLink
+              key={f.id}
+              href={filterHref(data.projectKey, scrum, laneMode, f.id)}
+            >
+              {f.id === filterId ? `${f.name} (กำลังใช้)` : f.name}
+            </TextLink>
+          ))}
+        </p>
+      )}
 
       {/*
         แถบเลือกเลน · อยู่ใน URL เหมือนโหมดกระดาน จึงแชร์ลิงก์และกดย้อนกลับได้

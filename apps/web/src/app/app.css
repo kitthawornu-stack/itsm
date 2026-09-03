@@ -3786,6 +3786,27 @@ tr[data-state='completed'] td {
   font-weight: 600;
 }
 
+/*
+  แถบตัวกรองด่วน
+
+  ตัวที่กดอยู่ยังแสดงเป็นปุ่ม พร้อมข้อความ "(กำลังใช้)" — **ไม่ใช่บอกด้วย
+  สีอย่างเดียว** และไม่ใช่หายไป มิฉะนั้นคนจะไม่รู้ว่ากำลังกรองด้วยอะไรอยู่
+  ซึ่งอ่านเหมือนงานหายไปจากกระดาน
+*/
+.board-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-3);
+  margin: 0 0 var(--space-3);
+  line-height: var(--line-height-body);
+}
+
+.board-filters-label {
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
 /* ช่องตั้งเพดาน — อยู่ใต้หัวคอลัมน์ ไม่ใช่ในหน้าตั้งค่าแยก */
 .wip-edit {
   display: flex;
