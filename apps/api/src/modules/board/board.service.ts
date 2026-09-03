@@ -101,6 +101,14 @@ export interface BoardView {
    * อยากเห็นคนละอย่าง
    */
   cardFields: CardField[];
+  /**
+   * ผู้เรียกยังไม่เคยตั้งค่าเอง — ต่างจากตั้งใจปิดทุกอย่าง (`cardFields` ว่าง)
+   *
+   * หน้าจอใช้ตัดสินว่าจะแสดงปุ่ม "กลับไปใช้ค่าปริยาย" ไหม · ถ้าไม่มีค่านี้
+   * ผู้ใช้ที่ปิดทุกช่องแล้วจะกลับไม่ได้ — ความแตกต่างที่ผู้ใช้ไปถึงไม่ได้
+   * คือความแตกต่างที่ไม่มีอยู่จริงสำหรับเขา
+   */
+  cardFieldsIsDefault: boolean;
 }
 
 export interface BoardColumn {
@@ -127,6 +135,14 @@ export interface BoardColumn {
  * กระดานที่แสดงคอลัมน์ซึ่งงานในโปรเจกต์นี้ไปถึงไม่ได้ ทำให้คนลากแล้วเด้งกลับ
  * โดยไม่เข้าใจว่าทำไม
  */
+/** แปลงค่าที่ผู้ใช้ตั้งไว้ ให้อยู่ในรูปที่คำตอบของกระดานใช้ */
+function cardPrefFor(p: {
+  fields: CardField[];
+  isDefault: boolean;
+}): { cardFields: CardField[]; cardFieldsIsDefault: boolean } {
+  return { cardFields: p.fields, cardFieldsIsDefault: p.isDefault };
+}
+
 export async function boardOf(
   ctx: TenantContext,
   projectKey: string,
@@ -214,7 +230,7 @@ export async function boardOf(
         scope,
         columns: [],
         canManage: await can(ctx, project.id, 'MANAGE_PROJECT'),
-        cardFields: (await cardPrefOf(ctx, project.key)).fields,
+        ...cardPrefFor(await cardPrefOf(ctx, project.key)),
       };
     }
   }
@@ -299,7 +315,7 @@ export async function boardOf(
     scope,
     columns,
     canManage: await can(ctx, project.id, 'MANAGE_PROJECT'),
-    cardFields: (await cardPrefOf(ctx, project.key)).fields,
+    ...cardPrefFor(await cardPrefOf(ctx, project.key)),
   };
 }
 

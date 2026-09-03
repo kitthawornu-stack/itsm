@@ -30,10 +30,13 @@ export function CardFieldPicker({
   apiBase,
   projectKey,
   current,
+  isDefault,
 }: {
   apiBase: string;
   projectKey: string;
   current: readonly CardFieldKey[];
+  /** ยังไม่เคยตั้งค่าเอง — ใช้ตัดสินว่าจะแสดงปุ่มกลับไปใช้ค่าปริยายไหม */
+  isDefault: boolean;
 }): ReactNode {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -48,7 +51,13 @@ export function CardFieldPicker({
    * ตัวช่วยที่กลืน error ไว้เองทำให้ promise สำเร็จเสมอ แล้วผู้เรียก
    * จะปิดฟอร์มทั้งตอนที่ถูกปฏิเสธ (บทเรียนใน CLAUDE.md)
    */
-  async function save(): Promise<boolean> {
+  /**
+   * ส่งค่าไปเซิร์ฟเวอร์ · `null` = กลับไปเป็น "ยังไม่เคยตั้ง"
+   *
+   * **คืนว่าสำเร็จหรือไม่ ไม่ใช่ `void`** — ตัวช่วยที่กลืน error ไว้เอง
+   * ทำให้ promise สำเร็จเสมอ แล้วผู้เรียกจะปิดฟอร์มทั้งตอนที่ถูกปฏิเสธ
+   */
+  async function send(fields: CardFieldKey[] | null): Promise<boolean> {
     setBusy(true);
     setError(null);
     try {
@@ -58,7 +67,7 @@ export function CardFieldPicker({
           method: 'POST',
           credentials: 'include',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ fields: picked }),
+          body: JSON.stringify({ fields }),
         },
       );
       const data = (await res.json()) as { message?: string };
@@ -69,7 +78,11 @@ export function CardFieldPicker({
         return false;
       }
       setStatus(
-        picked.length === 0 ? 'การ์ดจะไม่แสดงข้อมูลเพิ่มแล้ว' : `แสดง ${String(picked.length)} อย่าง`,
+        fields === null
+          ? 'กลับไปใช้ค่าปริยายแล้ว'
+          : fields.length === 0
+            ? 'การ์ดจะไม่แสดงข้อมูลเพิ่มแล้ว'
+            : `แสดง ${String(fields.length)} อย่าง`,
       );
       return true;
     } catch {
@@ -128,7 +141,7 @@ export function CardFieldPicker({
           variant="primary"
           disabled={busy}
           onClick={() => {
-            void save().then((ok) => {
+            void send(picked).then((ok) => {
               // ปิดเมื่อเซิร์ฟเวอร์รับแล้วเท่านั้น
               if (!ok) return;
               setOpen(false);
@@ -138,6 +151,25 @@ export function CardFieldPicker({
         >
           บันทึก
         </Button>
+        {isDefault ? null : (
+          /*
+            แสดงเฉพาะตอนที่ตั้งค่าเองไว้แล้ว — ปุ่มที่กดแล้วไม่เกิดอะไร
+            ทำให้คนสงสัยว่ากดถูกหรือเปล่า
+          */
+          <Button
+            variant="ghost"
+            disabled={busy}
+            onClick={() => {
+              void send(null).then((ok) => {
+                if (!ok) return;
+                setOpen(false);
+                router.refresh();
+              });
+            }}
+          >
+            กลับไปใช้ค่าปริยาย
+          </Button>
+        )}
         <Button
           variant="ghost"
           onClick={() => {

@@ -90,3 +90,33 @@ export async function setCardPref(
   const parsed = parseCardFields(raw);
   return { ...parsed, isDefault: false };
 }
+
+/**
+ * ลบค่าที่ตั้งไว้ กลับไปเป็น **"ยังไม่เคยตั้ง"**
+ *
+ * ต่างจากการบันทึกรายการว่าง ซึ่งแปลว่า "ตั้งใจไม่แสดงอะไรเลย" ·
+ * ทั้งระบบแยกสองสถานะนี้ไว้ตั้งแต่ชั้นเก็บข้อมูล แต่ถ้าหน้าจอไปถึงได้
+ * ทางเดียว **ผู้ใช้ที่ปิดทุกช่องแล้วจะกลับไม่ได้** — ความแตกต่างที่
+ * ผู้ใช้ไปถึงไม่ได้ คือความแตกต่างที่ไม่มีอยู่จริงสำหรับเขา
+ *
+ * ลบด้วย unique key ที่ระบุแถวเดียว ไม่ใช่ `deleteMany` ด้วยเงื่อนไขช่วง
+ * — `deleteMany` ที่ไม่ตรงแถวไหนเลยยังจับ gap lock ถึง supremum (CLAUDE.md)
+ */
+export async function resetCardPref(ctx: TenantContext, projectKey: string): Promise<CardPref> {
+  const projectId = await projectOf(ctx, projectKey);
+  if (ctx.actorId === null) throw new NotSignedInError();
+
+  const db = tenantScoped(ctx);
+  const row = await db.boardCardPref.findFirst({
+    where: { userId: ctx.actorId, projectId },
+    select: { id: true },
+  });
+  /*
+    ไม่มีแถวอยู่แล้ว = สำเร็จ ไม่ใช่ error · การกดปุ่มที่ทำให้ไปถึงสถานะ
+    ที่ต้องการอยู่แล้ว ควรเงียบ ไม่ใช่ฟ้อง
+  */
+  if (row !== null) await db.boardCardPref.delete({ where: { id: row.id } });
+
+  const parsed = parseCardFields(null);
+  return { ...parsed, isDefault: true };
+}

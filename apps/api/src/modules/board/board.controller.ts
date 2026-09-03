@@ -35,6 +35,7 @@ import {
   CardPrefProjectNotFoundError,
   NotSignedInError,
   cardPrefOf,
+  resetCardPref,
   setCardPref,
   type CardPref,
 } from './card-pref.service';
@@ -315,10 +316,27 @@ export class BoardController {
       — **ชนิดที่โกหกทำให้ lint โกหกตาม** (CLAUDE.md) · ของจริงคืออะไรก็ได้
       เพราะมาจาก body ของคำขอ
     */
+    /*
+      **`fields: null` = กลับไปเป็น "ยังไม่เคยตั้ง"** ซึ่งต่างจาก `fields: []`
+      ที่แปลว่าตั้งใจไม่แสดงอะไรเลย · ถ้าไม่มีทางนี้ ผู้ใช้ที่ปิดทุกช่องแล้ว
+      จะกลับไม่ได้ — ความแตกต่างที่ผู้ใช้ไปถึงไม่ได้ คือความแตกต่างที่
+      ไม่มีอยู่จริงสำหรับเขา
+    */
+    if (body.fields === null) {
+      try {
+        return await resetCardPref(ctx, projectKey);
+      } catch (e) {
+        throw toHttp(e);
+      }
+    }
     const raw: unknown[] | null = Array.isArray(body.fields) ? (body.fields as unknown[]) : null;
     if (raw === null) {
       throw new HttpException(
-        { message: 'ต้องส่ง fields เป็นรายการ · รายการว่างแปลว่าไม่แสดงอะไรเลย' },
+        {
+          message:
+            'ต้องส่ง fields เป็นรายการ · รายการว่างแปลว่าไม่แสดงอะไรเลย' +
+            ' · ส่ง null เพื่อกลับไปใช้ค่าปริยาย',
+        },
         HttpStatus.UNPROCESSABLE_ENTITY,
       );
     }

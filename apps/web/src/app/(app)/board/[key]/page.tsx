@@ -30,6 +30,7 @@ interface Board {
   columns: BoardColumn[];
   canManage: boolean;
   cardFields: CardFieldKey[];
+  cardFieldsIsDefault: boolean;
 }
 
 /**
@@ -223,6 +224,7 @@ export default async function BoardPage({
         apiBase={API_BASE}
         projectKey={data.projectKey}
         current={data.cardFields}
+        isDefault={data.cardFieldsIsDefault}
       />
 
       {filters.length === 0 ? null : (
