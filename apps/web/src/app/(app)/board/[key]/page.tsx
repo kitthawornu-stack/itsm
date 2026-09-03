@@ -2,7 +2,8 @@ import type { ReactNode } from 'react';
 
 import { Alert, PageHeader, TextLink } from '@itsm/ui';
 
-import { BoardView, type BoardColumn } from '@/components/board-view';
+import { BoardView, type BoardColumn, type CardFieldKey } from '@/components/board-view';
+import { CardFieldPicker } from '@/components/card-field-picker';
 import { splitLanes, type LaneMode } from '@/lib/swimlanes';
 import { API_BASE, apiFetch } from '@/lib/api';
 
@@ -28,6 +29,7 @@ interface Board {
   scope: Scope;
   columns: BoardColumn[];
   canManage: boolean;
+  cardFields: CardFieldKey[];
 }
 
 /**
@@ -217,6 +219,12 @@ export default async function BoardPage({
         และกดย้อนกลับได้ · **ตัวที่กดอยู่ยังแสดงเป็นปุ่ม ไม่ใช่หายไป**
         มิฉะนั้นคนจะไม่รู้ว่ากำลังกรองด้วยอะไรอยู่ ซึ่งอ่านเหมือนงานหายไป
       */}
+      <CardFieldPicker
+        apiBase={API_BASE}
+        projectKey={data.projectKey}
+        current={data.cardFields}
+      />
+
       {filters.length === 0 ? null : (
         <p className="board-filters">
           <span className="board-filters-label">ตัวกรองด่วน</span>
@@ -266,6 +274,7 @@ export default async function BoardPage({
           projectKey={data.projectKey}
           columns={data.columns}
           canManage={data.canManage}
+          cardFields={data.cardFields}
         />
       ) : (
         lanes.map((l, i) => (
@@ -290,6 +299,7 @@ export default async function BoardPage({
               columns={l.columns}
               showHelp={i === 0}
               showWip={false}
+              cardFields={data.cardFields}
               laneLabel={l.label}
             />
           </section>

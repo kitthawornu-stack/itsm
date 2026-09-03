@@ -5,7 +5,22 @@ import { useRef, useState, type ReactNode } from 'react';
 import { Alert, StatusPill, type PriorityRank, type StatusCategory } from '@itsm/ui';
 
 import { planDrop } from '@/lib/board-drop';
+import { thaiDayKey, thaiDayLabel } from '@/lib/thai-day';
 import { WipLimitEditor } from './wip-limit-editor';
+
+/**
+ * ฟิลด์ที่การ์ดแสดงได้ — **ตรงกับ `ALL_CARD_FIELDS` ใน `@itsm/types`**
+ *
+ * `apps/web` ไม่ได้พึ่ง `@itsm/types` (ทำตามแบบเดียวกับ `WipState` และ
+ * `Scope` ที่คัดชนิดมาไว้ที่นี่) · รายการที่เขียนไว้สองที่จะไม่ตรงกันในวันที่
+ * มีคนแก้แค่ที่เดียว จึงมีเทสต์สแกนซอร์สทั้งสองฝั่งมาเทียบ
+ * — `card-fields-sync.spec.ts`
+ */
+export const CARD_FIELDS = ['priority', 'assignee', 'type', 'sprint', 'updated'] as const;
+export type CardFieldKey = (typeof CARD_FIELDS)[number];
+
+/** ตรงกับ `DEFAULT_CARD_FIELDS` ใน `@itsm/types` — เทสต์สแกนเทียบให้ */
+export const DEFAULT_CARD_FIELDS: readonly CardFieldKey[] = ['priority', 'assignee'] as const;
 
 export interface BoardCard {
   itemKey: string;
@@ -13,6 +28,9 @@ export interface BoardCard {
   assignee: string | null;
   priority: { rank: number; name: string } | null;
   rank: string;
+  issueType: string;
+  sprint: string | null;
+  updatedAt: string;
 }
 
 /** ผลตัดสินเพดานงานที่ทำพร้อมกัน — ตรงกับ `WipState` ฝั่ง API */
@@ -123,6 +141,7 @@ export function BoardView({
   showHelp = true,
   showWip = true,
   canManage = false,
+  cardFields = DEFAULT_CARD_FIELDS,
   laneLabel = null,
 }: {
   apiBase: string;
@@ -151,6 +170,13 @@ export function BoardView({
    * เหมือนกับกติกาสิทธิ์ทุกข้อในโปรเจกต์นี้
    */
   canManage?: boolean;
+  /**
+   * ฟิลด์ที่การ์ดจะแสดง · ค่าปริยายตรงกับสิ่งที่การ์ดเคยแสดงมาตลอด
+   *
+   * ค่าปริยายที่เปลี่ยนหน้าตาให้คนที่ไม่ได้ขออะไร คือการเปลี่ยนแปลง
+   * ที่ไม่มีใครสั่ง — หน้าจอที่ลืมส่งค่านี้ต้องได้ของเดิม ไม่ใช่ของว่าง
+   */
+  cardFields?: readonly CardFieldKey[];
   /**
    * ชื่อเลนที่กระดานนี้อยู่ · ใช้ต่อท้าย `aria-label` ของคอลัมน์
    *
@@ -378,17 +404,39 @@ export function BoardView({
                     >
                       <span className="board-card-key">{card.itemKey}</span>
                       <span className="board-card-summary">{card.summary}</span>
-                      <span className="board-card-foot">
-                        <span
-                          className="board-card-pri"
-                          data-rank={String((card.priority?.rank ?? 5) as PriorityRank)}
-                        >
-                          {card.priority?.name ?? 'ไม่ระบุ'}
+                      {/*
+                        แสดงเฉพาะฟิลด์ที่ผู้ใช้เลือก · **ปิดหมดแล้วแถวล่าง
+                        หายไปทั้งแถว ไม่ใช่เหลือกล่องเปล่า** ซึ่งจะกินที่
+                        โดยไม่บอกอะไร
+                      */}
+                      {cardFields.length === 0 ? null : (
+                        <span className="board-card-foot">
+                          {cardFields.includes('priority') ? (
+                            <span
+                              className="board-card-pri"
+                              data-rank={String((card.priority?.rank ?? 5) as PriorityRank)}
+                            >
+                              {card.priority?.name ?? 'ไม่ระบุ'}
+                            </span>
+                          ) : null}
+                          {cardFields.includes('type') ? (
+                            <span className="board-card-meta">{card.issueType}</span>
+                          ) : null}
+                          {cardFields.includes('sprint') ? (
+                            <span className="board-card-meta">
+                              {card.sprint ?? 'ไม่อยู่ในรอบไหน'}
+                            </span>
+                          ) : null}
+                          {cardFields.includes('updated') ? (
+                            <span className="board-card-meta">{thaiDayLabel(thaiDayKey(new Date(card.updatedAt)))}</span>
+                          ) : null}
+                          {cardFields.includes('assignee') ? (
+                            <span className="board-card-who">
+                              {card.assignee ?? 'ยังไม่มีผู้รับผิดชอบ'}
+                            </span>
+                          ) : null}
                         </span>
-                        <span className="board-card-who">
-                          {card.assignee ?? 'ยังไม่มีผู้รับผิดชอบ'}
-                        </span>
-                      </span>
+                      )}
                     </button>
                   </li>
                 ))}

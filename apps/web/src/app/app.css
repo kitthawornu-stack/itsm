@@ -3786,6 +3786,55 @@ tr[data-state='completed'] td {
   font-weight: 600;
 }
 
+/* ตัวเลือกข้อมูลบนการ์ด — ค่าของแต่ละคน ไม่ใช่ของทั้งทีม */
+.card-pref {
+  margin: 0 0 var(--space-3);
+}
+
+.card-pref-open {
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+}
+
+.card-pref-set {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  border: 0;
+  margin: 0;
+  padding: 0;
+}
+
+.card-pref-legend {
+  padding: 0;
+  margin-bottom: var(--space-2);
+  font-weight: 600;
+  line-height: var(--line-height-body);
+}
+
+.card-pref-actions {
+  display: flex;
+  gap: var(--space-2);
+  margin: var(--space-3) 0 0;
+}
+
+.card-pref-error {
+  margin: var(--space-2) 0 0;
+  color: var(--status-critical);
+  line-height: var(--line-height-body);
+  overflow-wrap: anywhere;
+}
+
+/* ข้อมูลเสริมบนการ์ด — เล็กและจาง เพื่อไม่แย่งสายตาจากหัวข้อ */
+.board-card-meta {
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: var(--line-height-body);
+  overflow-wrap: anywhere;
+}
+
 /*
   แถบตัวกรองด่วน
 
