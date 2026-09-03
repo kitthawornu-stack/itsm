@@ -70,9 +70,9 @@ interface Unstarted {
   ident: string;
 }
 
-function unstartedItems(): Unstarted[] {
+function unstartedItems(doc: string = DOC): Unstarted[] {
   const out: Unstarted[] = [];
-  for (const raw of DOC.split('\n')) {
+  for (const raw of doc.split('\n')) {
     if (!raw.startsWith('- [ ]')) continue;
     const m = /<!--\s*ยังไม่มี:\s*([A-Za-z0-9_]+)\s*-->/.exec(raw);
     out.push({
@@ -101,10 +101,26 @@ describe('เอกสารสถานะ · ช่องที่กาว่
     expect(all, 'หาโค้ดในแพ็กเกจร่วมไม่เจอ').toContain('UtcDate');
   });
 
+  /**
+   * **probe ต้องยิงใส่ข้อความตัวอย่าง ไม่ใช่ใส่จำนวนที่เหลือในเอกสารจริง**
+   *
+   * ของเดิมเขียนว่า `toBeGreaterThan(3)` โดยเอาจำนวนที่เหลือ ณ วันนั้นมาตั้ง ·
+   * **มันแดงในวันที่งานคืบหน้า** — พอเหลือ 3 ข้อ ด่านก็ล้มทั้งที่ไม่มีอะไรผิด
+   * และจะแดงตลอดไปเมื่อเหลือ 0 ซึ่งเป็นเป้าหมายของโปรเจกต์ ·
+   * เพดานและพื้นที่ตั้งจากตัวเลขที่ขยับได้ จะกลายเป็นด่านที่ห้ามความคืบหน้า
+   */
+  it('probe · ตัวแกะช่อง `[ ]` ทำงานกับข้อความตัวอย่างได้', () => {
+    const sample = ['- [ ] อย่างหนึ่ง <!-- ยังไม่มี: alpha -->', '- [x] อีกอย่าง'].join('\n');
+    const got = unstartedItems(sample);
+    expect(got).toHaveLength(1);
+    expect(got[0]?.ident).toBe('alpha');
+  });
+
+  it('probe · ช่องที่ไม่มีเครื่องหมาย ถูกจับได้', () => {
+    expect(unstartedItems('- [ ] ไม่มีเครื่องหมาย')[0]?.ident).toBe('');
+  });
+
   it('**ทุกช่อง `[ ]` ต้องมีเครื่องหมายที่พิสูจน์ผิดได้**', () => {
-    expect(items.length, 'ไม่มีช่อง `[ ]` เลย — อ่านเอกสารไม่ได้หรือรูปแบบเปลี่ยน').toBeGreaterThan(
-      3,
-    );
     const missing = items.filter((i) => i.ident === '').map((i) => i.line);
     expect(
       missing,
