@@ -6,3 +6,4 @@ export * from './time-report.service';
 export * from './latency-stats';
 export * from './pivot';
 export * from './pivot.service';
+export * from './schedule';
