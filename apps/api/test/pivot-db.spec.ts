@@ -166,7 +166,15 @@ async function visibleProjects(): Promise<bigint[]> {
 describe('B · สิ่งที่ต้องปฏิเสธ', () => {
   it('มิติที่ไม่รู้จัก ถูกปฏิเสธพร้อมบอกว่าเลือกอะไรได้', () => {
     expect(() => assertDimension('ไม่มีมิตินี้')).toThrow(UnknownPivotDimensionError);
-    expect(() => assertDimension('ไม่มีมิตินี้')).toThrow(/status/);
+    /*
+      **ข้อความต้องเป็นภาษาคน ไม่ใช่คีย์ภายใน** (§5) · รอบแรกบอกว่า
+      "จัดกลุ่มได้เฉพาะ status · priority · …" ซึ่งเป็นชื่อที่ผู้ใช้
+      ไม่เคยเห็นที่ไหนบนหน้าจอเลย — เจอตอนเปิดดูจริง
+    */
+    expect(() => assertDimension('ไม่มีมิตินี้')).toThrow(/สถานะ/);
+    expect(() => assertDimension('ไม่มีมิตินี้'), 'ยังหลุดคีย์ภายในออกมา').not.toThrow(
+      /priority/,
+    );
   });
 
   /**

@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 
-import { Alert, DailyChart, PageHeader, Stat, Table } from '@itsm/ui';
+import { Alert, DailyChart, PageHeader, Stat, Table, TextLink } from '@itsm/ui';
 
 import { apiFetch } from '@/lib/api';
 
@@ -117,6 +117,13 @@ export default async function ReportsPage({
       <DailyChart daily={report.daily} />
 
       <h2 className="detail-section-title detail-section-gap">แจ้งเข้ามา แยกตามความสำคัญ</h2>
+      {/* ทางไปตารางไขว้ — คำถามที่สองมิติตอบได้ แต่หน้านี้ตอบไม่ได้ */}
+      <p className="pivot-back">
+        <TextLink href={`/reports/pivot?range=${encodeURIComponent(range)}`}>
+          ดูตารางไขว้ (แยกสองมิติพร้อมกัน)
+        </TextLink>
+      </p>
+
       <Table columns={['ความสำคัญ', 'จำนวน']} rowCount={report.byPriority.length}>
         {report.byPriority.map((p) => (
           <tr key={p.name}>

@@ -39,11 +39,19 @@ export const PIVOT_DIMENSION_LABEL: Record<PivotDimension, string> = {
   project: 'โปรเจกต์',
 };
 
+/**
+ * ข้อความปฏิเสธใช้ **ป้ายภาษาไทย ไม่ใช่คีย์ภายใน**
+ *
+ * §5 ของ CLAUDE.md: ข้อความที่ผู้ใช้เห็นเป็นภาษาคน ไม่ใช่ศัพท์ระบบ ·
+ * รอบแรกเขียนว่า `จัดกลุ่มได้เฉพาะ status · priority · …` ซึ่งเป็นชื่อที่
+ * ผู้ใช้ไม่เคยเห็นที่ไหนบนหน้าจอเลย — **เห็นตอนเปิดดูจริง ไม่ใช่ตอนอ่านโค้ด**
+ */
+const dimensionNames = (): string =>
+  PIVOT_DIMENSIONS.map((d) => PIVOT_DIMENSION_LABEL[d]).join(' · ');
+
 export class UnknownPivotDimensionError extends Error {
   constructor(name: string) {
-    super(
-      `ไม่รู้จักมิติ "${name}" — จัดกลุ่มได้เฉพาะ ${PIVOT_DIMENSIONS.join(' · ')}`,
-    );
+    super(`ไม่รู้จักมิติ "${name}" — จัดกลุ่มได้เฉพาะ ${dimensionNames()}`);
   }
 }
 
@@ -55,8 +63,11 @@ export class UnknownPivotDimensionError extends Error {
  * ดูเหมือนพัง
  */
 export class SameDimensionError extends Error {
-  constructor(name: string) {
-    super(`แถวกับคอลัมน์เป็น "${name}" เหมือนกัน — ตารางจะมีค่าเฉพาะแนวทแยง`);
+  constructor(dim: PivotDimension) {
+    super(
+      `แถวกับคอลัมน์เป็น "${PIVOT_DIMENSION_LABEL[dim]}" เหมือนกัน` +
+        ' — ตารางจะมีค่าเฉพาะแนวทแยง · เลือกคนละมิติ',
+    );
   }
 }
 

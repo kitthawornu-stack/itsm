@@ -3786,6 +3786,60 @@ tr[data-state='completed'] td {
   font-weight: 600;
 }
 
+/*
+  ตารางไขว้
+
+  ตารางกว้างได้มาก จึงเลื่อนในกล่องของตัวเอง ไม่ใช่ดันทั้งหน้าให้เลื่อน
+  แนวนอน ซึ่งทำให้เมนูและหัวเรื่องหลุดออกไปนอกจอด้วย
+*/
+.pivot-scroll {
+  overflow-x: auto;
+  margin-bottom: var(--space-4);
+}
+
+.pivot-pick {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-3);
+  margin: 0 0 var(--space-2);
+  line-height: var(--line-height-body);
+}
+
+.pivot-pick-label {
+  color: var(--text-muted);
+  font-size: 13px;
+  min-width: 5.5rem;
+}
+
+/* ชื่อแถวเป็นข้อความไทยที่ยาวได้ — ต้องตัดคำและไม่ดันตารางล้น */
+.pivot-rowhead {
+  text-align: start;
+  font-weight: 500;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  line-height: var(--line-height-body);
+}
+
+/* ตัวเลขชิดขวาและกว้างเท่ากันทุกหลัก เพื่อให้กวาดสายตาเทียบกันได้ */
+.pivot-num {
+  text-align: end;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.pivot-total {
+  font-weight: 600;
+}
+
+.pivot-footrow {
+  border-top: 2px solid var(--border-strong);
+}
+
+.pivot-back {
+  margin: var(--space-4) 0 0;
+}
+
 /* ตัวเลือกข้อมูลบนการ์ด — ค่าของแต่ละคน ไม่ใช่ของทั้งทีม */
 .card-pref {
   margin: 0 0 var(--space-3);
