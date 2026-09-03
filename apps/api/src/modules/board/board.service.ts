@@ -26,7 +26,13 @@ import { assertCan, browsableProjectIds } from '../permission';
 import { applyTransition, availableTransitions } from '../workflow';
 
 import { scrumScopeOf, type ScrumScope } from './scrum-scope';
-import { evaluateWip, wipLimitOf, type WipState } from './wip-limit';
+import {
+  evaluateWip,
+  isValidWipLimit,
+  wipLimitOf,
+  WIP_LIMIT_MAX,
+  type WipState,
+} from './wip-limit';
 
 export class BoardItemNotFoundError extends Error {
   constructor() {
@@ -427,4 +433,110 @@ export async function rebalanceColumn(
     };
   });
   return { rebalanced: rows.length };
+}
+
+/** ค่าที่ตั้งเป็นเพดานไม่ได้ — ข้อความบอกช่วงที่ยอมรับ ไม่ใช่แค่ว่าผิด */
+export class InvalidWipLimitError extends Error {
+  constructor(got: number) {
+    super(
+      `เพดานต้องเป็นจำนวนเต็มตั้งแต่ 1 ถึง ${String(WIP_LIMIT_MAX)} — ได้รับ ${String(got)}` +
+        ' · ถ้าต้องการเอาเพดานออก ให้ส่งค่าว่างแทนเลข 0',
+    );
+  }
+}
+
+/** คอลัมน์ที่อ้างถึงไม่มีอยู่ในกระดานของโปรเจกต์นี้ */
+export class BoardColumnNotFoundError extends Error {
+  constructor(column: string) {
+    super(`ไม่มีคอลัมน์ "${column}" บนกระดานของโปรเจกต์นี้`);
+  }
+}
+
+/**
+ * ตั้งหรือถอดเพดานงานที่ทำพร้อมกันของคอลัมน์หนึ่ง
+ *
+ * **อ้างถึงคอลัมน์ด้วยชื่อ แต่เก็บด้วยรหัสสถานะ** — ชื่อคือสิ่งที่คนเห็น
+ * บนกระดาน ส่วนสถานะคือสิ่งที่ไม่กำพร้าเมื่อมีคนเปลี่ยนชื่อ · คอลัมน์เดียว
+ * อาจยุบมาจากหลายสถานะ (ชนิดงานละ workflow) จึงเขียนให้ **ทุกสถานะในคอลัมน์นั้น**
+ * ค่าเดียวกัน มิฉะนั้นจะกลายเป็น "กำกวม" ทันทีที่ตั้งเสร็จ
+ *
+ * `maxCards === null` = ถอดเพดานออก · **ไม่ใช่ 0** ซึ่งตั้งไม่ได้เลย
+ */
+export async function setWipLimit(
+  ctx: TenantContext,
+  projectKey: string,
+  column: string,
+  maxCards: number | null,
+): Promise<{ column: string; maxCards: number | null; statuses: number }> {
+  const allowed = await browsableProjectIds(ctx);
+  const project =
+    allowed.length === 0
+      ? null
+      : await tenantScoped(ctx).project.findFirst({
+          where: { key: projectKey.trim(), id: { in: allowed } },
+          select: { id: true },
+        });
+  if (project === null) throw new BoardItemNotFoundError();
+  await assertCan(ctx, project.id, 'MANAGE_PROJECT');
+
+  if (maxCards !== null && !isValidWipLimit(maxCards)) throw new InvalidWipLimitError(maxCards);
+
+  const db = tenantScoped(ctx);
+  /*
+    หาสถานะจาก workflow ที่ *โปรเจกต์นี้ใช้จริง* ไม่ใช่ทุกสถานะที่ชื่อตรงกัน
+    ทั้งองค์กร — มิฉะนั้นการตั้งเพดานของโปรเจกต์หนึ่งจะไปสร้างแถวให้สถานะ
+    ของโปรเจกต์อื่นที่บังเอิญตั้งชื่อคอลัมน์เหมือนกัน
+  */
+  const schemes = await db.workflowScheme.findMany({
+    where: { projectId: project.id },
+    select: { workflowId: true },
+  });
+  const workflowIds = [...new Set(schemes.map((s) => s.workflowId.toString()))].map((x) =>
+    BigInt(x),
+  );
+  const statuses = await db.workflowStatus.findMany({
+    where: { workflowId: { in: workflowIds }, name: column.trim() },
+    select: { id: true },
+  });
+  if (statuses.length === 0) throw new BoardColumnNotFoundError(column);
+
+  await auditedTransaction(ctx, 'board.wip_limit', async (tx) => {
+    for (const st of statuses) {
+      if (maxCards === null) {
+        /*
+          ลบด้วย unique key ที่ระบุแถวเดียว ไม่ใช่ `deleteMany` ด้วยเงื่อนไขช่วง
+          — `deleteMany` ที่ไม่ตรงแถวไหนเลยยังจับ gap lock ถึง supremum
+          แล้วชนกับ insert ของอีกทรานแซกชันจนเป็น deadlock (CLAUDE.md)
+        */
+        await tx.boardWipLimit.deleteMany({
+          where: { projectId: project.id, statusId: st.id },
+        });
+      } else {
+        await tx.boardWipLimit.upsert({
+          where: { projectId_statusId: { projectId: project.id, statusId: st.id } },
+          create: {
+            tenantId: ctx.tenantId,
+            projectId: project.id,
+            statusId: st.id,
+            maxCards,
+          },
+          update: { maxCards },
+        });
+      }
+    }
+    return {
+      result: undefined,
+      audit: [
+        {
+          kind: 'system',
+          action: maxCards === null ? 'board.wip_limit.clear' : 'board.wip_limit.set',
+          entityType: 'project',
+          entityId: project.id.toString(),
+          payload: { column: column.trim(), maxCards, statuses: statuses.length },
+        },
+      ],
+    };
+  });
+
+  return { column: column.trim(), maxCards, statuses: statuses.length };
 }

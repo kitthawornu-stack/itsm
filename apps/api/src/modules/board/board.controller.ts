@@ -19,12 +19,15 @@ import type { TenantContext } from '@itsm/types';
 import { Ctx } from '../../infrastructure/http/session.guard';
 import { PermissionDeniedError } from '../permission';
 import {
+  BoardColumnNotFoundError,
   BoardItemNotFoundError,
+  InvalidWipLimitError,
   NoTransitionForColumnError,
   boardOf,
   type BoardView,
   moveCard,
   rebalanceColumn,
+  setWipLimit,
 } from './board.service';
 
 function toHttp(e: unknown): unknown {
@@ -40,6 +43,17 @@ function toHttp(e: unknown): unknown {
       { error: 'no_transition', message: e.message },
       HttpStatus.UNPROCESSABLE_ENTITY,
     );
+  }
+  if (e instanceof BoardColumnNotFoundError) {
+    return new HttpException({ message: e.message }, HttpStatus.NOT_FOUND);
+  }
+  if (e instanceof InvalidWipLimitError) {
+    /*
+      422 ไม่ใช่ 400 — คำขอถูกรูปแบบทุกอย่าง แต่ค่าที่ส่งมาอยู่นอกช่วง
+      ที่ยอมรับ · ข้อความบอกช่วงและบอกวิธีถอดเพดาน เพราะคนที่พิมพ์ 0
+      มาตั้งใจจะถอดเพดาน ไม่ได้ตั้งใจจะผิด
+    */
+    return new HttpException({ message: e.message }, HttpStatus.UNPROCESSABLE_ENTITY);
   }
   if (e instanceof PermissionDeniedError) {
     return new HttpException({ message: e.message }, HttpStatus.FORBIDDEN);
@@ -130,6 +144,35 @@ export class BoardController {
         projectKey,
         typeof body.column === 'string' ? body.column : '',
       );
+    } catch (e) {
+      throw toHttp(e);
+    }
+  }
+
+  /**
+   * ตั้งหรือถอดเพดานงานที่ทำพร้อมกันของคอลัมน์หนึ่ง
+   *
+   * `maxCards: null` = ถอดเพดาน · **0 ไม่ใช่การถอด** และถูกปฏิเสธ
+   * พร้อมข้อความที่บอกวิธีถอดจริง ๆ — คนที่พิมพ์ 0 ตั้งใจจะถอด
+   * ถ้ารับไว้เงียบ ๆ เขาจะเชื่อว่าถอดแล้วทั้งที่เก็บเป็นเพดาน 0
+   */
+  @Post(':projectKey/wip-limit')
+  @HttpCode(HttpStatus.OK)
+  async wipLimit(
+    @Ctx() ctx: TenantContext,
+    @Param('projectKey') projectKey: string,
+    @Body() body: { column?: unknown; maxCards?: unknown },
+  ): Promise<{ column: string; maxCards: number | null; statuses: number }> {
+    const column = typeof body.column === 'string' ? body.column : '';
+    /*
+      แยก "ไม่ส่งมา" ออกจาก "ส่งค่าที่ไม่ใช่ตัวเลข" ไม่ได้ที่ชั้นนี้ —
+      ทั้งสองอย่างกลายเป็น `null` ซึ่งแปลว่าถอดเพดาน · จึงรับเฉพาะ
+      `null` กับตัวเลขเท่านั้น ค่าอื่นส่งต่อให้ service ปฏิเสธพร้อมช่วงที่ถูก
+    */
+    const raw = body.maxCards;
+    const maxCards = raw === null || raw === undefined ? null : Number(raw);
+    try {
+      return await setWipLimit(ctx, projectKey, column, maxCards);
     } catch (e) {
       throw toHttp(e);
     }
