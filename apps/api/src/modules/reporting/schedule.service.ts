@@ -9,12 +9,10 @@
  * ตอนยังมีสิทธิ์ ต้องหยุดส่งเมื่อสิทธิ์ถูกถอน มิฉะนั้นการถอนสิทธิ์
  * จะไม่มีผลกับสิ่งที่ตั้งไว้แล้ว ซึ่งเป็นช่องที่ไม่มีใครนึกถึง
  */
-import { toUtcDate, type UtcDate, type TenantContext } from '@itsm/types';
+import { nextRunAt, toUtcDate, type Schedule, type UtcDate, type TenantContext } from '@itsm/types';
 
 import { tenantScoped } from '../../infrastructure/prisma/tenant-scope';
 import { assertCan, browsableProjectIds } from '../permission';
-
-import { nextRunAt, type Schedule } from './schedule';
 
 /** จำนวนตารางต่อคน · มากกว่านี้คือคนที่ควรใช้รายงานหน้าจอแทน */
 export const MAX_SCHEDULES_PER_USER = 10;

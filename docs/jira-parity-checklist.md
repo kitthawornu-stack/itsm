@@ -494,7 +494,7 @@ Jira สะสมฟีเจอร์มา 20 ปี การไล่เท�
 
 **272 commit · 2,318 เทสต์ผ่าน · 8 CI task · 198 endpoint · 36 หน้าจอ · 22 โมดูล (มีโค้ดจริง 22) · 151 ไฟล์เทสต์**
 
-เทสต์แยกตาม workspace: api 2050 · worker 63 · ui 53 · **hql 56** · lexorank 19 · web 62 · types 15
+เทสต์แยกตาม workspace: api 2033 · worker 63 · ui 53 · **hql 56** · lexorank 19 · web 62 · types 32
 
 <!--
   ตัวสแกน (`status-doc.spec.ts`) นับรายการในสองช่องท้ายด้วยตัวคั่น `·`

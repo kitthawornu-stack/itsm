@@ -13,7 +13,7 @@
  * ไฟล์นี้จึงเป็นฟังก์ชันบริสุทธิ์ล้วน — ทดสอบได้โดยไม่ต้องมีฐานข้อมูล
  * และไม่อ่านนาฬิกาเอง (เวลา "ตอนนี้" ส่งเข้ามา) เหมือนกติกาของ SLA Engine
  */
-import { toUtcDate, type UtcDate } from '@itsm/types';
+import { THAI_OFFSET_MS, toUtcDate, type UtcDate } from '@itsm/types';
 
 /**
  * ประเทศไทยเป็น UTC+7 ตลอดปี ไม่มี DST
@@ -23,7 +23,11 @@ import { toUtcDate, type UtcDate } from '@itsm/types';
  *      เซิร์ฟเวอร์ on-prem ที่ตั้ง TZ ผิดไม่ควรทำให้รายงานผิดตาม
  *   2. `Intl` ในคอนเทนเนอร์ที่ไม่มี full-icu จะตกกลับไปเป็น UTC เงียบ ๆ
  */
-export const THAI_OFFSET_MS = 7 * 60 * 60 * 1000;
+/*
+  ค่าคงที่เขตเวลาย้ายไปอยู่ที่ `@itsm/types` เพราะ worker ต้องใช้ด้วย
+  และเรียกโค้ดของ api ไม่ได้ · ส่งต่อชื่อเดิมไว้เพื่อไม่ให้ผู้เรียกเดิมพัง
+*/
+export { THAI_OFFSET_MS };
 
 export interface ReportWindow {
   /** รวมค่านี้ */

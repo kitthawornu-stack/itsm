@@ -22,7 +22,7 @@
  *      ไม่ใช่เงียบ ๆ เหมือนไม่เคยมีอะไรเกิดขึ้น
  */
 import { describe, expect, it } from 'vitest';
-import { toUtcDate } from '@itsm/types';
+import { toUtcDate } from './index';
 
 import { nextRunAt, missedRuns, type Schedule } from './schedule';
 
