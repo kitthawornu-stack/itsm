@@ -5,8 +5,18 @@
  * รายงานของโปรเจกต์ตัวเองได้ · สิทธิ์จึงเป็น `VIEW_REPORT` รายโปรเจกต์
  * ซึ่ง service ตรวจเองทุกครั้ง
  */
-import { Controller, Get, HttpException, HttpStatus, Query } from '@nestjs/common';
-import { systemClock, type TenantContext } from '@itsm/types';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpException,
+  HttpStatus,
+  Param,
+  Post,
+  Query,
+} from '@nestjs/common';
+import { scheduleFromRow, systemClock, type TenantContext } from '@itsm/types';
 
 import { Ctx } from '../../infrastructure/http/session.guard';
 import { PermissionDeniedError } from '../permission';
@@ -22,6 +32,41 @@ import {
   pivotReport,
   type PivotResult,
 } from './pivot.service';
+import {
+  InvalidScheduleError,
+  NotSignedInError,
+  ScheduleNotFoundError,
+  ScheduleProjectNotFoundError,
+  TooManySchedulesError,
+  createSchedule,
+  deleteSchedule,
+  mySchedules,
+  setScheduleEnabled,
+  type ScheduleRow,
+} from './schedule.service';
+
+/** แปลง error ของตารางเวลาเป็น HTTP */
+function scheduleHttp(e: unknown): HttpException {
+  if (e instanceof ScheduleProjectNotFoundError || e instanceof ScheduleNotFoundError) {
+    return new HttpException({ message: e.message }, HttpStatus.NOT_FOUND);
+  }
+  if (e instanceof NotSignedInError) {
+    return new HttpException({ message: e.message }, HttpStatus.UNAUTHORIZED);
+  }
+  if (e instanceof InvalidScheduleError || e instanceof TooManySchedulesError) {
+    /*
+      422 — คำขอถูกรูปแบบ แต่ค่าใช้ไม่ได้ · ข้อความมาจากตัวตรวจตรง ๆ
+      เพราะมันรู้ว่าผิดตรงไหน ส่วนเราไม่รู้
+    */
+    return new HttpException({ message: e.message }, HttpStatus.UNPROCESSABLE_ENTITY);
+  }
+  if (e instanceof PermissionDeniedError) {
+    return new HttpException({ message: e.message }, HttpStatus.FORBIDDEN);
+  }
+  return e instanceof HttpException
+    ? e
+    : new HttpException({ message: 'ทำรายการไม่สำเร็จ' }, HttpStatus.INTERNAL_SERVER_ERROR);
+}
 
 const RANGES = Object.keys(RANGE_LABEL) as RangeKey[];
 
@@ -150,6 +195,89 @@ export class ReportController {
         throw new HttpException({ message: e.message }, HttpStatus.FORBIDDEN);
       }
       throw e;
+    }
+  }
+
+  /** ตารางเวลาส่งรายงานของ **ผู้เรียกเอง** — ไม่มีใครเห็นของคนอื่น */
+  @Get('schedules')
+  async schedules(@Ctx() ctx: TenantContext): Promise<{ rows: ScheduleRow[] }> {
+    try {
+      return { rows: await mySchedules(ctx, systemClock.nowUtc()) };
+    } catch (e) {
+      throw scheduleHttp(e);
+    }
+  }
+
+  /**
+   * ตั้งตารางเวลาใหม่
+   *
+   * **เวลาที่ส่งมาเป็นเวลาไทย** ไม่ใช่ UTC — ผู้ใช้ตั้งเวลาที่เขามองเห็น
+   * บนนาฬิกาของตัวเอง · ค่าที่ไม่ครบถูกปฏิเสธ ไม่ใช่เดาให้
+   */
+  @Post('schedules')
+  @HttpCode(HttpStatus.CREATED)
+  async addSchedule(
+    @Ctx() ctx: TenantContext,
+    @Body()
+    body: {
+      projectKey?: unknown;
+      name?: unknown;
+      kind?: unknown;
+      hour?: unknown;
+      minute?: unknown;
+      weekday?: unknown;
+      day?: unknown;
+    },
+  ): Promise<ScheduleRow> {
+    const str = (v: unknown): string => (typeof v === 'string' ? v : '');
+    const num = (v: unknown): number | null =>
+      typeof v === 'number' ? v : typeof v === 'string' && v !== '' ? Number(v) : null;
+    try {
+      const schedule = scheduleFromRow({
+        kind: str(body.kind),
+        hour: num(body.hour) ?? -1,
+        minute: num(body.minute) ?? -1,
+        weekday: num(body.weekday),
+        day: num(body.day),
+      });
+      return await createSchedule(
+        ctx,
+        str(body.projectKey),
+        { name: str(body.name), schedule },
+        systemClock.nowUtc(),
+      );
+    } catch (e) {
+      throw scheduleHttp(e);
+    }
+  }
+
+  /** เปิดหรือปิดตารางของตัวเอง — ปิดไว้ต่างจากลบทิ้ง */
+  @Post('schedules/:id/enabled')
+  @HttpCode(HttpStatus.OK)
+  async toggleSchedule(
+    @Ctx() ctx: TenantContext,
+    @Param('id') id: string,
+    @Body() body: { enabled?: unknown },
+  ): Promise<ScheduleRow> {
+    try {
+      return await setScheduleEnabled(ctx, id, body.enabled === true, systemClock.nowUtc());
+    } catch (e) {
+      throw scheduleHttp(e);
+    }
+  }
+
+  /** ลบตารางของตัวเอง */
+  @Post('schedules/:id/delete')
+  @HttpCode(HttpStatus.OK)
+  async removeSchedule(
+    @Ctx() ctx: TenantContext,
+    @Param('id') id: string,
+  ): Promise<{ ok: true }> {
+    try {
+      await deleteSchedule(ctx, id);
+      return { ok: true };
+    } catch (e) {
+      throw scheduleHttp(e);
     }
   }
 }

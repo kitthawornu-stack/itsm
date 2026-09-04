@@ -111,6 +111,13 @@ const GUARDS: ReadonlyArray<{ pattern: RegExp; means: string }> = [
   { pattern: /browsableProjectIds\s*\(/, means: 'จำกัดด้วยรายการโปรเจกต์ที่เปิดดูได้' },
   { pattern: /inboxAudience\s*\(/, means: 'ขอบเขตกล่องแจ้งเตือนของผู้ใช้' },
   { pattern: /ownerId !== ctx\.actorId/, means: 'เจ้าของเท่านั้น' },
+  /*
+    **กรองด้วยเจ้าของในคิวรี ก็เป็นด่านเหมือนกัน** — `where: { ownerId: ctx.actorId }`
+    ทำให้แถวของคนอื่นหาไม่เจอตั้งแต่ต้น แล้วโค้ดโยน "ไม่พบ" · เป็นการ
+    *ตัดสิน* ไม่ใช่การ *เอ่ยถึง* เพราะมันจำกัดผลของคิวรีจริง ·
+    รูปแบบนี้เจาะจงพอ: ต้องมี `ctx.actorId` อยู่ในค่าของ `ownerId` เท่านั้น
+  */
+  { pattern: /ownerId:\s*ctx\.actorId/, means: 'กรองเฉพาะแถวของเจ้าของ' },
   { pattern: /reporterId !== ctx\.actorId/, means: 'ผู้แจ้งเท่านั้น' },
   { pattern: /uploaderId === ctx\.actorId/, means: 'ผู้อัปโหลด หรือคนที่มีสิทธิ์จัดการไฟล์แนบ' },
   { pattern: /groupMember\.findFirst/, means: 'ต้องอยู่ในกลุ่มที่กำหนด' },
@@ -149,8 +156,6 @@ const NO_GUARD_BY_DESIGN: ReadonlyMap<string, string> = new Map([
     'POST /admin/users/password',
     'เปลี่ยนรหัสผ่านของตัวเอง — changeOwnPassword ใช้ ctx.actorId อย่างเดียว ไม่รับ id จากคำขอ จึงเล็งคนอื่นไม่ได้',
   ],
-  ['POST /dashboards', 'สร้างแดชบอร์ดของตัวเอง — ownerId มาจาก ctx.actorId ไม่ได้มาจากคำขอ'],
-  ['POST /filters', 'สร้างตัวกรองของตัวเอง — createSavedFilter เขียน ownerId จาก ctx.actorId'],
   [
     'POST /notification-settings/me/preferences',
     'ตั้งค่าการแจ้งเตือนของตัวเอง — setMyPreference อ่านและเขียนเฉพาะแถวที่ userId เป็น ctx.actorId',
@@ -257,6 +262,10 @@ describe('ด่านสิทธิ์ของทุกเส้นทาง�
     expect(byKey.get('POST /work-items/:key/rating')?.guard).toBe('ผู้แจ้งเท่านั้น');
     expect(byKey.get('POST /work-items/:key/approvals/decision')?.guard).toBe(
       'ต้องอยู่ในกลุ่มที่กำหนด',
+    );
+    // แบบที่สี่: กรองด้วยเจ้าของในคิวรี
+    expect(byKey.get('POST /reports/schedules/:id/delete')?.guard).toBe(
+      'กรองเฉพาะแถวของเจ้าของ',
     );
   });
 
