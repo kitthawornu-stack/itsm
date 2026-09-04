@@ -84,13 +84,13 @@ describe('ตัดสินว่าส่งหรือไม่', () => {
   });
 
   it('เนื้อความบอกจำนวนรอบที่ตก เมื่อมีมากกว่าหนึ่ง', () => {
-    const mail = renderReportEmail(row(), 3, 120, 'http://web');
+    const mail = renderReportEmail(row(), 3, { rows: 120, total: 120 }, 'http://web');
     expect(mail.text).toContain('2 ครั้ง');
     expect(mail.subject).toContain('SD');
   });
 
   it('รอบเดียวไม่มีหมายเหตุ — ข้อความเตือนที่ขึ้นตลอดเวลาไม่มีใครอ่าน', () => {
-    expect(renderReportEmail(row(), 1, 10, 'http://web').text).not.toContain('หมายเหตุ');
+    expect(renderReportEmail(row(), 1, { rows: 10, total: 10 }, 'http://web').text).not.toContain('หมายเหตุ');
   });
 });
 
@@ -106,7 +106,7 @@ function fakeDeps(over: Partial<ReportSenderDeps> = {}): ReportSenderDeps & { ca
     },
     buildCsv: () => {
       calls.push('build');
-      return Promise.resolve({ csv: 'a,b', filename: 'x.csv', rows: 2 });
+      return Promise.resolve({ csv: 'a,b', filename: 'x.csv', rows: 2, total: 2 });
     },
     markError: (id, e) => {
       calls.push(`error:${String(id)}:${e}`);
@@ -114,8 +114,8 @@ function fakeDeps(over: Partial<ReportSenderDeps> = {}): ReportSenderDeps & { ca
     },
     clearError: () => Promise.resolve(),
     mailer: {
-      send: () => {
-        calls.push('send');
+      send: (m) => {
+        calls.push(`send:${String(m.attachments?.length ?? 0)}:${m.attachments?.[0]?.filename ?? ''}`);
         return Promise.resolve();
       },
     },
@@ -135,7 +135,7 @@ describe('รอบการส่ง', () => {
   it('**จองก่อนประกอบไฟล์และก่อนส่ง**', async () => {
     const deps = fakeDeps();
     await runReportSender(deps, NOW);
-    expect(deps.calls).toEqual(['claim:1', 'build', 'send']);
+    expect(deps.calls).toEqual(['claim:1', 'build', 'send:1:x.csv']);
   });
 
   it('จองไม่ได้ (มีตัวอื่นจองไปแล้ว) = ข้าม ไม่ประกอบไฟล์และไม่ส่ง', async () => {
@@ -155,7 +155,7 @@ describe('รอบการส่ง', () => {
       loadEnabled: () => Promise.resolve(rows),
       buildCsv: (r) => {
         if (r.id === 1n) return Promise.reject(new Error('ไม่มีสิทธิ์ดูรายงานแล้ว'));
-        return Promise.resolve({ csv: 'a', filename: 'x.csv', rows: 1 });
+        return Promise.resolve({ csv: 'a', filename: 'x.csv', rows: 1, total: 1 });
       },
     });
     const report = await runReportSender(deps, NOW);
@@ -206,5 +206,45 @@ describe('รอบการส่ง', () => {
     });
     await runReportSender(deps, NOW);
     expect(send).not.toHaveBeenCalled();
+  });
+
+  /**
+   * **แนบไฟล์จริง ไม่ใช่ลิงก์ให้ไปโหลด**
+   *
+   * ลิงก์ต้องล็อกอินก่อน ซึ่งทำให้รายงานที่ตั้งใจให้เปิดอ่านตอนเช้า
+   * กลายเป็นงานอีกขั้น · และ `charset=utf-8` ต้องมี เพราะไฟล์มีภาษาไทย
+   */
+  it('**อีเมลมีไฟล์แนบ พร้อมชนิดที่ระบุ charset**', async () => {
+    let got: { filename: string; contentType: string } | undefined;
+    const deps = fakeDeps({
+      mailer: {
+        send: (m) => {
+          got = m.attachments?.[0];
+          return Promise.resolve();
+        },
+      },
+    });
+    await runReportSender(deps, NOW);
+    expect(got?.filename).toBe('x.csv');
+    expect(got?.contentType, 'ไม่ระบุ charset — ภาษาไทยจะเพี้ยนตอนเปิด').toContain('utf-8');
+  });
+
+  /**
+   * **ไฟล์ที่ถูกตัดต้องบอกว่าตัด**
+   *
+   * ถ้าบอกแค่จำนวนแถวในไฟล์ ผู้รับจะอ่านว่า "โปรเจกต์นี้มีงานเท่านี้"
+   * ซึ่งน้อยกว่าความจริง แล้วเอาไปสรุปผิด · **เจอตอนส่งจริงแล้วเปิดไฟล์ดู**
+   * — โปรเจกต์มี 10,024 ใบ แต่อีเมลบอกว่า 5,000 โดยไม่มีคำว่า "ตัด" เลย
+   */
+  it('**ไฟล์ที่ถูกตัด บอกทั้งจำนวนในไฟล์และจำนวนทั้งหมด**', () => {
+    const t = renderReportEmail(row(), 1, { rows: 5000, total: 10024 }, 'http://web').text;
+    expect(t).toContain('5000');
+    expect(t, 'ไม่บอกจำนวนจริง — ผู้รับจะเชื่อว่าเท่านี้คือทั้งหมด').toContain('10024');
+    expect(t).toContain('ตัด');
+  });
+
+  it('ไฟล์ที่ไม่ถูกตัด ไม่ต้องพูดถึงการตัด — คำเตือนที่ขึ้นตลอดไม่มีใครอ่าน', () => {
+    const t = renderReportEmail(row(), 1, { rows: 12, total: 12 }, 'http://web').text;
+    expect(t).not.toContain('ตัด');
   });
 });

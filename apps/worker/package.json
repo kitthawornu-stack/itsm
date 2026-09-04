@@ -7,6 +7,7 @@
     "start": "node dist/main.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "dotenv -e ../../.env -- vitest run",
+    "report-smoke": "dotenv -e ../../.env -- tsx src/report-smoke.ts",
     "smoke": "dotenv -e ../../.env -- tsx src/smoke.ts",
     "prisma:generate": "prisma generate --schema ../api/prisma/schema.prisma",
     "build": "tsc -p tsconfig.build.json"

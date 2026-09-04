@@ -70,7 +70,7 @@ export function decideSend(row: ScheduleRowRaw, now: UtcDate): SendDecision {
 export function renderReportEmail(
   row: ScheduleRowRaw,
   missed: number,
-  rows: number,
+  file: { rows: number; total: number },
   webBaseUrl: string,
 ): { subject: string; text: string } {
   const late =
@@ -78,11 +78,21 @@ export function renderReportEmail(
       ? `\n\nหมายเหตุ: รอบก่อนหน้าไม่ได้ถูกส่ง ${String(missed - 1)} ครั้ง` +
         ' (ระบบส่งเฉพาะรอบล่าสุด ไม่ส่งย้อนหลังทั้งหมด)'
       : '';
+  /*
+    **ไฟล์ที่ถูกตัดต้องบอกว่าตัด** · ถ้าบอกแค่จำนวนแถวในไฟล์ ผู้รับจะอ่านว่า
+    "โปรเจกต์นี้มีงานเท่านี้" ซึ่งน้อยกว่าความจริง แล้วเอาไปสรุปผิด ·
+    เจอตอนส่งจริงแล้วเปิดไฟล์ดู — โปรเจกต์มี 10,024 ใบ แต่อีเมลบอกว่า 5,000
+  */
+  const count =
+    file.rows < file.total
+      ? `ไฟล์แนบมี ${String(file.rows)} รายการ จากทั้งหมด ${String(file.total)} รายการ` +
+        ' (ตัดที่เพดานขนาดไฟล์ — เรียงตามลำดับที่สร้าง)'
+      : `ไฟล์แนบมี ${String(file.rows)} รายการ`;
   return {
     subject: `รายงาน ${row.name} · ${row.projectKey}`,
     text:
       `รายงานตามตารางเวลา "${row.name}" ของโปรเจกต์ ${row.projectKey}\n` +
-      `ไฟล์แนบมี ${String(rows)} รายการ\n\n` +
+      `${count}\n\n` +
       `ดูบนหน้าจอ: ${webBaseUrl}/reports${late}`,
   };
 }
@@ -99,7 +109,7 @@ export interface ReportSenderDeps {
    */
   claim(id: bigint, at: Date): Promise<boolean>;
   /** ประกอบไฟล์ด้วยสิทธิ์ของเจ้าของ · โยน error เมื่อสิทธิ์ถูกถอนไปแล้ว */
-  buildCsv(row: ScheduleRowRaw): Promise<{ csv: string; filename: string; rows: number }>;
+  buildCsv(row: ScheduleRowRaw): Promise<{ csv: string; filename: string; rows: number; total: number }>;
   markError(id: bigint, error: string): Promise<void>;
   clearError(id: bigint): Promise<void>;
   mailer: MailSender;
@@ -153,8 +163,20 @@ export async function runReportSender(
 
     try {
       const file = await deps.buildCsv(row);
-      const mail = renderReportEmail(row, decision.missed, file.rows, deps.webBaseUrl);
-      await deps.mailer.send({ to: decision.to, subject: mail.subject, text: mail.text });
+      const mail = renderReportEmail(row, decision.missed, file, deps.webBaseUrl);
+      await deps.mailer.send({
+        to: decision.to,
+        subject: mail.subject,
+        text: mail.text,
+        /*
+          **แนบไฟล์จริง** ไม่ใช่ลิงก์ให้ไปโหลด · ลิงก์ต้องล็อกอินก่อน
+          ซึ่งทำให้รายงานที่ตั้งใจให้เปิดอ่านตอนเช้า กลายเป็นงานอีกขั้น
+          · `text/csv` พร้อม charset เพราะไฟล์มีภาษาไทย
+        */
+        attachments: [
+          { filename: file.filename, content: file.csv, contentType: 'text/csv; charset=utf-8' },
+        ],
+      });
       await deps.clearError(row.id);
       report.sent += 1;
     } catch (e) {

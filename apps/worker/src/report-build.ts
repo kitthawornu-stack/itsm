@@ -70,10 +70,19 @@ export async function permissionsInProject(
  * โยน error เมื่อสิทธิ์ถูกถอนหรือโปรเจกต์หายไป · ผู้เรียก (`runReportSender`)
  * บันทึกเหตุผลลงแถวให้เจ้าของเห็น แทนที่จะเงียบ
  */
+export interface BuiltReport {
+  csv: string;
+  filename: string;
+  /** จำนวนแถวในไฟล์ · เท่ากับ `total` เมื่อไม่ถูกตัด */
+  rows: number;
+  /** จำนวนงานทั้งหมดที่เข้าเงื่อนไข **ก่อน**ตัด */
+  total: number;
+}
+
 export async function buildProjectCsv(
   prisma: PrismaClient,
   input: { ownerId: bigint; ownerEmail: string; projectId: bigint; projectKey: string },
-): Promise<{ csv: string; filename: string; rows: number }> {
+): Promise<BuiltReport> {
   const perms = await permissionsInProject(prisma, input.ownerId, input.projectId);
   /*
     ต้องมีทั้งสองอย่าง — เห็นโปรเจกต์ **และ** ดูรายงานได้ · เหมือนกับ
@@ -82,6 +91,13 @@ export async function buildProjectCsv(
   if (!perms.has('BROWSE_PROJECT') || !perms.has('VIEW_REPORT')) {
     throw new ReportPermissionRevokedError(input.ownerEmail, input.projectKey);
   }
+
+  /*
+    **นับทั้งหมดก่อนตัด** · ไฟล์ที่ถูกตัดแล้วบอกแค่จำนวนแถวในไฟล์
+    ทำให้ผู้รับอ่านว่า "โปรเจกต์นี้มีงานเท่านี้" ซึ่งน้อยกว่าความจริง ·
+    เป็นความผิดชนิดเดียวกับตารางไขว้ที่ตัดคอลัมน์เงียบ ๆ
+  */
+  const total = await prisma.workItem.count({ where: { projectId: input.projectId } });
 
   const rows = await prisma.workItem.findMany({
     where: { projectId: input.projectId },
@@ -108,5 +124,6 @@ export async function buildProjectCsv(
     csv: toCsv(data),
     filename: `${input.projectKey}.csv`,
     rows: data.length,
+    total,
   };
 }

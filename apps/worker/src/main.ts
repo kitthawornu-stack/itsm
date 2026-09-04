@@ -8,7 +8,7 @@
  * รันด้วย: pnpm --filter @itsm/worker dev
  */
 import { PrismaClient } from '@prisma/client';
-import { systemClock } from '@itsm/types';
+import { scheduleFromRow, systemClock } from '@itsm/types';
 
 import { createSlaHandler } from './sla-handler';
 import {
@@ -26,6 +26,8 @@ import {
 } from './email-notifier';
 import { createMailer } from './mailer';
 import { runReconcile, type ClockRow } from './sla-reconciler';
+import { buildProjectCsv } from './report-build';
+import { runReportSender, type ScheduleRowRaw } from './report-sender';
 
 const prisma = new PrismaClient();
 
@@ -88,6 +90,13 @@ const RECONCILE_EVERY_MS = Number(process.env['SLA_RECONCILE_INTERVAL_MS'] ?? 5 
  * แต่ไม่ถี่จนกลายเป็นการ poll ฐานข้อมูลทุกวินาที — ครึ่งนาทีคือจุดที่รับได้ทั้งสองทาง
  */
 const EMAIL_EVERY_MS = Number(process.env['EMAIL_DELIVERY_INTERVAL_MS'] ?? 30_000);
+/**
+ * ความถี่ที่ตรวจว่ามีตารางเวลาถึงรอบหรือยัง
+ *
+ * หนึ่งนาทีพอ เพราะความละเอียดของตารางเวลาคือนาที · ถี่กว่านี้ไม่ทำให้
+ * รายงานมาเร็วขึ้น มีแต่คิวรีเปล่า
+ */
+const REPORT_EVERY_MS = Number(process.env['REPORT_SEND_INTERVAL_MS'] ?? 60_000);
 const WEB_BASE_URL = process.env['WEB_BASE_URL'] ?? 'http://localhost:4300';
 
 async function main(): Promise<void> {
@@ -302,6 +311,117 @@ async function main(): Promise<void> {
   await deliverOnce();
   const emailTimer = setInterval(() => void deliverOnce(), EMAIL_EVERY_MS);
 
+  /*
+    ส่งรายงานตามตารางเวลา
+
+    **จองด้วย `updateMany` ที่มีเงื่อนไข `lastRunAt` เดิม** — ถ้ามี worker
+    อีกตัวจองไปก่อน จำนวนแถวที่ถูกแก้จะเป็น 0 และเรารู้ทันทีว่าต้องข้าม ·
+    การเช็กก่อนแล้วค่อยเขียนมีช่องว่างระหว่างสองคำสั่งเสมอ
+  */
+  const reportDeps = {
+    async loadEnabled(limit: number): Promise<ScheduleRowRaw[]> {
+      const rows = await prisma.reportSchedule.findMany({
+        where: { isEnabled: true },
+        take: limit,
+        select: {
+          id: true,
+          tenantId: true,
+          name: true,
+          kind: true,
+          hour: true,
+          minute: true,
+          weekday: true,
+          day: true,
+          isEnabled: true,
+          lastRunAt: true,
+          project: { select: { id: true, key: true } },
+          owner: { select: { id: true, email: true } },
+        },
+      });
+      const out: ScheduleRowRaw[] = [];
+      for (const r of rows) {
+        try {
+          out.push({
+            id: r.id,
+            tenantId: r.tenantId,
+            name: r.name,
+            projectKey: r.project.key,
+            ownerEmail: r.owner.email,
+            schedule: scheduleFromRow(r),
+            isEnabled: r.isEnabled,
+            lastRunAt: r.lastRunAt,
+          });
+        } catch (err) {
+          /*
+            **แถวที่ข้อมูลไม่ครบต้องข้ามไปทีละใบ ไม่ล้มทั้งรอบ** และต้องบันทึก
+            เหตุผลไว้ให้เจ้าของเห็น — ไม่ใช่หายไปเงียบ ๆ จากรายการที่ส่ง
+          */
+          await prisma.reportSchedule.update({
+            where: { id: r.id },
+            data: { lastError: (err instanceof Error ? err.message : String(err)).slice(0, 500) },
+          });
+        }
+      }
+      return out;
+    },
+    async claim(id: bigint, at: Date): Promise<boolean> {
+      const before = await prisma.reportSchedule.findUnique({
+        where: { id },
+        select: { lastRunAt: true },
+      });
+      if (before === null) return false;
+      const changed = await prisma.reportSchedule.updateMany({
+        where: { id, lastRunAt: before.lastRunAt },
+        data: { lastRunAt: at },
+      });
+      return changed.count === 1;
+    },
+    async buildCsv(row: ScheduleRowRaw) {
+      const project = await prisma.project.findFirstOrThrow({
+        where: { key: row.projectKey, tenantId: row.tenantId },
+        select: { id: true },
+      });
+      const owner = await prisma.user.findFirstOrThrow({
+        where: { email: row.ownerEmail, tenantId: row.tenantId },
+        select: { id: true },
+      });
+      return buildProjectCsv(prisma, {
+        ownerId: owner.id,
+        ownerEmail: row.ownerEmail,
+        projectId: project.id,
+        projectKey: row.projectKey,
+      });
+    },
+    async markError(id: bigint, error: string): Promise<void> {
+      await prisma.reportSchedule.update({
+        where: { id },
+        data: { lastError: error.slice(0, 500) },
+      });
+    },
+    async clearError(id: bigint): Promise<void> {
+      await prisma.reportSchedule.update({ where: { id }, data: { lastError: null } });
+    },
+    mailer,
+    webBaseUrl: WEB_BASE_URL,
+  };
+
+  const sendReportsOnce = async (): Promise<void> => {
+    try {
+      const r = await runReportSender(reportDeps, systemClock.nowUtc());
+      if (r.sent > 0 || r.failed > 0) {
+        console.log(
+          `[รายงาน] ส่ง ${String(r.sent)} · ล้ม ${String(r.failed)} จาก ${String(r.scanned)} ตาราง`,
+        );
+      }
+    } catch (err) {
+      // ตัวส่งรายงานล่มต้องไม่ทำให้ worker ตาย — คิว SLA ยังต้องเดินต่อ
+      console.error('[รายงาน] รอบส่งล้มเหลว:', err instanceof Error ? err.message : String(err));
+    }
+  };
+
+  await sendReportsOnce();
+  const reportTimer = setInterval(() => void sendReportsOnce(), REPORT_EVERY_MS);
+
   console.log(
     `Worker พร้อมทำงาน — คิว sla-notification · กวาดหาที่ตกหล่นทุก ${String(Math.round(RECONCILE_EVERY_MS / 1000))} วินาที · ส่งอีเมลทุก ${String(Math.round(EMAIL_EVERY_MS / 1000))} วินาที`,
   );
@@ -311,6 +431,7 @@ async function main(): Promise<void> {
     // ปิดอย่างนุ่มนวล — งานที่กำลังทำอยู่ต้องจบก่อน ไม่งั้นจะถูกลองใหม่โดยไม่จำเป็น
     clearInterval(reconcileTimer);
     clearInterval(emailTimer);
+    clearInterval(reportTimer);
     mailer.close();
     await worker.close();
     await connection.quit();

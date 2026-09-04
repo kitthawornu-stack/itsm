@@ -136,8 +136,21 @@ export function renderEmail(n: PendingNotification, webBaseUrl: string): Rendere
   };
 }
 
+/** ไฟล์ที่แนบไปกับอีเมล */
+export interface MailAttachment {
+  filename: string;
+  content: string;
+  contentType: string;
+}
+
 export interface MailSender {
-  send(msg: { to: string; subject: string; text: string }): Promise<void>;
+  send(msg: {
+    to: string;
+    subject: string;
+    text: string;
+    /** ไม่ใส่ = ไม่มีไฟล์แนบ · การแจ้งเตือนทั่วไปไม่เคยมี */
+    attachments?: MailAttachment[];
+  }): Promise<void>;
 }
 
 export interface DeliveryDeps {

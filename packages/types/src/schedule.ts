@@ -141,3 +141,44 @@ export function missedRuns(s: Schedule, lastRunAt: UtcDate | null, now: UtcDate)
   }
   return n;
 }
+
+/** ค่าที่ตั้งไม่ได้ — ข้อความบอกว่าผิดตรงไหน ไม่ใช่แค่ว่าผิด */
+export class InvalidScheduleError extends Error {}
+
+/**
+ * ประกอบ `Schedule` จากแถวในฐานข้อมูล
+ *
+ * **แถวที่ข้อมูลไม่ครบต้องล้ม ไม่ใช่เดาค่าที่ขาด** — `weekly` ที่ไม่มี
+ * `weekday` ถ้าเดาเป็นวันอาทิตย์ รายงานจะไปโผล่วันที่ไม่มีใครตั้ง
+ * และไม่มีอะไรบอกว่าเพี้ยน
+ */
+export function scheduleFromRow(row: {
+  kind: string;
+  hour: number;
+  minute: number;
+  weekday: number | null;
+  day: number | null;
+}): Schedule {
+  if (!Number.isInteger(row.hour) || row.hour < 0 || row.hour > 23) {
+    throw new InvalidScheduleError('ชั่วโมงต้องอยู่ระหว่าง 0 ถึง 23');
+  }
+  if (!Number.isInteger(row.minute) || row.minute < 0 || row.minute > 59) {
+    throw new InvalidScheduleError('นาทีต้องอยู่ระหว่าง 0 ถึง 59');
+  }
+  switch (row.kind) {
+    case 'daily':
+      return { kind: 'daily', hour: row.hour, minute: row.minute };
+    case 'weekly':
+      if (row.weekday === null || row.weekday < 0 || row.weekday > 6) {
+        throw new InvalidScheduleError('รายสัปดาห์ต้องระบุวันในสัปดาห์ (0 = อาทิตย์ ถึง 6 = เสาร์)');
+      }
+      return { kind: 'weekly', weekday: row.weekday, hour: row.hour, minute: row.minute };
+    case 'monthly':
+      if (row.day === null || row.day < 1 || row.day > 31) {
+        throw new InvalidScheduleError('รายเดือนต้องระบุวันที่ระหว่าง 1 ถึง 31');
+      }
+      return { kind: 'monthly', day: row.day, hour: row.hour, minute: row.minute };
+    default:
+      throw new InvalidScheduleError(`ไม่รู้จักรอบ "${row.kind}" — ใช้ได้แค่ daily · weekly · monthly`);
+  }
+}

@@ -14,7 +14,13 @@ import type { MailSender } from './email-notifier';
 export function createMailer(): MailSender & { close: () => void } {
   const transporter: Transporter = createTransport({
     host: process.env['SMTP_HOST'] ?? 'localhost',
-    port: Number(process.env['SMTP_PORT'] ?? 1025),
+    /*
+      **ค่า fallback ต้องตรงกับ `.env` เสมอ** (CLAUDE.md §9) · ของเดิมเป็น
+      1025 ซึ่งเป็นพอร์ตมาตรฐานเดิมของ Mailpit ไม่ใช่พอร์ตที่โปรเจกต์นี้ใช้
+      · fallback ที่ชี้ไปพอร์ตเก่าทำให้ worker ต่อไปผิดที่**เงียบ ๆ** เมื่อ
+      env หายไป แทนที่จะล้มให้เห็น — อีเมลจะไม่ถูกส่งโดยไม่มีใครรู้
+    */
+    port: Number(process.env['SMTP_PORT'] ?? 4025),
     // Mailpit ไม่ใช้ TLS และไม่ต้องยืนยันตัวตน
     // ตอนต่อกับผู้ให้บริการจริงต้องตั้งค่าเหล่านี้จาก env ไม่ใช่แก้โค้ด
     secure: process.env['SMTP_SECURE'] === 'true',
@@ -32,7 +38,13 @@ export function createMailer(): MailSender & { close: () => void } {
 
   return {
     async send(msg) {
-      await transporter.sendMail({ from, to: msg.to, subject: msg.subject, text: msg.text });
+      await transporter.sendMail({
+        from,
+        to: msg.to,
+        subject: msg.subject,
+        text: msg.text,
+        ...(msg.attachments === undefined ? {} : { attachments: msg.attachments }),
+      });
     },
     close() {
       transporter.close();
