@@ -441,7 +441,7 @@ footer .wrap{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;
     <div class="card"><span class="k">Search</span><h4>OpenSearch 2.x</h4><p><b>บังคับใช้ตั้งแต่เฟส 0</b> — MySQL FULLTEXT ตัดคำไทยไม่ได้ ต้องใช้ ICU + Thai analyzer (dictionary-based) เป็นเป้าหมายของ HQL (ภาษาคิวรีแบบ JQL) ทั้งหมด</p></div>
     <div class="card"><span class="k">Cache &amp; Queue</span><h4>Redis 7 · BullMQ</h4><p>Session/permission cache · SLA timer เป็น delayed job · Automation execution queue · Socket.IO adapter สำหรับ multi-instance · Rate limiting</p></div>
     <div class="card"><span class="k">Storage</span><h4>MinIO (S3-compatible)</h4><p>ไฟล์แนบ + รูปใน rich text · on-prem ใช้ MinIO ขึ้น SaaS สลับเป็น S3 ได้โดยไม่แก้โค้ด (S3 SDK เดียวกัน) · pre-signed URL + virus scan hook (ClamAV)</p></div>
-    <div class="card"><span class="k">Identity</span><h4>Keycloak (OIDC) หรือ In-house</h4><p>รองรับ SAML 2.0 / OIDC / LDAP sync ผ่าน Keycloak · โหมด on-prem ที่ลูกค้าไม่อยากติดตั้งเพิ่ม ใช้ in-house JWT + LDAP connector ได้ ตัดสินใจใน ADR-003</p></div>
+    <div class="card"><span class="k">Identity</span><h4>In-house (ตัดสินแล้วใน ADR-003)</h4><p><b>ไม่ใช้ Keycloak และไม่มี SAML/OIDC/LDAP</b> — ADR-003 ตัดสินไปแล้วว่าองค์กรนี้<u>ไม่ได้ใช้ AD/LDAP</u> ความคุ้มค่าของ Keycloak จึงหายไป · ใช้ session + bcrypt ของตัวเอง · แผนฉบับแรกเขียนไว้ก่อนได้คำตอบข้อนี้</p></div>
     <div class="card"><span class="k">Observability</span><h4>OpenTelemetry Stack</h4><p>Trace/Metric/Log ผ่าน OTel Collector → Grafana + Loki + Tempo + Prometheus · Sentry สำหรับ frontend error · ทุก request มี <code>trace_id</code> ที่โยงถึง audit log ได้</p></div>
     <div class="card"><span class="k">Delivery</span><h4>Docker · Compose / K8s</h4><p>On-prem ส่งเป็น Docker Compose bundle (ลูกค้าไทยส่วนใหญ่ไม่มี K8s) · SaaS รันบน K8s + Helm chart เดียวกัน · Prisma Migrate + gh-ost สำหรับตารางใหญ่</p></div>
   </div>
@@ -753,7 +753,7 @@ footer .wrap{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;
         <div class="card tint neutral"><span class="k">Rule Builder</span><p>สร้างกฎแบบ no-code · Trigger 8 แบบ · Condition ด้วย HQL · Action 14 แบบ · ทดสอบกฎกับงานจริงก่อนเปิดใช้ · Log ย้อนหลัง 90 วัน</p></div>
         <div class="card tint neutral"><span class="k">REST API v1</span><p>OpenAPI 3.1 · API Token ต่อผู้ใช้/ต่อแอป · Rate limit ต่อ tenant · Pagination แบบ cursor · Bulk endpoint สำหรับ import</p></div>
         <div class="card tint neutral"><span class="k">Webhook</span><p>ส่งออกพร้อมลายเซ็น HMAC-SHA256 · ลองใหม่แบบ exponential backoff 5 ครั้ง · Dead letter queue ที่แอดมินดูและสั่งส่งซ้ำได้</p></div>
-        <div class="card tint neutral"><span class="k">SSO &amp; Directory</span><p>SAML 2.0 · OIDC · LDAP/AD sync ตามรอบ (ผู้ใช้ + กลุ่ม) · SCIM provisioning ในเฟส 5 · Just-in-time provisioning</p></div>
+        <div class="card tint neutral"><span class="k">SSO &amp; Directory</span><p><b>ตัดออกแล้ว</b> — ADR-003 ตัดสินว่าองค์กรไม่ได้ใช้ AD/LDAP จึงไม่ทำ SAML · OIDC · LDAP sync · SCIM · ถ้าลูกค้ารายถัดไปใช้ AD ให้กลับมาเปิด ADR-003 ใหม่ ไม่ใช่แอบเพิ่มกลับเงียบ ๆ</p></div>
         <div class="card tint run"><span class="k">Notification</span><p>Email (SMTP + template ที่แก้ได้) · <b>LINE Messaging API</b> (ช่องทางที่ทีม IT ไทยใช้จริง) · Microsoft Teams · Slack · In-app + Web Push · ตั้งค่ารายบุคคลว่าจะรับอะไรทางไหน</p></div>
         <div class="card tint run"><span class="k">Email-to-Ticket</span><p>รับผ่าน IMAP หรือ MS Graph · แยกเธรดด้วย Message-ID + คีย์ในหัวข้อ · ดึงไฟล์แนบ · ตัดลายเซ็นและข้อความอ้างอิงออกอัตโนมัติ · กันลูปอีเมลตอบกลับอัตโนมัติ</p></div>
       </div>
@@ -766,6 +766,27 @@ footer .wrap{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;
     <div class="part-num"><span class="bar"></span><span class="eyebrow">Part 05</span></div>
     <h2>โรดแมป 10 เดือน · 6 เฟส</h2>
     <p class="lead prose">ทุกเฟสมี <b>Exit Criteria</b> ที่วัดได้ ไม่ใช่ “เสร็จประมาณ 80%” — ถ้าเฟสไหนไม่ผ่านเกณฑ์ ห้ามเริ่มเฟสถัดไปโดยไม่ตัดสินใจอย่างเป็นทางการว่าจะยืดเวลาหรือตัดขอบเขต</p>
+
+    <div class="card tint neutral" style="margin-top:16px">
+      <span class="k">สถานะจริง · ปรับปรุง 4 กันยายน 2569</span>
+      <h3 style="margin:4px 0 8px">โค้ดเดินหน้าถึงเฟส 4 · หมุดหมายที่ต้องมีคนใช้จริง ยังไม่ผ่านสักข้อ</h3>
+      <p class="prose">นับจากซอร์สจริง ไม่ใช่จากคำประกาศ — <b>22 โมดูล · 36 หน้าจอ · 202 endpoint ·
+      2,344 เทสต์ · 153 ไฟล์เทสต์ · 302 commit</b> · ตัวเลขเหล่านี้มีเทสต์ที่สแกนซอร์สมาเทียบ
+      (<code>status-doc.spec.ts</code>) จึงเพี้ยนเงียบ ๆ ไม่ได้</p>
+      <p class="prose"><b>สิ่งที่แผนนี้ประเมินผิดที่สุด ไม่ใช่ปริมาณโค้ด แต่เป็นสิ่งที่โค้ดซื้อไม่ได้</b> —
+      Exit Criteria ของเฟส 1 ถึง 5 เกือบทั้งหมดวัดจาก <u>การใช้งานจริง</u>: ทีมย้ายมาใช้ · ตั๋วจริง 300 ใบ/เดือน ·
+      dogfooding · Change 10 ครั้งจริง · integration 3 ระบบ · tenant ทดลอง 3 ราย ·
+      <b>ยังไม่มีข้อไหนเกิดขึ้นเลย</b> และไม่มีข้อไหนที่เขียนโค้ดเพิ่มแล้วจะเกิดเอง</p>
+      <p class="prose"><b>สามอย่างที่ติดของนอกระบบ:</b> LINE (channel access token) ·
+      Email-to-Ticket (กล่องจดหมาย IMAP) · การทดสอบเจาะระบบ ·
+      <b>หนึ่งอย่างที่ติดการตัดสินใจ:</b> ไม่มีกลุ่มไหนในข้อมูลตั้งต้นได้สิทธิ์ <code>MANAGE_PROJECT</code>
+      ทำให้สี่ฟีเจอร์ (เพดาน WIP · ตัวกรองด่วน · นำเข้า CSV · ปล่อยรุ่น) เรียกไม่ได้เลยบนเครื่องพัฒนา
+      — แก้ที่ <code>seed.ts</code> ได้ แต่แตะสิทธิ์ต้องผ่าน Tech Lead</p>
+      <p class="prose" style="margin-bottom:0"><b>สิ่งที่แผนฉบับแรกเขียนไว้แล้วถูกยกเลิกภายหลัง:</b>
+      SSO (SAML/OIDC) และ LDAP/SCIM ถูกตัดออกตาม ADR-003 เพราะองค์กรไม่ได้ใช้ AD/LDAP ·
+      ย่อหน้าเดิมในเฟส 4 และ 5 ถูกแก้ให้ตรงแล้ว — <b>แผนที่ยังสัญญาสิ่งที่ตัดไปแล้ว
+      อันตรายกว่าแผนที่ไม่มีรายละเอียด</b> เพราะมีคนวางแผนงานต่อจากมัน</p>
+    </div>
   </div>
 
   <div style="overflow-x:auto;margin-bottom:30px">
@@ -794,6 +815,11 @@ footer .wrap{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;
         <ul class="tick"><li><b>ส่งมอบ:</b> Monorepo + CI/CD + สภาพแวดล้อม dev/staging</li><li>Auth + RBAC + Permission Scheme + Tenancy guard</li><li>Work Item Core (CRUD, comment, attachment, history)</li><li>Workflow Engine v1 + Workflow Editor แบบพื้นฐาน</li><li>Custom Field + Screen Scheme</li><li>Design System + Component Library ชุดแรก 24 ตัว</li><li>OpenSearch indexer + HQL parser ตัวต้นแบบ</li></ul>
         <ul class="tick"><li><b>Exit Criteria:</b> แอดมินสร้าง Issue Type ใหม่ + workflow 5 สถานะ + ฟิลด์ 3 ตัว ได้จาก UI โดยไม่แตะโค้ด</li><li>ผู้ใช้ 2 บทบาทเห็นปุ่ม transition ต่างกันตาม permission</li><li>ทุก transition ปรากฏใน history ครบถ้วน</li><li>Storybook มีคอมโพเนนต์ครบ 24 ตัวพร้อมสถานะ empty/loading/error</li><li>ทดสอบอัตโนมัติผ่าน ≥ 70% บนโมดูล core</li><li><b>ห้ามข้าม:</b> spike เอนจินทั้ง 4 ตัวต้องมีของจริงให้เห็น ไม่ใช่แค่เอกสาร</li></ul>
       </div>
+      <div style="margin-top:12px;padding:10px 12px;border-radius:8px;background:var(--surface-2);border-left:3px solid var(--text-faint)"><b>สถานะจริง · <span class="pill ok">โค้ดครบ</span></b>
+      <p class="prose" style="margin:6px 0 0">โมดูล 22 ตัวมีโค้ดจริงทั้งหมด · Design System <b>26 คอมโพเนนต์ · 92 story</b> (แผนขอ 24) ·
+      เอนจินทั้งสี่มีของจริง: workflow · SLA (102 เคส) · HQL (แปลได้ทั้ง OpenSearch และ Prisma) · LexoRank ·
+      <b>ยังไม่ผ่าน:</b> เกณฑ์ “ทดสอบผ่าน ≥ 70% บนโมดูล core” <u>ยังไม่เคยวัด</u> — ติดตั้ง <code>@vitest/coverage-v8</code> ไว้แล้ว
+      แต่ไม่มีเกณฑ์ใน CI จึงเป็นตัวเลขที่ไม่มีใครรู้ · ควรตั้งเกณฑ์แล้ววัด ไม่ใช่ประกาศว่าผ่าน</p></div>
     </div>
 
     <div class="card tint run">
@@ -805,6 +831,11 @@ footer .wrap{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;
         <ul class="tick"><li>Incident + Service Request + Service Catalog</li><li>SLA Engine เต็มรูปแบบ + ปฏิทินวันหยุดไทย</li><li>Agent Console: Queue, Saved Filter, Bulk Action, Detail View</li><li>Service Portal สำหรับผู้ใช้ทั่วไป + CSAT</li><li>Email-to-Ticket (IMAP + MS Graph)</li><li>Notification: Email + LINE + In-app</li><li>Approval แบบขั้นเดียว</li></ul>
         <ul class="tick"><li><b>Exit Criteria:</b> ทีม IT ภายในเลิกใช้ระบบเดิม ย้ายมาทั้งหมด</li><li>รับตั๋วจริง ≥ 300 ใบ/เดือน ต่อเนื่อง 4 สัปดาห์</li><li>ตัวเลข SLA ตรงกับการคำนวณมือใน 20 เคสสุ่มตรวจ</li><li>Agent เปิดคิว 1,000 แถวได้ภายใน 1 วินาที</li><li>เก็บ feedback จากผู้ใช้จริง ≥ 30 ข้อ เข้า backlog</li></ul>
       </div>
+      <div style="margin-top:12px;padding:10px 12px;border-radius:8px;background:var(--surface-2);border-left:3px solid var(--text-faint)"><b>สถานะจริง · <span class="pill warn">โค้ดครบ แต่ยังไม่มีผู้ใช้จริง</span></b>
+      <p class="prose" style="margin:6px 0 0">Incident · Service Request · Catalog · CSAT · Approval หลายขั้น · SLA พร้อมปฏิทินวันหยุดไทย ·
+      Portal และคิว Agent ใช้งานได้ · <b>Exit Criteria ทั้งห้าข้อยังไม่ผ่านสักข้อ เพราะทุกข้อวัดจากการใช้งานจริง</b> —
+      ยังไม่มีทีมไหนย้ายมาใช้ ยังไม่มีตั๋วจริงสักใบ ตัวเลขทั้งหมดมาจากข้อมูลทดสอบ 10,024 ใบ ·
+      หมุดหมาย <b>Pilot Go-live เดือนที่ 4 ยังไม่เกิดขึ้น</b> และเป็นสิ่งที่โค้ดเพิ่มอีกเท่าไรก็ไม่ทำให้เกิดเอง</p></div>
     </div>
 
     <div class="card tint build">
@@ -816,6 +847,12 @@ footer .wrap{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;
         <ul class="tick"><li>Backlog + Scrum Board + Kanban Board + Sprint</li><li>Epic Hierarchy + Issue Link + Roadmap/Gantt</li><li>Story Point + Time Tracking + Worklog</li><li>Version / Release + Component / Label</li><li>HQL เต็มรูปแบบ + Saved Filter + Quick Filter</li><li>Command Palette + คีย์ลัดครบชุด</li></ul>
         <ul class="tick"><li><b>Exit Criteria:</b> ทีมพัฒนา Helix เองย้ายจาก Jira มาใช้ Helix บริหารงานตัวเอง</li><li>Board 500 การ์ดเรนเดอร์ &lt; 800 ms · ลากการ์ดตอบสนอง &lt; 100 ms</li><li>Backlog 5,000 ใบเลื่อนลื่นที่ 60fps</li><li>Sprint ปิดแล้ว burndown ตรงกับข้อมูลจริง 100%</li><li>ทำงานทั้ง sprint ได้โดยไม่ต้องกลับไปเปิด Jira</li></ul>
       </div>
+      <div style="margin-top:12px;padding:10px 12px;border-radius:8px;background:var(--surface-2);border-left:3px solid var(--text-faint)"><b>สถานะจริง · <span class="pill warn">โค้ดเกือบครบ · ยังไม่ dogfood</span></b>
+      <p class="prose" style="margin:6px 0 0">Board ทั้ง Kanban และ Scrum · Backlog + วางแผน Sprint · Version/Release · HQL + Saved Filter ·
+      เลนตามผู้รับผิดชอบและความสำคัญ · เพดาน WIP · ตัวกรองด่วน · เลือกฟิลด์บนการ์ดได้ ·
+      <b>ยังขาด:</b> เลนตาม Epic · Roadmap แบบ Gantt ยังไม่ครบ ·
+      <b>Exit Criteria ที่วัดประสิทธิภาพ (500 การ์ด &lt; 800 ms · backlog 5,000 ใบที่ 60fps) ยังไม่เคยวัด</b> —
+      วัดแล้วเฉพาะฝั่งเซิร์ฟเวอร์ ไม่ใช่ฝั่งเรนเดอร์ · หมุดหมาย <b>Dogfooding เดือนที่ 6 ยังไม่เกิด</b></p></div>
     </div>
 
     <div class="card tint run">
@@ -826,6 +863,11 @@ footer .wrap{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;
         <ul class="tick"><li>Problem Management + Known Error DB + RCA template</li><li>Change Enablement + CAB + Change Calendar + Freeze Window</li><li>Approval Engine หลายขั้น + มอบอำนาจแทน</li><li>CMDB + CI Relationship Graph + Impact Analysis</li><li>Knowledge Base + สายอนุมัติ + แนะนำบทความตอนพิมพ์</li></ul>
         <ul class="tick"><li><b>Exit Criteria:</b> เดินกระบวนการ Change ครบวงจร (ยื่น → ประเมินความเสี่ยง → CAB อนุมัติ → ทำ → ทบทวน) ได้ 10 ครั้งจริง</li><li>Impact Analysis ตอบได้ว่า CI หนึ่งตัวกระทบบริการใดบ้าง ภายใน &lt; 500 ms ที่ 50,000 CI</li><li>Incident → Problem → Change → Story ลิงก์ถึงกันและแสดงในไทม์ไลน์เดียว</li><li>วัด Deflection จาก Knowledge Base ได้เป็นตัวเลข</li></ul>
       </div>
+      <div style="margin-top:12px;padding:10px 12px;border-radius:8px;background:var(--surface-2);border-left:3px solid var(--text-faint)"><b>สถานะจริง · <span class="pill warn">โค้ดครบ · ยังไม่เดินกระบวนการจริง</span></b>
+      <p class="prose" style="margin:6px 0 0">Problem Management · Change + ปฏิทินการเปลี่ยนแปลง + ช่วงห้ามเปลี่ยนแปลง + ประเมินความเสี่ยง ·
+      CMDB + Impact Analysis · Knowledge Base · ลิงก์ข้ามชนิดงาน 6 แบบ ·
+      <b>Exit Criteria ทุกข้อวัดจากการใช้จริง จึงยังไม่ผ่าน</b> — ยังไม่มี Change สักใบที่เดินครบวงจรกับคนจริง
+      และยังไม่เคยวัด Impact Analysis ที่ 50,000 CI (ข้อมูลทดสอบยังไม่ถึงขนาดนั้น)</p></div>
     </div>
 
     <div class="card tint neutral" style="--accent:var(--info)">
@@ -834,9 +876,15 @@ footer .wrap{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;
         <span class="pill info">v1.0 Feature Complete</span>
       </div>
       <div class="grid g2">
-        <ul class="tick"><li>Dashboard + Gadget 18 ชนิด + Wallboard</li><li>Agile Reports 8 ตัว + ITSM Reports 8 ตัว</li><li>Report Builder + Scheduled Export</li><li>Automation Rule Builder แบบ no-code + Test Run</li><li>REST API v1 + OpenAPI + Webhook + Dead Letter Queue</li><li>SSO (SAML/OIDC) + LDAP Sync</li></ul>
+        <ul class="tick"><li>Dashboard + Gadget 18 ชนิด + Wallboard</li><li>Agile Reports 8 ตัว + ITSM Reports 8 ตัว</li><li>Report Builder + Scheduled Export</li><li>Automation Rule Builder แบบ no-code + Test Run</li><li>REST API v1 + OpenAPI + Webhook + Dead Letter Queue</li><li><s>SSO (SAML/OIDC) + LDAP Sync</s> — <b>ตัดออกตาม ADR-003</b></li></ul>
         <ul class="tick"><li><b>Exit Criteria:</b> ผู้บริหารมี dashboard ที่เปิดดูเองทุกเช้าโดยไม่ต้องขอรายงาน</li><li>สร้างกฎ automation 20 กฎที่ใช้จริงในงานประจำวัน</li><li>API ผ่านการทดสอบจาก integration จริง 3 ระบบ</li><li>เอกสาร API ครบพอให้ dev ภายนอกเรียกใช้ได้โดยไม่ต้องถาม</li></ul>
       </div>
+      <div style="margin-top:12px;padding:10px 12px;border-radius:8px;background:var(--surface-2);border-left:3px solid var(--text-faint)"><b>สถานะจริง · <span class="pill warn">เกือบครบ · เหลือช่องทางแจ้งเตือน</span></b>
+      <p class="prose" style="margin:6px 0 0">Dashboard + Gadget · รายงานสรุป · <b>Report Builder แบบ pivot</b> ·
+      <b>Scheduled export (CSV) ส่งได้จริงถึงกล่องอีเมล</b> · Automation Rule Builder · REST API v1 + OpenAPI 202 เส้นทาง + Webhook ·
+      <b>ยังขาด:</b> LINE Messaging API (ติดที่ channel access token) · Email-to-Ticket (ติดที่กล่องจดหมาย IMAP) ·
+      Scheduled export ยังเป็น CSV อย่างเดียว ยังไม่มี PDF/XLSX ·
+      <b>Exit Criteria “API ผ่านการทดสอบจาก integration จริง 3 ระบบ” ยังไม่ผ่าน</b> — ยังไม่มีระบบภายนอกสักตัวที่ต่อเข้ามาจริง</p></div>
     </div>
 
     <div class="card tint neutral" style="--accent:var(--ok)">
@@ -848,6 +896,12 @@ footer .wrap{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;
         <ul class="tick"><li>ปรับสมรรถนะ: ทดสอบโหลดที่ 1 ล้าน work item, 500 ผู้ใช้พร้อมกัน</li><li>ทดสอบเจาะระบบโดยบุคคลที่สาม + แก้ตาม OWASP ASVS L2</li><li>PDPA: คำขอของเจ้าของข้อมูล, บันทึกความยินยอม, นโยบายเก็บ/ลบข้อมูล</li><li>เปิดโหมด Multi-tenant + Billing + Subscription Tier</li><li>PWA + responsive เต็มรูปแบบสำหรับมือถือ</li><li>เครื่องมือย้ายข้อมูลจาก Jira / ServiceNow / Freshservice</li><li>เอกสารผู้ใช้ + คู่มือแอดมิน + Runbook</li></ul>
         <ul class="tick"><li><b>Exit Criteria:</b> รับ tenant ทดลอง 3 รายบน SaaS ได้จริง</li><li>ไม่มีช่องโหว่ระดับ High/Critical ค้างจากการทดสอบเจาะระบบ</li><li>p95 ของ API &lt; 400 ms ที่โหลดเป้าหมาย</li><li>กู้คืนระบบจาก backup ได้จริงภายใน RTO 4 ชั่วโมง (ซ้อมจริง)</li><li>ย้ายข้อมูล Jira 10,000 issue ได้ครบถ้วนตรวจสอบได้</li></ul>
       </div>
+      <div style="margin-top:12px;padding:10px 12px;border-radius:8px;background:var(--surface-2);border-left:3px solid var(--text-faint)"><b>สถานะจริง · <span class="pill">ยังไม่เริ่มเป็นเฟส</span></b>
+      <p class="prose" style="margin:6px 0 0">มีของบางส่วนที่ทำไปพร้อมเฟสอื่น: การกั้นข้อมูลข้ามองค์กรพิสูจน์ได้ด้วย
+      <code>pnpm --filter @itsm/api verify:multitenant</code> (ยกฐานชั่วคราว สร้างสององค์กร ตรวจ แล้วลบทิ้ง) ·
+      ชุดส่งมอบ on-prem ยกขึ้นจากภาพจริงและล็อกอินผ่านเบราว์เซอร์ได้แล้ว · นโยบายระยะเวลาเก็บข้อมูล (PDPA) มีแล้ว ·
+      <b>ยังไม่มี:</b> โหมด SaaS และ billing · การทดสอบเจาะระบบ · การซ้อมกู้คืนจาก backup ·
+      เครื่องมือย้ายข้อมูลจาก Jira · การวัด p95 ที่โหลดเป้าหมาย</p></div>
     </div>
   </div>
 </section>
@@ -1600,7 +1654,7 @@ footer .wrap{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;
 
   <div class="callout build" style="margin-top:34px">
     <span class="k">อีก 36 หน้าจอที่เหลือ</span>
-    <p><b>ฝั่ง Service:</b> Service Catalog Admin · ฟอร์มส่งคำขอ · หน้าอนุมัติ · Change Calendar · CAB Meeting · CMDB Explorer + Impact Graph · Knowledge Article + Editor · Problem RCA · Major Incident War Room &nbsp;·&nbsp; <b>ฝั่ง Delivery:</b> Backlog + Sprint Planning · Kanban Board · Release · Sprint Report · Velocity · Cumulative Flow &nbsp;·&nbsp; <b>ส่วนกลาง:</b> Command Palette · Global Create · ผลการค้นหา · Saved Filter Manager · โปรไฟล์ · ศูนย์การแจ้งเตือน &nbsp;·&nbsp; <b>Admin 14 หน้า:</b> Workflow Editor · Field &amp; Screen Scheme · Permission Scheme · SLA Policy · Automation Rule Builder · Notification Scheme · ผู้ใช้และกลุ่ม · SSO/LDAP · Webhook · API Token · Audit Log · การตั้งค่าระบบ · ปฏิทินวันหยุด · Import/Export</p>
+    <p><b>ฝั่ง Service:</b> Service Catalog Admin · ฟอร์มส่งคำขอ · หน้าอนุมัติ · Change Calendar · CAB Meeting · CMDB Explorer + Impact Graph · Knowledge Article + Editor · Problem RCA · Major Incident War Room &nbsp;·&nbsp; <b>ฝั่ง Delivery:</b> Backlog + Sprint Planning · Kanban Board · Release · Sprint Report · Velocity · Cumulative Flow &nbsp;·&nbsp; <b>ส่วนกลาง:</b> Command Palette · Global Create · ผลการค้นหา · Saved Filter Manager · โปรไฟล์ · ศูนย์การแจ้งเตือน &nbsp;·&nbsp; <b>Admin 14 หน้า:</b> Workflow Editor · Field &amp; Screen Scheme · Permission Scheme · SLA Policy · Automation Rule Builder · Notification Scheme · ผู้ใช้และกลุ่ม · Webhook · API Token · Audit Log · การตั้งค่าระบบ · ปฏิทินวันหยุด · Import/Export</p>
   </div>
 </section>
 <section class="part neutral" id="p9">
@@ -2017,7 +2071,7 @@ footer .wrap{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;
         <li>Problem · Change + CAB · CMDB — กระบวนการ ITIL เชิงลึกที่องค์กรขนาดนี้ยังไม่มีวุฒิภาวะรองรับ</li>
         <li>HQL — ใช้ตัวกรองแบบเลือกจากรายการก็เพียงพอที่ตั๋วหลักพันใบ</li>
         <li>Automation Rule Builder — ฝังกฎที่จำเป็น 5 ข้อไว้ในโค้ดก่อน</li>
-        <li>Report Builder · Scheduled Export · Multi-tenant · SSO/LDAP · Webhook · API สาธารณะ</li>
+        <li>Report Builder · Scheduled Export · Multi-tenant · Webhook · API สาธารณะ</li>
         <li><b>คงไว้เฉพาะ:</b> <code>tenant_id</code> ทุกตาราง และ token สองธีม — สองอย่างนี้เติมทีหลังแพงมาก อย่างอื่นเติมได้</li>
       </ul>
     </div>
