@@ -818,8 +818,11 @@ footer .wrap{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;
       <div style="margin-top:12px;padding:10px 12px;border-radius:8px;background:var(--surface-2);border-left:3px solid var(--text-faint)"><b>สถานะจริง · <span class="pill ok">โค้ดครบ</span></b>
       <p class="prose" style="margin:6px 0 0">โมดูล 22 ตัวมีโค้ดจริงทั้งหมด · Design System <b>26 คอมโพเนนต์ · 92 story</b> (แผนขอ 24) ·
       เอนจินทั้งสี่มีของจริง: workflow · SLA (102 เคส) · HQL (แปลได้ทั้ง OpenSearch และ Prisma) · LexoRank ·
-      <b>ยังไม่ผ่าน:</b> เกณฑ์ “ทดสอบผ่าน ≥ 70% บนโมดูล core” <u>ยังไม่เคยวัด</u> — ติดตั้ง <code>@vitest/coverage-v8</code> ไว้แล้ว
-      แต่ไม่มีเกณฑ์ใน CI จึงเป็นตัวเลขที่ไม่มีใครรู้ · ควรตั้งเกณฑ์แล้ววัด ไม่ใช่ประกาศว่าผ่าน</p></div>
+      <b>เกณฑ์ “ทดสอบผ่าน ≥ 70% บนโมดูล core” ผ่านแล้ว และตอนนี้วัดทุกครั้ง</b> —
+      วัดครั้งแรกได้ <b>93.9% บรรทัด · 85.88% branch</b> · เกณฑ์เดิม 70/60 ถูกตั้งไว้ในไฟล์ตั้งค่า
+      <u>แต่ไม่เคยถูกรัน</u> เพราะสคริปต์ทดสอบไม่ได้ส่ง <code>--coverage</code> —
+      กลไกที่ไม่มีอะไรเรียกใช้ ป้องกันอะไรไม่ได้ · ตอนนี้รันทุกครั้งที่ <code>pnpm ci</code>
+      และเพดานถูกยกไปที่ค่าที่วัดได้จริง เพราะช่องว่าง 24 จุดคือระยะที่เทสต์หายไปได้โดยไม่มีอะไรส่งเสียง</p></div>
     </div>
 
     <div class="card tint run">
