@@ -2,7 +2,9 @@ import type { ReactNode } from 'react';
 
 import { Alert, DailyChart, PageHeader, Stat, Table, TextLink } from '@itsm/ui';
 
-import { apiFetch } from '@/lib/api';
+import { ScheduleManager, type ScheduleRow } from '@/components/schedule-manager';
+
+import { API_BASE, apiFetch } from '@/lib/api';
 
 export const dynamic = 'force-dynamic';
 
@@ -66,6 +68,18 @@ export default async function ReportsPage({
     );
   }
 
+  /*
+    ตารางเวลาโหลดแยกจากรายงาน · ล้มแล้วไม่ทำให้ทั้งหน้าหาย — ส่วนเสริม
+    ที่พาสิ่งสำคัญไปด้วย คือการทำให้สิ่งสำคัญขึ้นกับสิ่งที่ไม่สำคัญ
+  */
+  let schedules: ScheduleRow[] = [];
+  try {
+    const r = await apiFetch('/api/v1/reports/schedules');
+    if (r.ok) schedules = ((await r.json()) as { rows: ScheduleRow[] }).rows;
+  } catch {
+    schedules = [];
+  }
+
   const report = data;
 
   return (
@@ -117,6 +131,14 @@ export default async function ReportsPage({
       <DailyChart daily={report.daily} />
 
       <h2 className="detail-section-title detail-section-gap">แจ้งเข้ามา แยกตามความสำคัญ</h2>
+      {/* ตารางเวลาส่งรายงาน — ค่าของแต่ละคน ส่งให้เจ้าของคนเดียว */}
+      <h2 className="cfg-title detail-section-gap">ส่งรายงานอัตโนมัติ</h2>
+      <p className="page-sub">
+        รายงานจะถูกส่งเป็นไฟล์ CSV ไปที่อีเมลของคุณตามรอบที่ตั้งไว้ ·
+        เวลาที่ตั้งเป็นเวลาไทย
+      </p>
+      <ScheduleManager apiBase={API_BASE} rows={schedules} projects={report.projects} />
+
       {/* ทางไปตารางไขว้ — คำถามที่สองมิติตอบได้ แต่หน้านี้ตอบไม่ได้ */}
       <p className="pivot-back">
         <TextLink href={`/reports/pivot?range=${encodeURIComponent(range)}`}>

@@ -3786,6 +3786,57 @@ tr[data-state='completed'] td {
   font-weight: 600;
 }
 
+/* ตารางเวลาส่งรายงาน — ค่าของแต่ละคน */
+.sched {
+  margin-bottom: var(--space-4);
+}
+
+.sched-name {
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  line-height: var(--line-height-body);
+}
+
+.sched-actions {
+  display: flex;
+  gap: var(--space-2);
+  white-space: nowrap;
+}
+
+.sched-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+}
+
+.sched-add,
+.sched-none {
+  margin: var(--space-3) 0 0;
+  line-height: var(--line-height-body);
+}
+
+.sched-none {
+  color: var(--text-muted);
+}
+
+.sched-error {
+  color: var(--status-critical);
+  overflow-wrap: anywhere;
+}
+
+.sched-msg {
+  margin: var(--space-2) 0 0;
+  color: var(--status-critical);
+  line-height: var(--line-height-body);
+  overflow-wrap: anywhere;
+}
+
 /*
   ตารางไขว้
 
