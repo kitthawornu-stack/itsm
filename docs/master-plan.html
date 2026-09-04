@@ -854,8 +854,12 @@ footer .wrap{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;
       <p class="prose" style="margin:6px 0 0">Board ทั้ง Kanban และ Scrum · Backlog + วางแผน Sprint · Version/Release · HQL + Saved Filter ·
       เลนตามผู้รับผิดชอบและความสำคัญ · เพดาน WIP · ตัวกรองด่วน · เลือกฟิลด์บนการ์ดได้ ·
       <b>ยังขาด:</b> เลนตาม Epic · Roadmap แบบ Gantt ยังไม่ครบ ·
-      <b>Exit Criteria ที่วัดประสิทธิภาพ (500 การ์ด &lt; 800 ms · backlog 5,000 ใบที่ 60fps) ยังไม่เคยวัด</b> —
-      วัดแล้วเฉพาะฝั่งเซิร์ฟเวอร์ ไม่ใช่ฝั่งเรนเดอร์ · หมุดหมาย <b>Dogfooding เดือนที่ 6 ยังไม่เกิด</b></p></div>
+      <b>เกณฑ์ “Board 500 การ์ด &lt; 800 ms” ผ่านแล้ว</b> — วัดบน production build จริง (ไม่ใช่ dev server
+      ซึ่งคอมไพล์ตอนเรียกและให้ตัวเลขที่ไม่ตอบคำถาม) ด้วยการ์ด 500 ใบจากข้อมูลจริง 5 รอบ:
+      <b>รวมทั้งการนำทาง 175 ms</b> (แย่สุด 292) · เซิร์ฟเวอร์ตอบ 125 ms · ส่วนเรนเดอร์เอง 46 ms ·
+      <b>ยังไม่วัด:</b> “ลากการ์ดตอบสนอง &lt; 100 ms” และ “backlog 5,000 ใบที่ 60fps” ·
+      การวัดนี้ทำด้วยมือ (เครื่องมือ browser automation อยู่นอก repo) จึงเป็น <u>ภาพ ณ วันที่วัด</u>
+      ไม่ใช่ด่านที่กันการถดถอย · หมุดหมาย <b>Dogfooding เดือนที่ 6 ยังไม่เกิด</b></p></div>
     </div>
 
     <div class="card tint run">
