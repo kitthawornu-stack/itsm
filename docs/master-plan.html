@@ -349,7 +349,7 @@ footer .wrap{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;
     <div class="hero-meta">
       <div><dt>ระยะเวลา</dt><dd>10 เดือน · 6 เฟส</dd></div>
       <div><dt>ทีม</dt><dd>6 FTE + AI coding</dd></div>
-      <div><dt>โมดูล</dt><dd>28 โมดูลหลัก</dd></div>
+      <div><dt>โมดูล</dt><dd>วางแผนไว้ 28 · <b>ของจริง 22</b></dd></div>
       <div><dt>หน้าจอหลัก</dt><dd>42 หน้าจอ</dd></div>
       <div><dt>Go-live แรก</dt><dd>เดือนที่ 4 (Pilot)</dd></div>
     </div>
@@ -436,7 +436,7 @@ footer .wrap{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;
 
   <div class="grid g3" style="margin-bottom:26px">
     <div class="card"><span class="k">Client</span><h4>Next.js 15 · App Router</h4><p>React 19 + TypeScript · Server Components สำหรับหน้าอ่านอย่างเดียว · Client Island สำหรับ Board/Editor · TanStack Query สำหรับ cache + optimistic update · Zustand สำหรับ UI state · dnd-kit สำหรับลากการ์ด · TanStack Virtual สำหรับคิว 10,000 แถว</p></div>
-    <div class="card"><span class="k">API</span><h4>NestJS 11 · Modular Monolith</h4><p>REST v1 (OpenAPI auto-gen) + Socket.IO gateway · แบ่ง 16 โมดูลที่คุยกันผ่าน Application Service ไม่ใช่เรียก repository ข้ามโมดูล · CQRS แบบเบา (แยก command/query handler เฉพาะโดเมนที่ซับซ้อน)</p></div>
+    <div class="card"><span class="k">API</span><h4>NestJS 11 · Modular Monolith</h4><p>REST v1 (OpenAPI auto-gen) + Socket.IO gateway · แบ่งเป็นโมดูลที่คุยกันผ่าน Application Service (วางแผนไว้ 16 · ของจริง 22) ไม่ใช่เรียก repository ข้ามโมดูล · CQRS แบบเบา (แยก command/query handler เฉพาะโดเมนที่ซับซ้อน)</p></div>
     <div class="card"><span class="k">Database</span><h4>MySQL 8.0 · InnoDB · Prisma</h4><p>Collation <code>utf8mb4_0900_ai_ci</code> · ใช้ CTE + Window Function สำหรับรายงาน · JSON column + Generated Column + index บน generated column แทน array/partial index ที่ MySQL ไม่มี · Read replica แยกสำหรับ reporting</p></div>
     <div class="card"><span class="k">Search</span><h4>OpenSearch 2.x</h4><p><b>บังคับใช้ตั้งแต่เฟส 0</b> — MySQL FULLTEXT ตัดคำไทยไม่ได้ ต้องใช้ ICU + Thai analyzer (dictionary-based) เป็นเป้าหมายของ HQL (ภาษาคิวรีแบบ JQL) ทั้งหมด</p></div>
     <div class="card"><span class="k">Cache &amp; Queue</span><h4>Redis 7 · BullMQ</h4><p>Session/permission cache · SLA timer เป็น delayed job · Automation execution queue · Socket.IO adapter สำหรับ multi-instance · Rate limiting</p></div>
@@ -446,7 +446,7 @@ footer .wrap{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;
     <div class="card"><span class="k">Delivery</span><h4>Docker · Compose / K8s</h4><p>On-prem ส่งเป็น Docker Compose bundle (ลูกค้าไทยส่วนใหญ่ไม่มี K8s) · SaaS รันบน K8s + Helm chart เดียวกัน · Prisma Migrate + gh-ost สำหรับตารางใหญ่</p></div>
   </div>
 
-  <h3 style="margin-bottom:14px">ขอบเขตโมดูลฝั่ง Backend (16 โมดูล)</h3>
+  <h3 style="margin-bottom:14px">ขอบเขตโมดูลฝั่ง Backend — วางแผนไว้ 16 · <b>ของจริง 22</b></h3>
   <div class="tblwrap">
     <table>
       <thead><tr><th>กลุ่ม</th><th>โมดูล</th><th>ความรับผิดชอบ</th><th>แยกเป็นเซอร์วิสได้เมื่อ</th></tr></thead>
@@ -690,7 +690,7 @@ footer .wrap{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;
 <section class="part build" id="p4">
   <div class="part-head">
     <div class="part-num"><span class="bar"></span><span class="eyebrow">Part 04</span></div>
-    <h2>ขอบเขตโมดูล 28 โมดูล</h2>
+    <h2>ขอบเขตโมดูล · วางแผนไว้ 28 กลุ่มงาน</h2>
     <p class="lead prose">แบ่งเป็น 4 กลุ่มตามที่ตกลง แต่ละโมดูลระบุเฟสที่ส่งมอบไว้ชัดเจน เพื่อให้ใช้เป็น checklist ตอนรีวิวรายเดือนได้ทันที</p>
   </div>
 
@@ -771,7 +771,7 @@ footer .wrap{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;
       <span class="k">สถานะจริง · ปรับปรุง 4 กันยายน 2569</span>
       <h3 style="margin:4px 0 8px">โค้ดเดินหน้าถึงเฟส 4 · หมุดหมายที่ต้องมีคนใช้จริง ยังไม่ผ่านสักข้อ</h3>
       <p class="prose">นับจากซอร์สจริง ไม่ใช่จากคำประกาศ — <b>22 โมดูล · 36 หน้าจอ · 202 endpoint ·
-      2,344 เทสต์ · 153 ไฟล์เทสต์ · 302 commit</b> · ตัวเลขเหล่านี้มีเทสต์ที่สแกนซอร์สมาเทียบ
+      2,349 เทสต์ · 154 ไฟล์เทสต์ · 302 commit</b> · ตัวเลขเหล่านี้มีเทสต์ที่สแกนซอร์สมาเทียบ
       (<code>status-doc.spec.ts</code>) จึงเพี้ยนเงียบ ๆ ไม่ได้</p>
       <p class="prose"><b>สิ่งที่แผนนี้ประเมินผิดที่สุด ไม่ใช่ปริมาณโค้ด แต่เป็นสิ่งที่โค้ดซื้อไม่ได้</b> —
       Exit Criteria ของเฟส 1 ถึง 5 เกือบทั้งหมดวัดจาก <u>การใช้งานจริง</u>: ทีมย้ายมาใช้ · ตั๋วจริง 300 ใบ/เดือน ·
@@ -1869,7 +1869,7 @@ footer .wrap{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;
   </div>
   <div class="callout run" style="margin-top:20px">
     <span class="k">คำถามที่ต้องมีคำตอบก่อนสิ้นสัปดาห์ที่ 2</span>
-    <p><b>1)</b> ลูกค้ารายแรกคือใคร และเขามีตั๋วเดือนละกี่ใบ · <b>2)</b> ต้องย้ายข้อมูลจากระบบเดิมหรือไม่ ระบบอะไร มีข้อมูลเท่าไร · <b>3)</b> องค์กรใช้ AD/LDAP อยู่แล้วหรือไม่ · <b>4)</b> มีข้อกำหนดด้าน compliance อะไรบ้าง (ISO 27001, PDPA, กฎเกณฑ์เฉพาะอุตสาหกรรม) · <b>5)</b> ใครคือผู้มีอำนาจตัดสินใจตัดขอบเขตเมื่อเวลาไม่พอ — ข้อนี้สำคัญที่สุดและมักไม่มีใครถามจนสายเกินไป</p>
+    <p><b>1)</b> ลูกค้ารายแรกคือใคร และเขามีตั๋วเดือนละกี่ใบ · <b>2)</b> ต้องย้ายข้อมูลจากระบบเดิมหรือไม่ ระบบอะไร มีข้อมูลเท่าไร · <b>3)</b> องค์กรใช้ AD/LDAP อยู่แล้วหรือไม่ — <b>ตอบแล้วสำหรับลูกค้ารายแรก: ไม่ใช้</b> จึงตัด SSO/LDAP ออกตาม ADR-003 · ถ้ารายถัดไปตอบว่าใช้ ต้องเปิด ADR-003 ใหม่ · <b>4)</b> มีข้อกำหนดด้าน compliance อะไรบ้าง (ISO 27001, PDPA, กฎเกณฑ์เฉพาะอุตสาหกรรม) · <b>5)</b> ใครคือผู้มีอำนาจตัดสินใจตัดขอบเขตเมื่อเวลาไม่พอ — ข้อนี้สำคัญที่สุดและมักไม่มีใครถามจนสายเกินไป</p>
   </div>
 </section>
 
@@ -2112,7 +2112,7 @@ footer .wrap{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;
         <tr><td>Prisma schema + migration จาก ERD</td><td class="num" style="color:var(--ok);font-weight:600">4–6×</td><td>แปลงจากข้อกำหนดที่มีโครงสร้างอยู่แล้ว</td></tr>
         <tr><td>หน้าจอมาตรฐาน — ฟอร์ม ลิสต์ หน้ารายละเอียด</td><td class="num" style="color:var(--ok)">3–4×</td><td>เร็วมาก <b>ถ้ามีดีไซน์ให้แล้ว</b> — ถ้ายังไม่มี AI จะเดาและได้ผลลัพธ์ที่ไม่สม่ำเสมอ</td></tr>
         <tr><td>Business logic ที่ข้อกำหนดชัด</td><td class="num">2–3×</td><td>เร็วเท่าที่ข้อกำหนดชัด · ข้อกำหนดคลุมเครือคือของแพงที่สุดในโมเดลนี้</td></tr>
-        <tr><td>Integration กับ API ที่มีเอกสารดี</td><td class="num">2–3×</td><td>LDAP, SMTP, LINE Messaging API, S3</td></tr>
+        <tr><td>Integration กับ API ที่มีเอกสารดี</td><td class="num">2–3×</td><td>SMTP, LINE Messaging API, S3 <span style="color:var(--text-faint)">(LDAP ตัดออกตาม ADR-003)</span></td></tr>
         <tr><td><b>Workflow · SLA · HQL · LexoRank engine</b></td><td class="num" style="color:var(--crit);font-weight:600">1.2–1.5×</td><td><b>แกนกลางของระบบ</b> — ตรรกะที่มีสถานะและเคสขอบหนาแน่น AI เขียนโค้ดที่ดูถูกต้องและผ่านเทสต์ที่มันเขียนเอง</td></tr>
         <tr><td><b>ปรับสมรรถนะ</b> — board 2,000 การ์ด, query plan, index</td><td class="num" style="color:var(--crit);font-weight:600">1–1.2×</td><td>ต้องวัดกับข้อมูลจริงเป็นรอบ ๆ AI เดาจุดคอขวดไม่ได้จากการอ่านโค้ด</td></tr>
         <tr><td><b>Debug ปัญหาที่เกิดจากการทำงานร่วมกัน</b></td><td class="num" style="color:var(--crit);font-weight:600">1×</td><td>race condition, cache invalidation, ความไม่สอดคล้องระหว่าง MySQL กับ OpenSearch — ต้องอ่าน trace และตั้งสมมติฐาน</td></tr>
