@@ -2,7 +2,14 @@
 
 import { useRouter } from 'next/navigation';
 import { useRef, useState, type ReactNode } from 'react';
-import { Alert, StatusPill, type PriorityRank, type StatusCategory } from '@itsm/ui';
+import {
+  Alert,
+  IssueTypeIcon,
+  StatusPill,
+  type IssueTypeIconName,
+  type PriorityRank,
+  type StatusCategory,
+} from '@itsm/ui';
 
 import { planDrop } from '@/lib/board-drop';
 import { thaiDayKey, thaiDayLabel } from '@/lib/thai-day';
@@ -29,6 +36,7 @@ export interface BoardCard {
   priority: { rank: number; name: string } | null;
   rank: string;
   issueType: string;
+  issueTypeIcon: IssueTypeIconName;
   sprint: string | null;
   epic: string | null;
   updatedAt: string;
@@ -403,7 +411,20 @@ export function BoardView({
                         router.push(`/browse/${card.itemKey}`);
                       }}
                     >
-                      <span className="board-card-key">{card.itemKey}</span>
+                      <span className="board-card-key">
+                        {/*
+                          ไอคอนอยู่ตรงนี้ **ไม่ใช่ในช่อง "ประเภท"** เพราะช่องนั้น
+                          ปิดอยู่โดยปริยาย (ค่าเริ่มต้นคือความสำคัญกับผู้รับผิดชอบ)
+                          — วางไว้ที่นั่นแล้วไอคอนจะมองไม่เห็นจนกว่าจะมีคนไปเปิด
+                          · ชนิดของงานเป็นสิ่งที่ต้องรู้ทุกใบ ไม่ใช่ของเลือกได้
+                        */}
+                        <IssueTypeIcon
+                          name={card.issueTypeIcon}
+                          size="sm"
+                          ariaLabel={card.issueType}
+                        />{' '}
+                        {card.itemKey}
+                      </span>
                       <span className="board-card-summary">{card.summary}</span>
                       {/*
                         แสดงเฉพาะฟิลด์ที่ผู้ใช้เลือก · **ปิดหมดแล้วแถวล่าง

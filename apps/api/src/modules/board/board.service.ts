@@ -17,7 +17,8 @@
  * ปฏิเสธ** — งานจะถูกปิดโดยไม่มีผลการแก้ไข นาฬิกา SLA ไม่หยุด และไม่มี error
  * สักบรรทัด (บทเรียนเดียวกับการเปลี่ยนสถานะเป็นชุด)
  */
-import type { CardField, TenantContext } from '@itsm/types';
+import type { CardField, IssueTypeIconKey, TenantContext } from '@itsm/types';
+import { normalizeIconKey } from '@itsm/types';
 import { between, needsRebalance, distribute, compareRank } from '@itsm/lexorank';
 
 import { auditedTransaction, change } from '../../infrastructure/audit/audited-transaction';
@@ -67,6 +68,13 @@ export interface BoardCard {
   rank: string;
   /** ชื่อประเภทงาน — หน้าจอเลือกได้ว่าจะแสดงหรือไม่ */
   issueType: string;
+  /**
+   * คีย์ไอคอนที่ **แปลแล้ว** ไม่ใช่ค่าดิบจากฐานข้อมูล
+   *
+   * `issue_type.icon_key` เป็นสตริงอิสระที่แต่ละทางเข้าเขียนคนละแบบ
+   * แปลที่นี่ที่เดียว หน้าจอจึงรับเฉพาะค่าที่วาดได้ (ดู `@itsm/types`)
+   */
+  issueTypeIcon: IssueTypeIconKey;
   /** ชื่อรอบที่งานอยู่ · `null` = ยังไม่อยู่ในรอบไหน */
   sprint: string | null;
   /**
@@ -351,7 +359,7 @@ export async function boardOf(
         parentId: true,
         assignee: { select: { displayName: true } },
         priority: { select: { rank: true, name: true } },
-        issueType: { select: { name: true } },
+        issueType: { select: { name: true, iconKey: true } },
         sprint: { select: { name: true } },
       },
     });
@@ -372,6 +380,7 @@ export async function boardOf(
         priority: r.priority === null ? null : { rank: r.priority.rank, name: r.priority.name },
         rank: r.rank,
         issueType: r.issueType.name,
+        issueTypeIcon: normalizeIconKey(r.issueType.iconKey),
         sprint: r.sprint?.name ?? null,
         epic: null,
         updatedAt: r.updatedAt.toISOString(),

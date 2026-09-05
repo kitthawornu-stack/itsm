@@ -953,3 +953,13 @@
   background: var(--accent-delivery);
   fill: var(--accent-delivery);
 }
+
+/*
+  ไอคอนประเภทงาน — ไม่มีสีของตัวเอง รับจากข้อความที่อยู่ข้าง ๆ ผ่าน currentColor
+  จึงถูกต้องทั้งสามสถานะของธีมโดยไม่ต้องนิยาม token เพิ่ม
+*/
+.ui-issue-icon {
+  /* ไอคอนอยู่บรรทัดเดียวกับข้อความไทยที่ line-height 1.6 — baseline จะทำให้ลอย */
+  vertical-align: -0.125em;
+  flex: none;
+}
