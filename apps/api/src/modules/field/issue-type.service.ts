@@ -7,12 +7,15 @@
  * ประเภทงานเดียวตอนสร้าง และ **ไม่มีทางเพิ่มประเภทที่สองได้เลยหลังจากนั้น**
  * นอกจากเขียน SQL
  *
- * ⚠️ `iconKey` และ `hierarchyLevel` มีอยู่ในสคีมาแต่ **ยังไม่มีอะไรเรนเดอร์**
- * `iconKey` เดินทางจากฐานข้อมูลผ่าน API ไปถึง prop ของคอมโพเนนต์แล้วหยุดอยู่ตรงนั้น
- * ส่วน `hierarchyLevel` ไม่มีโค้ดไหนอ่านเลย (จะได้ใช้ตอนทำ Epic → Story → Sub-task)
- * ฟอร์มจึงไม่ถามสองอย่างนี้ — ถามค่าที่ตั้งแล้วไม่มีผล คือการสร้างความเชื่อผิด
+ * `iconKey` ถามจากผู้ดูแลได้แล้ว เพราะมีของที่เรนเดอร์มันจริง · ค่าที่รับ
+ * ถูกแปลผ่าน `normalizeIconKey` เสมอ — คอลัมน์นี้เคยเป็นสตริงอิสระที่ทุก
+ * ทางเข้าเขียนคนละแบบ การเปิดให้กรอกโดยไม่แปล คือการเพิ่มทางเข้าที่ห้าให้ปัญหาเดิม
+ *
+ * ⚠️ `hierarchyLevel` ยังไม่ถามจากฟอร์ม — มันตั้งจาก `isSubtask` และการให้
+ * ผู้ดูแลกรอกเองแปลว่าเขาสร้างชั้นที่ระบบไม่รู้จักได้ · ถามค่าที่ตั้งแล้วไม่มีผล
+ * คือการสร้างความเชื่อผิด
  */
-import type { TenantContext } from '@itsm/types';
+import { normalizeIconKey, type IssueTypeIconKey, type TenantContext } from '@itsm/types';
 
 import { auditedTransaction } from '../../infrastructure/audit/audited-transaction';
 import { tenantScoped } from '../../infrastructure/prisma/tenant-scope';
@@ -85,6 +88,8 @@ function cleanName(v: unknown): string {
 export interface IssueTypeRow {
   id: string;
   name: string;
+  /** แปลแล้วเสมอ — แถวเก่าถือค่าดิบอย่าง `alert-triangle` หรือ `x` อยู่ */
+  icon: IssueTypeIconKey;
   isSubtask: boolean;
   itemCount: number;
   /** โปรเจกต์ที่ผูกประเภทนี้ไว้ */
@@ -102,6 +107,7 @@ export async function listIssueTypes(ctx: TenantContext): Promise<IssueTypeRow[]
   return rows.map((t) => ({
     id: t.id.toString(),
     name: t.name,
+    icon: normalizeIconKey(t.iconKey),
     isSubtask: t.isSubtask,
     itemCount: t._count.workItems,
     usedBy: [...new Set(t.workflowSchemes.map((s) => s.project.key))].sort((a, b) =>
@@ -114,6 +120,7 @@ export async function createIssueType(
   ctx: TenantContext,
   rawName: string,
   isSubtask = false,
+  rawIcon: unknown = null,
 ): Promise<{ id: bigint; name: string }> {
   const db = tenantScoped(ctx);
   const name = cleanName(rawName);
@@ -126,14 +133,12 @@ export async function createIssueType(
       data: {
         tenantId: ctx.tenantId,
         name,
-        /**
-         * ค่าที่ไม่ได้ถามจากผู้ใช้ เพราะยังไม่มีอะไรอ่านมัน
-         *
-         * `iconKey` ส่งไปถึงหน้าจอแล้วแต่ไม่มีใครเรนเดอร์ · `hierarchyLevel`
-         * ไม่มีโค้ดไหนอ่านเลย จะได้ใช้ตอนทำลำดับชั้น Epic → Story → Sub-task
-         * ตั้งค่ากลาง ๆ ไว้ ดีกว่าให้ผู้ดูแลกรอกสิ่งที่ไม่มีผล
-         */
-        iconKey: 'generic',
+        /*
+          แปลก่อนเก็บเสมอ · ค่าที่ไม่รู้จักกลายเป็น `generic` ไม่ใช่ถูกปฏิเสธ
+          — ผู้ดูแลเลือกจากรายการที่ API ให้มา ค่าประหลาดจึงมาจากการเรียก
+          endpoint ตรง ๆ เท่านั้น และไม่ควรทำให้สร้างประเภทงานไม่ได้
+        */
+        iconKey: normalizeIconKey(typeof rawIcon === 'string' ? rawIcon : null),
         isSubtask,
         hierarchyLevel: isSubtask ? -1 : 0,
       },
@@ -147,7 +152,7 @@ export async function createIssueType(
           action: 'issuetype.create',
           entityType: 'issue_type',
           entityId: t.id.toString(),
-          payload: { name, isSubtask },
+          payload: { name, isSubtask, icon: normalizeIconKey(typeof rawIcon === 'string' ? rawIcon : null) },
         },
       ],
     };
@@ -288,6 +293,42 @@ export async function unbindIssueType(
           entityType: 'project',
           entityId: projectId.toString(),
           payload: { issueType: scheme.issueType.name },
+        },
+      ],
+    };
+  });
+}
+
+/**
+ * เปลี่ยนไอคอนของประเภทงานที่มีอยู่แล้ว
+ *
+ * ต้องมี เพราะประเภทงานทั้งหมดที่มีอยู่ตอนนี้ถือค่าดิบที่เขียนไว้ตอน seed
+ * หรือ `generic` ที่ `createIssueType` เคยตั้งให้ · ถ้าตั้งได้แต่ตอนสร้าง
+ * ผู้ดูแลจะแก้ของที่มีอยู่ไม่ได้เลย และต้องลบทิ้งสร้างใหม่ ซึ่งลบไม่ได้
+ * ถ้ามีงานผูกอยู่
+ */
+export async function setIssueTypeIcon(
+  ctx: TenantContext,
+  id: bigint,
+  rawIcon: unknown,
+): Promise<IssueTypeIconKey> {
+  const db = tenantScoped(ctx);
+  const before = await db.issueType.findFirst({ where: { id }, select: { iconKey: true } });
+  if (before === null) throw new IssueTypeNotFoundError(id);
+  const icon = normalizeIconKey(typeof rawIcon === 'string' ? rawIcon : null);
+
+  return auditedTransaction(ctx, 'issuetype.icon', async (tx) => {
+    await tx.issueType.update({ where: { id }, data: { iconKey: icon } });
+    return {
+      result: icon,
+      audit: [
+        {
+          kind: 'system',
+          action: 'issuetype.icon',
+          entityType: 'issue_type',
+          entityId: id.toString(),
+          /* เก็บค่าเดิมไว้ด้วย — "เปลี่ยนเป็นอะไร" ตอบได้ครึ่งเดียวว่าเกิดอะไรขึ้น */
+          payload: { from: normalizeIconKey(before.iconKey), to: icon },
         },
       ],
     };

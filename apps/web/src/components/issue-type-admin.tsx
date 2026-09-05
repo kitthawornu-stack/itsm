@@ -1,14 +1,35 @@
 'use client';
 
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
-import { Button, Field, Input, LinkButton, Select, Table } from '@itsm/ui';
+import {
+  Button,
+  Field,
+  Input,
+  IssueTypeIcon,
+  LinkButton,
+  Select,
+  Table,
+  type IssueTypeIconName,
+} from '@itsm/ui';
 
 interface TypeRow {
   id: string;
   name: string;
+  icon: IssueTypeIconName;
   isSubtask: boolean;
   itemCount: number;
   usedBy: string[];
+}
+
+/**
+ * ตัวเลือกไอคอน **มาจาก API** ไม่ใช่รายการที่พิมพ์ไว้ที่นี่
+ *
+ * คำศัพท์อยู่ที่ `@itsm/types` ซึ่ง `apps/web` ไม่ได้พึ่ง · เขียนรายการเองที่นี่
+ * จะกลายเป็นที่ที่สามที่ต้องแก้ตามทุกครั้ง และที่ที่ลืมแก้จะเงียบ
+ */
+interface IconOption {
+  key: IssueTypeIconName;
+  label: string;
 }
 
 interface ProjectRow {
@@ -40,7 +61,9 @@ export function IssueTypeAdmin({ apiBase }: { apiBase: string }): ReactNode {
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
+  const [icons, setIcons] = useState<IconOption[]>([]);
   const [name, setName] = useState('');
+  const [newIcon, setNewIcon] = useState<string>('generic');
   const [bindType, setBindType] = useState('');
   const [bindProject, setBindProject] = useState('');
   const [bindWorkflow, setBindWorkflow] = useState('');
@@ -58,7 +81,9 @@ export function IssueTypeAdmin({ apiBase }: { apiBase: string }): ReactNode {
       setRows([]);
       return;
     }
-    setRows(((await t.json()) as { rows: TypeRow[] }).rows);
+    const payload = (await t.json()) as { rows: TypeRow[]; icons?: IconOption[] };
+    setRows(payload.rows);
+    setIcons(payload.icons ?? []);
     if (p.ok) setProjects(((await p.json()) as { rows: ProjectRow[] }).rows);
     if (w.ok) setWorkflows(((await w.json()) as { rows: WorkflowRow[] }).rows);
   }, [apiBase]);
@@ -113,7 +138,7 @@ export function IssueTypeAdmin({ apiBase }: { apiBase: string }): ReactNode {
         className="admin-add-form"
         onSubmit={(e) => {
           e.preventDefault();
-          void send('', { name }, `เพิ่ม "${name}" แล้ว`).then((ok) => {
+          void send('', { name, icon: newIcon }, `เพิ่ม "${name}" แล้ว`).then((ok) => {
             if (ok) setName('');
           });
         }}
@@ -125,6 +150,14 @@ export function IssueTypeAdmin({ apiBase }: { apiBase: string }): ReactNode {
         >
           <Input id="it-name" value={name} onChange={setName} maxLength={64} />
         </Field>
+        <Field label="ไอคอน" htmlFor="it-icon">
+          <Select
+            id="it-icon"
+            value={newIcon}
+            onChange={setNewIcon}
+            options={icons.map((i) => ({ value: i.key, label: i.label }))}
+          />
+        </Field>
         <Button variant="primary" type="submit" disabled={busy || name.trim() === ''}>
           เพิ่ม
         </Button>
@@ -133,6 +166,7 @@ export function IssueTypeAdmin({ apiBase }: { apiBase: string }): ReactNode {
       <Table
         columns={[
           'ชื่อ',
+          'ไอคอน',
           'งานที่เป็นประเภทนี้',
           'ใช้ในโปรเจกต์',
           { label: 'การกระทำ', srOnly: true },
@@ -141,7 +175,25 @@ export function IssueTypeAdmin({ apiBase }: { apiBase: string }): ReactNode {
       >
         {rows.map((t) => (
           <tr key={t.id} data-inactive={t.usedBy.length === 0 ? 'true' : undefined}>
-            <td>{t.name}</td>
+            <td>
+              <IssueTypeIcon name={t.icon} ariaLabel={`ไอคอนของ ${t.name}`} /> {t.name}
+            </td>
+            <td>
+              {/*
+                เปลี่ยนได้ทันทีจากตาราง ไม่ต้องเข้าหน้าย่อย · ประเภทงานที่มีอยู่
+                ทั้งหมดถือค่าที่ตั้งไว้ตอน seed หรือ `generic` ถ้าตั้งได้แต่ตอนสร้าง
+                ผู้ดูแลจะแก้ของเดิมไม่ได้เลย และลบทิ้งสร้างใหม่ก็ทำไม่ได้ถ้ามีงานผูกอยู่
+              */}
+              <Select
+                id={`it-icon-${t.id}`}
+                ariaLabel={`ไอคอนของ ${t.name}`}
+                value={t.icon}
+                onChange={(v) => {
+                  void send(`/${t.id}/icon`, { icon: v }, `เปลี่ยนไอคอนของ "${t.name}" แล้ว`);
+                }}
+                options={icons.map((i) => ({ value: i.key, label: i.label }))}
+              />
+            </td>
             <td className="admin-when">{t.itemCount.toLocaleString('th-TH')}</td>
             <td>
               {/*

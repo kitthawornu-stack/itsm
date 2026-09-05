@@ -5,7 +5,7 @@
  * ไม่มีความหมาย — สร้างแล้วไม่มีใครเลือกได้
  */
 import { Body, Controller, Get, HttpException, HttpStatus, Param, Post } from '@nestjs/common';
-import type { TenantContext } from '@itsm/types';
+import { ISSUE_TYPE_ICONS, ISSUE_TYPE_ICON_LABEL, type TenantContext } from '@itsm/types';
 
 import { Ctx } from '../../infrastructure/http/session.guard';
 import { assertTenantAdmin } from '../permission';
@@ -18,6 +18,7 @@ import {
   WorkflowUnusableError,
   bindIssueType,
   createIssueType,
+  setIssueTypeIcon,
   listIssueTypes,
   removeIssueType,
   unbindIssueType,
@@ -62,16 +63,28 @@ function mapIssueTypeError(e: unknown): never {
  */
 @Controller('admin/issue-types')
 export class IssueTypeController {
+  /**
+   * ส่งรายการไอคอนที่เลือกได้มากับรายการประเภทงาน
+   *
+   * **ตัวเลือกบนหน้าจอต้องมาจากที่เดียวกับที่ระบบใช้ตัดสิน** ไม่ใช่รายการ
+   * ที่พิมพ์ซ้ำไว้ในหน้าจอ · `apps/web` ไม่ได้พึ่ง `@itsm/types` (พึ่งแค่
+   * `@itsm/ui`) ถ้าไม่ส่งมา หน้าจอจะต้องเขียนรายการเองเป็นที่ที่สาม
+   */
   @Get()
-  async list(@Ctx() ctx: TenantContext): Promise<{ rows: unknown[] }> {
+  async list(
+    @Ctx() ctx: TenantContext,
+  ): Promise<{ rows: unknown[]; icons: { key: string; label: string }[] }> {
     await assertTenantAdmin(ctx);
-    return { rows: await listIssueTypes(ctx) };
+    return {
+      rows: await listIssueTypes(ctx),
+      icons: ISSUE_TYPE_ICONS.map((k) => ({ key: k, label: ISSUE_TYPE_ICON_LABEL[k] })),
+    };
   }
 
   @Post()
   async create(
     @Ctx() ctx: TenantContext,
-    @Body() body: { name?: unknown; isSubtask?: unknown },
+    @Body() body: { name?: unknown; isSubtask?: unknown; icon?: unknown },
   ): Promise<unknown> {
     await assertTenantAdmin(ctx);
     try {
@@ -79,8 +92,23 @@ export class IssueTypeController {
         ctx,
         typeof body.name === 'string' ? body.name : '',
         body.isSubtask === true,
+        body.icon,
       );
       return { ok: true, id: t.id.toString(), name: t.name };
+    } catch (e) {
+      return mapIssueTypeError(e);
+    }
+  }
+
+  @Post(':id/icon')
+  async icon(
+    @Ctx() ctx: TenantContext,
+    @Param('id') id: string,
+    @Body() body: { icon?: unknown },
+  ): Promise<unknown> {
+    await assertTenantAdmin(ctx);
+    try {
+      return { ok: true, icon: await setIssueTypeIcon(ctx, requireId(id, 'รหัสประเภทงาน'), body.icon) };
     } catch (e) {
       return mapIssueTypeError(e);
     }
