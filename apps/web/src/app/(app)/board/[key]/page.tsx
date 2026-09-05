@@ -121,7 +121,7 @@ export default async function BoardPage({
     ค่าที่พิมพ์ผิดตกไปเป็น "ไม่แบ่งเลน" — เหมือนกับโหมดกระดาน · การแบ่งเลน
     โดยไม่ตั้งใจทำให้กระดานหน้าตาเปลี่ยนไปโดยไม่มีใครสั่ง
   */
-  const laneMode: LaneMode = lane === 'assignee' || lane === 'priority' ? lane : 'none';
+  const laneMode: LaneMode = lane === 'assignee' || lane === 'priority' || lane === 'epic' ? lane : 'none';
 
   let data: Board | null = null;
   let error: string | null = null;
@@ -253,6 +253,7 @@ export default async function BoardPage({
             ['none', 'ไม่แบ่งเลน'],
             ['assignee', 'แบ่งตามผู้รับผิดชอบ'],
             ['priority', 'แบ่งตามความสำคัญ'],
+            ['epic', 'แบ่งตาม Epic'],
           ] as const
         )
           .filter(([v]) => v !== laneMode)

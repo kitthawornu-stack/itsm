@@ -20,12 +20,18 @@ import { describe, expect, it } from 'vitest';
 
 import { NO_LANE_LABEL, splitLanes, type LaneMode } from './swimlanes';
 
-const card = (itemKey: string, assignee: string | null, rank: number | null) => ({
+const card = (
+  itemKey: string,
+  assignee: string | null,
+  rank: number | null,
+  epic: string | null = null,
+) => ({
   itemKey,
   summary: `งาน ${itemKey}`,
   assignee,
   priority: rank === null ? null : { rank, name: `P${String(rank)}` },
   rank: itemKey,
+  epic,
 });
 
 const columns = [
@@ -80,7 +86,7 @@ describe('เลนบนกระดาน', () => {
   });
 
   it('**จำนวนการ์ดรวมทุกเลน เท่ากับก่อนแบ่งเสมอ**', () => {
-    for (const mode of ['none', 'assignee', 'priority'] as LaneMode[]) {
+    for (const mode of ['none', 'assignee', 'priority', 'epic'] as LaneMode[]) {
       expect(total(splitLanes(columns, mode)), `โหมด ${mode} ทำการ์ดหาย`).toBe(4);
     }
   });
@@ -172,6 +178,37 @@ describe('เลนบนกระดาน', () => {
   it('ไม่แบ่งเลน — count ของคอลัมน์ยังเป็นจำนวนจริงจากเซิร์ฟเวอร์', () => {
     const [only] = splitLanes(columns, 'none');
     expect(only?.columns[0]?.count, 'ถูกเขียนทับด้วยจำนวนการ์ดที่แสดง').toBe(999);
+  });
+
+  /**
+   * **แบ่งตาม Epic**
+   *
+   * งานที่ไม่ได้อยู่ใต้ Epic ไหน — รวมถึงตัว Epic เอง — ได้เลนของตัวเอง
+   * ที่มีชื่อ ไม่ใช่หายไป · กติกาเดียวกับเลนอื่นทุกโหมด
+   */
+  it('**แบ่งตาม Epic — งานที่ไม่มี Epic ได้เลนของตัวเองและอยู่บนสุด**', () => {
+    const cols = [
+      {
+        statusId: '1',
+        name: 'ใหม่',
+        category: 'TODO',
+        count: 3,
+        cards: [
+          card('A', null, 1, 'ยกเครื่องระบบสำรองข้อมูล'),
+          card('B', null, 1, null),
+          card('C', null, 1, 'ยกเครื่องระบบสำรองข้อมูล'),
+        ],
+      },
+    ];
+    const lanes = splitLanes(cols, 'epic');
+    expect(lanes[0]?.label).toBe(NO_LANE_LABEL.epic);
+    expect(lanes.map((l) => l.label)).toEqual([NO_LANE_LABEL.epic, 'ยกเครื่องระบบสำรองข้อมูล']);
+    // การ์ดสองใบที่อยู่ Epic เดียวกัน ต้องอยู่เลนเดียวกัน
+    expect(lanes[1]?.columns[0]?.cards.map((c) => c.itemKey)).toEqual(['A', 'C']);
+  });
+
+  it('**จำนวนการ์ดรวมทุกเลนเท่าเดิม เมื่อแบ่งตาม Epic**', () => {
+    expect(total(splitLanes(columns, 'epic'))).toBe(4);
   });
 
   it('กระดานเปล่า ได้เลนเปล่า ไม่ใช่พัง', () => {

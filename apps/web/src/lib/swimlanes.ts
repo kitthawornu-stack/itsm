@@ -17,6 +17,8 @@ export interface LaneCard {
   assignee: string | null;
   priority: { rank: number; name: string } | null;
   rank: string;
+  /** Epic ที่การ์ดสังกัด · `null` = ไม่ได้อยู่ใต้ Epic ไหน */
+  epic?: string | null;
 }
 
 export interface LaneColumn {
@@ -48,7 +50,7 @@ export interface Lane<T extends LaneColumn = LaneColumn> {
   columns: T[];
 }
 
-export type LaneMode = 'none' | 'assignee' | 'priority';
+export type LaneMode = 'none' | 'assignee' | 'priority' | 'epic';
 
 /**
  * ชื่อของเลนที่ **ไม่มีค่าให้จัดกลุ่ม**
@@ -59,11 +61,17 @@ export type LaneMode = 'none' | 'assignee' | 'priority';
 export const NO_LANE_LABEL: Record<Exclude<LaneMode, 'none'>, string> = {
   assignee: 'ยังไม่มีผู้รับผิดชอบ',
   priority: 'ยังไม่ได้จัดระดับความสำคัญ',
+  /*
+    งานที่ไม่ได้อยู่ใต้ Epic ไหน · รวมถึงตัว Epic เองด้วย เพราะ Epic
+    ไม่ได้อยู่ใต้ Epic — เขียนไว้ตรง ๆ ดีกว่าปล่อยให้คนเดาว่าหายไปไหน
+  */
+  epic: 'ไม่ได้อยู่ใต้ Epic ใด',
 };
 
 /** ค่าที่ใช้จัดกลุ่มการ์ดหนึ่งใบ · `null` = ไม่มีค่า */
 function laneKeyOf(card: LaneCard, mode: Exclude<LaneMode, 'none'>): string | null {
   if (mode === 'assignee') return card.assignee;
+  if (mode === 'epic') return card.epic ?? null;
   return card.priority === null ? null : card.priority.name;
 }
 

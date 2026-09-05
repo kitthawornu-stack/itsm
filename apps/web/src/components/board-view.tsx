@@ -30,6 +30,7 @@ export interface BoardCard {
   rank: string;
   issueType: string;
   sprint: string | null;
+  epic: string | null;
   updatedAt: string;
 }
 

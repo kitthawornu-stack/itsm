@@ -70,6 +70,14 @@ export interface BoardCard {
   /** ชื่อรอบที่งานอยู่ · `null` = ยังไม่อยู่ในรอบไหน */
   sprint: string | null;
   /**
+   * Epic ที่การ์ดใบนี้สังกัด · `null` = ไม่ได้อยู่ใต้ Epic ไหน
+   *
+   * หาโดยไต่ขึ้นไปหาบรรพบุรุษที่ `hierarchyLevel === 1` **ไม่ใช่ดูจากชื่อ
+   * ประเภทงาน** — ชื่อเปลี่ยนได้ และแต่ละองค์กรตั้งไม่เหมือนกัน ·
+   * Sub-task ต้องไต่สองชั้น (Sub-task → Story → Epic)
+   */
+  epic: string | null;
+  /**
    * เวลาที่แก้ล่าสุด เป็น **ISO UTC** ไม่ใช่ `Date`
    *
    * `JSON.stringify` แปลง `Date` ให้เองก็จริง แต่ชนิดที่ประกาศต้องตรงกับ
@@ -135,6 +143,57 @@ export interface BoardColumn {
  * กระดานที่แสดงคอลัมน์ซึ่งงานในโปรเจกต์นี้ไปถึงไม่ได้ ทำให้คนลากแล้วเด้งกลับ
  * โดยไม่เข้าใจว่าทำไม
  */
+/**
+ * หา Epic ของงานหลายใบพร้อมกัน — **ไต่เป็นชั้น ไม่ใช่ไต่ทีละใบ**
+ *
+ * ลำดับชั้นลึกสุดสามชั้น (Epic → Story → Sub-task) จึงไต่อย่างมากสองรอบ
+ * และแต่ละรอบเป็นคิวรีเดียว · การไต่ทีละใบจะกลายเป็น N+1 ทันทีบนกระดาน
+ * ที่มีการ์ด 500 ใบ — ซึ่งวัดมาแล้วว่าเวลาต่อคำขอแปรตามจำนวนคิวรี
+ *
+ * ตัดสินจาก `hierarchyLevel === 1` **ไม่ใช่จากชื่อประเภทงาน** เพราะชื่อ
+ * เปลี่ยนได้และแต่ละองค์กรตั้งไม่เหมือนกัน
+ */
+async function epicTitles(
+  ctx: TenantContext,
+  seeds: ReadonlySet<string>,
+): Promise<Map<string, string>> {
+  /** id ของงานที่ถาม → ชื่อ Epic ที่เจอ */
+  const found = new Map<string, string>();
+  let frontier = [...seeds].map((s) => BigInt(s));
+  /** id ที่ถามมาตอนแรก → id ที่กำลังไต่อยู่ตอนนี้ */
+  let trace = new Map<string, string>([...seeds].map((s) => [s, s]));
+
+  // สามชั้นแปลว่าไต่อย่างมากสองรอบ · เผื่อไว้สามกันข้อมูลที่ลึกกว่าที่ออกแบบ
+  for (let depth = 0; depth < 3 && frontier.length > 0; depth++) {
+    const rows = await tenantScoped(ctx).workItem.findMany({
+      where: { id: { in: frontier } },
+      select: {
+        id: true,
+        summary: true,
+        parentId: true,
+        issueType: { select: { hierarchyLevel: true } },
+      },
+    });
+    const byId = new Map(rows.map((r) => [r.id.toString(), r]));
+    const nextTrace = new Map<string, string>();
+    const next: bigint[] = [];
+    for (const [origin, at] of trace) {
+      const row = byId.get(at);
+      if (row === undefined) continue;
+      if (row.issueType.hierarchyLevel === 1) {
+        found.set(origin, row.summary);
+        continue;
+      }
+      if (row.parentId === null) continue;
+      nextTrace.set(origin, row.parentId.toString());
+      next.push(row.parentId);
+    }
+    trace = nextTrace;
+    frontier = [...new Set(next.map((n) => n.toString()))].map((n) => BigInt(n));
+  }
+  return found;
+}
+
 /** แปลงค่าที่ผู้ใช้ตั้งไว้ ให้อยู่ในรูปที่คำตอบของกระดานใช้ */
 function cardPrefFor(p: {
   fields: CardField[];
@@ -271,6 +330,13 @@ export async function boardOf(
   const limitByStatus = new Map(limitRows.map((r) => [r.statusId.toString(), r.maxCards]));
 
   const columns: BoardColumn[] = [];
+  /**
+   * itemKey ของการ์ดที่มีแม่ → id ของแม่
+   *
+   * เก็บไว้ก่อนแล้วไต่หา Epic ครั้งเดียวหลังสร้างคอลัมน์ครบ — ไต่ทีละใบ
+   * จะได้คิวรีเท่าจำนวนการ์ด
+   */
+  const parentOf = new Map<string, string>();
   for (const [name, e] of byName) {
     const rows = await db.workItem.findMany({
       where: { projectId: project.id, statusId: { in: e.ids }, ...sprintFilter, ...filterWhere },
@@ -282,6 +348,7 @@ export async function boardOf(
         summary: true,
         rank: true,
         updatedAt: true,
+        parentId: true,
         assignee: { select: { displayName: true } },
         priority: { select: { rank: true, name: true } },
         issueType: { select: { name: true } },
@@ -290,6 +357,8 @@ export async function boardOf(
     });
     const ids = e.ids.map((i) => i.toString());
     const count = ids.reduce((n, id) => n + (countByStatus.get(id) ?? 0), 0);
+    for (const r of rows)
+      if (r.parentId !== null) parentOf.set(r.itemKey, r.parentId.toString());
     columns.push({
       statusId: (e.ids[0] ?? 0n).toString(),
       name,
@@ -304,9 +373,24 @@ export async function boardOf(
         rank: r.rank,
         issueType: r.issueType.name,
         sprint: r.sprint?.name ?? null,
+        epic: null,
         updatedAt: r.updatedAt.toISOString(),
       })),
     });
+  }
+
+  /*
+    เติมชื่อ Epic ให้การ์ดที่มีแม่ · ไม่มีการ์ดใบไหนมีแม่ = ไม่เสียคิวรีเลย
+    — แต่ "ไม่เสียคิวรี" กับ "ไม่ได้เรียก" ให้ผลเหมือนกันทุกประการเมื่อดูจาก
+    จำนวนคิวรี ครั้งก่อนจึงอ่านว่าถูกทั้งที่ยังไม่ได้ต่อสาย
+  */
+  if (parentOf.size > 0) {
+    const titles = await epicTitles(ctx, new Set(parentOf.values()));
+    for (const col of columns)
+      for (const card of col.cards) {
+        const parent = parentOf.get(card.itemKey);
+        card.epic = parent === undefined ? null : (titles.get(parent) ?? null);
+      }
   }
 
   return {
