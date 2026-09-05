@@ -130,3 +130,4 @@ export * from './card-fields';
 export * from './schedule';
 export * from './csv';
 export * from './permission-rules';
+export * from './issue-type-icon';
