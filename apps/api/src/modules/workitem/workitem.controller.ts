@@ -32,7 +32,8 @@ import {
   assertCan,
   browsableProjectIds,
   can,
-  summaryFor,
+  permissionsFor,
+  summarize,
 } from '../permission';
 import { tenantScoped } from '../../infrastructure/prisma/tenant-scope';
 import type { TenantContext } from '@itsm/types';
@@ -805,7 +806,19 @@ export class WorkItemController {
 
     // เปิดดูโปรเจกต์นี้ไม่ได้ = ตอบเหมือนไม่มีงานใบนี้
     // ตอบ 403 เท่ากับยืนยันว่างานคีย์นี้มีอยู่จริง ซึ่งเป็นข้อมูลรั่วเล็ก ๆ ที่ไล่เก็บได้
-    if (!(await can(ctx, item.projectId, 'BROWSE_PROJECT'))) {
+    /*
+      **อ่านสิทธิ์รอบเดียวแล้วใช้ซ้ำ** · ของเดิมเรียก `can()` ที่นี่ แล้วเรียก
+      `summaryFor()` อีกครั้งตอนประกอบคำตอบ — ทั้งสองตัวเรียก `permissionsFor()`
+      ซึ่งยิง 3 คิวรีทุกครั้ง จึงเสียไป 6 คิวรีทั้งที่ 3 พอ
+
+      วัดแล้วว่าเส้นทางนี้ยิง 58 คิวรีต่อคำขอ และเวลาต่อคำขอแปรตามจำนวนคิวรี
+      เกือบเป็นเส้นตรงที่ราว 13 ms ต่อคิวรี (MySQL อยู่ใน Docker บนวินโดวส์)
+
+      **ไม่ได้แก้อะไรในโมดูลสิทธิ์** — ใช้ `permissionsFor` กับ `summarize`
+      ที่โมดูลนั้น export ไว้อยู่แล้ว และคำตอบเรื่องสิทธิ์เหมือนเดิมทุกประการ
+    */
+    const perms = await permissionsFor(ctx, item.projectId);
+    if (!perms.has('BROWSE_PROJECT')) {
       throw new HttpException({ error: 'not_found', message: `ไม่พบงาน ${key}` }, HttpStatus.NOT_FOUND);
     }
 
@@ -857,7 +870,7 @@ export class WorkItemController {
       satisfaction: await satisfactionFor(ctx, item.itemKey),
       canRate: item.reporterId === ctx.actorId && item.resolvedAt !== null,
       // ให้หน้าจอซ่อนปุ่มที่กดไม่ได้ — ไม่ใช่กลไกป้องกัน เซิร์ฟเวอร์ปฏิเสธเองอยู่แล้ว
-      permissions: await summaryFor(ctx, item.projectId),
+      permissions: summarize(perms),
       // ตัวเลือกสำหรับฟอร์มแก้ไข ส่งมาพร้อมหน้าเลย ไม่ต้องยิงอีกคำขอ
       priorities: await listPriorities(ctx),
       /**
