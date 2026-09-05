@@ -125,12 +125,37 @@ beforeAll(async () => {
     keys.push(w.itemKey);
   }
 
-  const hiddenItem = await prismaClient.workItem.findFirstOrThrow({
+  /*
+    งานที่ผู้ใช้มองไม่เห็น — **สร้างใบของตัวเองใน PLAT ไม่ใช่ยืมใบของ seed**
+
+    เดิมใช้ `findFirstOrThrow` ซึ่งได้ `PLAT-1` เสมอ แล้วคืนค่าตอนท้าย ·
+    คืนได้ทุกคอลัมน์ **ยกเว้น `updatedAt`** ซึ่งเป็น `@updatedAt` — ตัวการเขียน
+    คืนเองก็ขยับมันอีกครั้ง วัดจริงแล้ว `PLAT-1` ถูกขยับทุกครั้งที่รัน `pnpm ci`
+    โดยไม่มีคอลัมน์อื่นเปลี่ยนเลย จึงไม่มีเทสต์ไหนแดงและไม่มีใครเห็น ·
+    ผลที่ตามมา: ใบนั้นลอยขึ้นบนสุดของ "แก้ไขล่าสุด" ทุกวัน และไม่มีวันเข้าเกณฑ์
+    "เงียบมานาน" ของ automation เลย
+  */
+  const platTemplate = await prismaClient.workItem.findFirstOrThrow({
     where: { projectId: hiddenProjectId },
+    select: { issueTypeId: true, statusId: true, priorityId: true },
+  });
+  const hiddenItem = await prismaClient.workItem.create({
+    data: {
+      tenantId,
+      projectId: hiddenProjectId,
+      itemKey: `PLAT-HID${STAMP}`,
+      issueTypeId: platTemplate.issueTypeId,
+      statusId: platTemplate.statusId,
+      priorityId: platTemplate.priorityId,
+      reporterId: staffId,
+      summary: `งานในโปรเจกต์ที่มองไม่เห็น ${STAMP}`,
+      rank: `zzy${STAMP}h`,
+    },
     select: { itemKey: true, priorityId: true },
   });
   hiddenKey = hiddenItem.itemKey;
   hiddenPriorityId = hiddenItem.priorityId;
+  keys.push(hiddenItem.itemKey);
 }, 120_000);
 
 /** เก็บกวาดต้องทนต่อการที่ `beforeAll` ล้มกลางทาง ไม่งั้น error จริงถูกกลบ */
@@ -142,19 +167,7 @@ afterAll(async () => {
     ถูกลบออกเพื่อพิสูจน์ว่าเทสต์แดงได้ ใบที่ควรถูกปฏิเสธจะถูกแก้จริง
     และงานของ PLAT ที่ควรมองไม่เห็น จะถูกแตะจริง
   */
-  /*
-    คืนงานของ PLAT ให้เหมือนเดิม **ก่อนอย่างอื่น**
-
-    ตอนกลไกขอบเขตการมองเห็นถูกลบออก (ซึ่งต้องทำเพื่อพิสูจน์ว่าเทสต์แดงได้)
-    ใบนั้นจะถูกแก้จริง · การลบประวัติอย่างเดียวไม่พอ เพราะค่าที่เปลี่ยนไป
-    ค้างอยู่บนงานของ seed ที่หน้าจอจริงอ่านอยู่ทุกวัน
-  */
-  if (hiddenKey !== undefined) {
-    await prismaClient.workItem.updateMany({
-      where: { itemKey: hiddenKey },
-      data: { priorityId: hiddenPriorityId },
-    });
-  }
+  // งานใน PLAT เป็นใบของเทสต์เอง จึงลบทิ้งพร้อม `keys` ไม่ต้องคืนค่าอะไร
   await prismaClient.workItemHistory.deleteMany({ where: { actorId: { in: ids(staffId, viewerId) } } });
   await prismaClient.auditLog.deleteMany({ where: { actorId: { in: ids(staffId, viewerId) } } });
   await prismaClient.notification.deleteMany({

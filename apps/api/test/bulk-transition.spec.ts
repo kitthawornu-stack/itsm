@@ -187,17 +187,35 @@ beforeAll(async () => {
   doneKey = keys[3];
 
   const hidden = await prismaClient.project.findFirstOrThrow({ where: { key: 'PLAT' } });
-  const hiddenItem = await prismaClient.workItem.findFirstOrThrow({
+  /*
+    งานที่ผู้ใช้มองไม่เห็น — **สร้างใบของตัวเองใน PLAT ไม่ใช่ยืมใบของ seed**
+
+    เดิมใช้ `findFirstOrThrow` ซึ่งได้ `PLAT-1` เสมอ แล้วคืนค่าตอนท้าย ·
+    คืนได้ทุกคอลัมน์ **ยกเว้น `updatedAt`** ซึ่งเป็น `@updatedAt` — ตัวการเขียน
+    คืนเองก็ขยับมันอีกครั้ง วัดจริงแล้ว `PLAT-1` ถูกขยับทุกครั้งที่รัน `pnpm ci`
+    โดยไม่มีคอลัมน์อื่นเปลี่ยนเลย จึงไม่มีเทสต์ไหนแดงและไม่มีใครเห็น ·
+    ผลที่ตามมา: ใบนั้นลอยขึ้นบนสุดของ "แก้ไขล่าสุด" ทุกวัน และไม่มีวันเข้าเกณฑ์
+    "เงียบมานาน" ของ automation เลย
+  */
+  const platTemplate = await prismaClient.workItem.findFirstOrThrow({
     where: { projectId: hidden.id },
-    select: {
-      itemKey: true,
-      statusId: true,
-      assigneeId: true,
-      resolutionId: true,
-      resolvedAt: true,
+    select: { issueTypeId: true, statusId: true },
+  });
+  const hiddenItem = await prismaClient.workItem.create({
+    data: {
+      tenantId,
+      projectId: hidden.id,
+      itemKey: `PLAT-BTR${STAMP}`,
+      issueTypeId: platTemplate.issueTypeId,
+      statusId: platTemplate.statusId,
+      reporterId: staffId,
+      summary: `งานในโปรเจกต์ที่มองไม่เห็น ${STAMP}`,
+      rank: `zzy${STAMP}h`,
     },
+    select: { itemKey: true, statusId: true, assigneeId: true, resolutionId: true, resolvedAt: true },
   });
   hiddenKey = hiddenItem.itemKey;
+  keys.push(hiddenItem.itemKey);
   hiddenBefore = {
     statusId: hiddenItem.statusId,
     assigneeId: hiddenItem.assigneeId,
@@ -207,27 +225,7 @@ beforeAll(async () => {
 }, 180_000);
 
 afterAll(async () => {
-  /*
-    คืนงานของ PLAT ให้เหมือนเดิม **ก่อนอย่างอื่น**
-
-    ตอนตัวกรองขอบเขตถูกลบออกเพื่อพิสูจน์ว่าเทสต์แดงได้ ใบนี้จะถูกขยับจริง
-    · การลบประวัติอย่างเดียวไม่พอ เพราะค่าที่เปลี่ยนไปค้างอยู่บนงานของ seed
-    ที่หน้าจอจริงอ่านอยู่ทุกวัน และการนับแถวจับการแก้ค่าไม่ได้ (CLAUDE.md §9)
-  */
-  const wasHidden = hiddenBefore;
-  if (hiddenKey !== undefined && wasHidden !== null) {
-    await step('คืนงานของ PLAT', () =>
-      prismaClient.workItem.updateMany({
-        where: { itemKey: hiddenKey },
-        data: {
-          statusId: wasHidden.statusId,
-          assigneeId: wasHidden.assigneeId,
-          resolutionId: wasHidden.resolutionId,
-          resolvedAt: wasHidden.resolvedAt,
-        },
-      }),
-    );
-  }
+  // งานใน PLAT เป็นใบของเทสต์เอง จึงลบทิ้งพร้อม `keys` ไม่ต้องคืนค่าอะไร
   const owners = [staffId, singleId, noTransitionId].filter((v): v is bigint => v !== undefined);
   await step('ประวัติ', () =>
     prismaClient.workItemHistory.deleteMany({ where: { actorId: { in: owners } } }),
