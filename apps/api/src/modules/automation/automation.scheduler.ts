@@ -118,6 +118,22 @@ export class AutomationScheduler implements OnModuleInit, OnModuleDestroy {
           );
         }
       }
+    } catch (e) {
+      /*
+        **ตัวตั้งเวลาต้องไม่ทำให้โปรเซสตาย**
+
+        `tick()` ถูกเรียกด้วย `void` · promise ที่ถูกปฏิเสธจึงกลายเป็น
+        unhandled rejection ซึ่ง Node 22 ปิดโปรเซสทิ้ง · ของเดิมมีแต่
+        `try/finally` — ลูปด้านในดักทีละองค์กรไว้แล้ว **แต่การอ่านรายชื่อ
+        องค์กรอยู่นอกลูป** จึงไม่มีอะไรรับ
+
+        เกิดขึ้นจริง: ฐานข้อมูลสะดุดชั่วขณะ แล้ว API ตายทั้งตัว ขณะที่
+        worker รอดเพราะดักไว้ · **ระบบล่มเพราะงานเบื้องหลังที่ไม่มีใครรอผล
+        คือราคาที่แพงเกินกว่าเหตุ**
+      */
+      this.log.error(
+        `รอบกวาดกฎอัตโนมัติล้ม: ${e instanceof Error ? e.message : String(e)}`,
+      );
     } finally {
       this.running = false;
     }
