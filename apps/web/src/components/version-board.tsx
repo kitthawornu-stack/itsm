@@ -54,6 +54,7 @@ export function VersionBoard({
 }): ReactNode {
   const [rows, setRows] = useState<VersionRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [adding, setAdding] = useState(false);
   const [name, setName] = useState('');
@@ -108,6 +109,51 @@ export function VersionBoard({
     }
   }
 
+  /**
+   * เก็บเข้าคลัง / เอาออก — **ต้องอ่านคำตอบ ไม่ใช่แค่รู้ว่าสำเร็จ**
+   *
+   * เซิร์ฟเวอร์บอกจำนวนงานที่ยังไม่เสร็จซึ่งเพิ่งถูกพาออกจากแผนไปด้วย ·
+   * ไม่แสดงเท่ากับเก็บเงียบ ๆ ซึ่งเป็นอาการที่ฟีเจอร์นี้มีไว้แก้ ·
+   * และ **ศูนย์ต้องพูดออกมา** ไม่ใช่เงียบ — ผู้ใช้แยกไม่ออกระหว่าง
+   * "ไม่มีงานค้าง" กับ "ระบบไม่ได้บอก"
+   */
+  async function toggleArchive(v: VersionRow): Promise<void> {
+    setBusy(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const res = await fetch(`${apiBase}/api/v1/versions/${v.id}/archive`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ archived: !v.archived }),
+      });
+      const data = (await res.json().catch(() => null)) as {
+        message?: string;
+        unfinished?: number;
+      } | null;
+      if (!res.ok) {
+        setError(data?.message ?? `ทำรายการไม่สำเร็จ (HTTP ${String(res.status)})`);
+        return;
+      }
+      if (v.archived) {
+        setNotice(`เอา ${v.name} ออกจากคลังแล้ว`);
+      } else {
+        const n = data?.unfinished ?? 0;
+        setNotice(
+          n === 0
+            ? `เก็บ ${v.name} เข้าคลังแล้ว · ไม่มีงานค้างในรุ่นนี้`
+            : `เก็บ ${v.name} เข้าคลังแล้ว · พางานที่ยังไม่เสร็จ ${String(n)} เรื่องออกจากแผนไปด้วย`,
+        );
+      }
+      await load();
+    } catch {
+      setError('เชื่อมต่อเซิร์ฟเวอร์ไม่ได้');
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function openNote(id: string): Promise<void> {
     setError(null);
     setNoteFor(id);
@@ -134,6 +180,11 @@ export function VersionBoard({
       {error === null ? null : (
         <Alert tone="error" inline>
           {error}
+        </Alert>
+      )}
+      {notice === null ? null : (
+        <Alert tone="info" inline>
+          {notice}
         </Alert>
       )}
 
@@ -240,7 +291,11 @@ export function VersionBoard({
               </p>
 
               <div className="admin-btn-row">
-                {v.releasedAt === null ? (
+                {/*
+                  รุ่นในคลังไม่มีปุ่มปล่อย/เปิดใหม่ — เซิร์ฟเวอร์ปฏิเสธอยู่แล้ว
+                  แต่ปุ่มที่กดแล้วได้ error คือหน้าจอที่หลอกคน
+                */}
+                {v.archived ? null : v.releasedAt === null ? (
                   <Button
                     disabled={busy}
                     onClick={() => {
@@ -266,6 +321,15 @@ export function VersionBoard({
                   }}
                 >
                   {v.releasedAt === null ? 'ดูตัวอย่างบันทึกการปล่อย' : 'ดูบันทึกการปล่อย'}
+                </LinkButton>
+                <LinkButton
+                  ariaLabel={`${v.archived ? 'เอาออกจากคลัง' : 'เก็บเข้าคลัง'} รุ่น ${v.name}`}
+                  disabled={busy}
+                  onClick={() => {
+                    void toggleArchive(v);
+                  }}
+                >
+                  {v.archived ? 'เอาออกจากคลัง' : 'เก็บเข้าคลัง'}
                 </LinkButton>
               </div>
 

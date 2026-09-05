@@ -15,8 +15,11 @@ import { tenantScoped } from '../../infrastructure/prisma/tenant-scope';
 import { assertCan } from '../permission';
 import {
   VERSION_STATE_LABEL,
+  VersionArchivedError,
   assertCanRelease,
   assertCanReopen,
+  assertCanUnarchive,
+  planArchive,
   releaseNoteOf,
   versionStateOf,
   type ReleaseItem,
@@ -375,9 +378,17 @@ export async function setItemVersion(
 
   const version = await db.projectVersion.findFirst({
     where: { id: versionId },
-    select: { id: true, name: true, projectId: true },
+    select: { id: true, name: true, projectId: true, archived: true },
   });
   if (version === null) throw new VersionNotFoundError();
+  /*
+    **ใส่งานเข้ารุ่นที่อยู่ในคลังไม่ได้ แต่เอาออกได้เสมอ**
+
+    ด่านนี้เพิ่งมีความหมายในวันที่มีทางเก็บเข้าคลังจริง · ใส่เข้าไปได้เมื่อไร
+    งานใบนั้นจะชี้ไปรุ่นที่หายจากแผนและจากรายการให้เลือกแล้ว — มีอยู่แต่ไม่มี
+    ใครเห็น · ส่วนการเอาออกต้องทำได้ ไม่งั้นงานที่ติดอยู่จะปลดไม่ได้เลย
+  */
+  if (add && version.archived) throw new VersionArchivedError();
   /*
     **รุ่นเป็นของโปรเจกต์** — ใส่งานข้ามโปรเจกต์เข้าไปได้เมื่อไร บันทึกการปล่อย
     จะมีงานที่ไม่มีใครในทีมนั้นรู้จัก และตัวกรอง `projectId` ที่หน้าจอใช้
@@ -403,6 +414,46 @@ export async function setItemVersion(
       result: undefined,
       audit: [
         change(item.id, 'fixVersion', add ? null : version.name, add ? version.name : null),
+      ],
+    };
+  });
+}
+
+/**
+ * เก็บรุ่นเข้าคลัง หรือเอาออกจากคลัง
+ *
+ * คืนจำนวนงานที่ยังไม่เสร็จเสมอ แม้เป็นศูนย์ — หน้าจอต้องบอกผู้ใช้ว่า
+ * เพิ่งพางานกี่ใบออกไปจากแผน · ตัวเลขที่ไม่บอก กับตัวเลขที่เป็นศูนย์
+ * ต่างกัน และผู้ใช้แยกไม่ออกถ้าเราไม่ส่งมา
+ */
+export async function setVersionArchived(
+  ctx: TenantContext,
+  id: bigint,
+  archived: boolean,
+): Promise<{ unfinished: number }> {
+  const v = await versionFor(ctx, id);
+  await assertCan(ctx, v.projectId, 'MANAGE_PROJECT');
+
+  let unfinished = 0;
+  if (archived) {
+    ({ unfinished } = planArchive(v.row, await itemsOf(ctx, id)));
+  } else {
+    assertCanUnarchive(v.row);
+  }
+
+  return auditedTransaction(ctx, archived ? 'version.archive' : 'version.unarchive', async (tx) => {
+    await tx.projectVersion.update({ where: { id }, data: { archived } });
+    return {
+      result: { unfinished },
+      audit: [
+        {
+          kind: 'system' as const,
+          action: archived ? 'version.archive' : 'version.unarchive',
+          entityType: 'project-version',
+          entityId: id.toString(),
+          /* จำนวนงานค้าง ณ วันที่เก็บ ต้องอยู่ในบันทึก ไม่ใช่คำนวณใหม่ทีหลัง */
+          payload: { name: v.row.name, unfinished },
+        },
       ],
     };
   });

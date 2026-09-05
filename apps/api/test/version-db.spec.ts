@@ -27,7 +27,9 @@ import {
   ItemFromOtherProjectError,
   UnfinishedItemsError,
   VersionNameRequiredError,
+  VersionArchivedError,
   createVersion,
+  setVersionArchived,
   listVersions,
   releaseNote,
   releaseVersion,
@@ -415,5 +417,82 @@ describe('รุ่น · ต่อของจริง', () => {
     expect((await listVersions(viewerCtx, 'SD', NOW)).map((v) => v.id)).toContain(id.toString());
     await expect(setItemVersion(viewerCtx, key, id, true)).rejects.toThrow(PermissionDeniedError);
     expect(await prismaClient.workItemVersion.count({ where: { versionId: id } })).toBe(0);
+  });
+});
+
+// ============================================================
+
+/**
+ * เก็บรุ่นเข้าคลัง — ต่อฐานข้อมูลจริง
+ *
+ * ที่ต้องมีเทสต์ต่อของจริง ไม่ใช่แค่เอนจิน: ด่าน "รุ่นในคลังแตะไม่ได้"
+ * **เพิ่งไปถึงได้ในวันนี้** ก่อนหน้านี้ `archived` ตั้งไม่ได้จากที่ไหนเลย
+ * โค้ดที่ไม่ตรวจมันจึงดูปลอดภัยมาตลอด — เทสต์เอนจินพิสูจน์ได้แค่ว่า
+ * *ถ้า* แถวหน้าตาแบบนั้นเข้ามา ผลจะถูก ไม่ได้พิสูจน์ว่ามีอะไรสร้างมันได้จริง
+ */
+describe('รุ่น · G · เก็บเข้าคลัง (ต่อของจริง)', () => {
+  it('**เก็บได้แม้มีงานค้าง และบอกจำนวนกลับมา**', async () => {
+    const id = await newVersion('9.0');
+    await setItemVersion(ctx, await newItem('ARCA', { done: false }), id, true);
+    await setItemVersion(ctx, await newItem('ARCB', { done: true }), id, true);
+
+    expect(await setVersionArchived(ctx, id, true)).toEqual({ unfinished: 1 });
+    const row = await prismaClient.projectVersion.findFirstOrThrow({ where: { id } });
+    expect(row.archived).toBe(true);
+  });
+
+  it('จำนวนงานค้าง ณ วันที่เก็บ อยู่ใน audit ไม่ใช่คำนวณใหม่ทีหลัง', async () => {
+    const id = await newVersion('9.1');
+    await setItemVersion(ctx, await newItem('ARCC', { done: false }), id, true);
+    await setVersionArchived(ctx, id, true);
+
+    const log = await prismaClient.auditLog.findFirstOrThrow({
+      where: { action: 'version.archive', entityId: id.toString() },
+      orderBy: { id: 'desc' },
+      select: { payload: true },
+    });
+    expect(log.payload).toMatchObject({ unfinished: 1 });
+  });
+
+  /** **หัวใจ** — สามทางที่แตะรุ่นในคลังได้ ถ้าไม่มีด่าน */
+  it('**รุ่นในคลัง: ปล่อยไม่ได้ · เปิดใหม่ไม่ได้ · ใส่งานเพิ่มไม่ได้**', async () => {
+    const id = await newVersion('9.2');
+    await setVersionArchived(ctx, id, true);
+    const key = await newItem('ARCD', { done: true });
+
+    await expect(releaseVersion(ctx, id, NOW)).rejects.toThrow(VersionArchivedError);
+    await expect(reopenVersion(ctx, id)).rejects.toThrow(VersionArchivedError);
+    await expect(setItemVersion(ctx, key, id, true)).rejects.toThrow(VersionArchivedError);
+    expect(await prismaClient.workItemVersion.count({ where: { versionId: id } })).toBe(0);
+  });
+
+  /**
+   * เอางานออกจากรุ่นที่อยู่ในคลัง **ต้องทำได้** — ไม่งั้นงานที่ติดอยู่กับ
+   * รุ่นที่เก็บไปแล้วจะปลดไม่ได้เลย และเจ้าของงานทำอะไรไม่ได้นอกจากเรียกแอดมิน
+   */
+  it('เอางานออกจากรุ่นในคลังได้เสมอ', async () => {
+    const id = await newVersion('9.3');
+    const key = await newItem('ARCE', { done: true });
+    await setItemVersion(ctx, key, id, true);
+    await setVersionArchived(ctx, id, true);
+
+    await setItemVersion(ctx, key, id, false);
+    expect(await prismaClient.workItemVersion.count({ where: { versionId: id } })).toBe(0);
+  });
+
+  it('เอาออกจากคลังแล้วปล่อยได้ตามปกติ', async () => {
+    const id = await newVersion('9.4');
+    await setVersionArchived(ctx, id, true);
+    expect(await setVersionArchived(ctx, id, false)).toEqual({ unfinished: 0 });
+    await releaseVersion(ctx, id, NOW);
+    const row = await prismaClient.projectVersion.findFirstOrThrow({ where: { id } });
+    expect(row.releasedAt).not.toBeNull();
+  });
+
+  it('**ต้องมี MANAGE_PROJECT** — คนที่แก้งานได้ยังเก็บรุ่นเข้าคลังไม่ได้', async () => {
+    const id = await newVersion('9.5');
+    await expect(setVersionArchived(editorCtx, id, true)).rejects.toThrow(PermissionDeniedError);
+    const row = await prismaClient.projectVersion.findFirstOrThrow({ where: { id } });
+    expect(row.archived, 'ด่านที่อยู่หลังการเขียนจะโยนสายเกินไป').toBe(false);
   });
 });

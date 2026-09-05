@@ -16,8 +16,13 @@ import { describe, expect, it } from 'vitest';
 import { toUtcDate } from '@itsm/types';
 
 import {
+  AlreadyArchivedError,
   AlreadyReleasedError,
+  NotArchivedError,
   NotReleasedYetError,
+  VersionArchivedError,
+  assertCanUnarchive,
+  planArchive,
   UnfinishedItemsError,
   assertCanRelease,
   assertCanReopen,
@@ -191,5 +196,46 @@ describe('รุ่น · C · บันทึกการปล่อย', () =
     const snapshot = JSON.stringify(items);
     releaseNoteOf(version(), items);
     expect(JSON.stringify(items)).toBe(snapshot);
+  });
+});
+
+describe('รุ่น · F · เก็บเข้าคลัง', () => {
+  /**
+   * **เคสที่สำคัญที่สุด** — รุ่นที่ถูกยกเลิกกลางทางคือรุ่นที่มีงานค้างเสมอ
+   * นั่นคือเหตุผลที่ต้องเก็บเข้าคลังตั้งแต่แรก · ปฏิเสธไปจะทำให้ฟีเจอร์นี้
+   * ใช้ไม่ได้กับกรณีเดียวที่คนต้องใช้มัน · แต่เก็บเงียบ ๆ ก็ไม่ได้
+   * เพราะงานที่ค้างจะหายจากแผนงานโดยไม่มีใครรู้ว่ามันไปไหน
+   */
+  it('**เก็บได้แม้ยังมีงานค้าง แต่ต้องบอกจำนวน**', () => {
+    const items = [item({ done: false }), item({ done: false }), item()];
+    expect(planArchive(version(), items)).toEqual({ unfinished: 2 });
+  });
+
+  it('ไม่มีงานค้างก็บอกศูนย์ ไม่ใช่ไม่บอก', () => {
+    expect(planArchive(version(), [item()])).toEqual({ unfinished: 0 });
+  });
+
+  it('เก็บซ้ำไม่ได้', () => {
+    expect(() => { planArchive(version({ archived: true }), []); }).toThrow(AlreadyArchivedError);
+  });
+
+  it('เอาออกจากคลังได้เฉพาะของที่อยู่ในคลัง', () => {
+    expect(() => { assertCanUnarchive(version()); }).toThrow(NotArchivedError);
+    expect(() => { assertCanUnarchive(version({ archived: true })); }).not.toThrow();
+  });
+
+  /**
+   * ด่านสองข้อนี้ **เพิ่งไปถึงได้ในวันที่มีทางเก็บเข้าคลังจริง** — ก่อนหน้านี้
+   * `archived` ตั้งไม่ได้จากที่ไหนเลย โค้ดที่ไม่ตรวจมันจึงดูปลอดภัยมาตลอด
+   * (รูปแบบเดียวกับ `listComments` ที่รับ viewer จาก `?view=`)
+   */
+  it('**รุ่นในคลังปล่อยไม่ได้ และเปิดใหม่ไม่ได้**', () => {
+    const archived = version({ archived: true });
+    expect(() => { assertCanRelease(archived, []); }).toThrow(VersionArchivedError);
+    expect(() => { assertCanReopen(archived); }).toThrow(VersionArchivedError);
+  });
+
+  it('รุ่นที่ปล่อยแล้วเก็บเข้าคลังได้ — เป็นทางปกติที่สุด', () => {
+    expect(planArchive(version({ releasedAt: NOW }), [item()])).toEqual({ unfinished: 0 });
   });
 });

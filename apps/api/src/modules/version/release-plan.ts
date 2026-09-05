@@ -43,6 +43,35 @@ export class AlreadyReleasedError extends Error {
   }
 }
 
+export class AlreadyArchivedError extends Error {
+  constructor() {
+    super('รุ่นนี้ถูกเก็บเข้าคลังไปแล้ว');
+    this.name = 'AlreadyArchivedError';
+  }
+}
+
+export class NotArchivedError extends Error {
+  constructor() {
+    super('รุ่นนี้ไม่ได้อยู่ในคลัง');
+    this.name = 'NotArchivedError';
+  }
+}
+
+/**
+ * รุ่นที่อยู่ในคลังถูกแตะไม่ได้อีก
+ *
+ * **ด่านนี้เพิ่งมีความหมายในวันที่มีทางเก็บเข้าคลังจริง** — ก่อนหน้านี้
+ * `archived` ตั้งไม่ได้เลยจากที่ไหน โค้ดที่ไม่ได้ตรวจมันจึงดู "ปลอดภัย"
+ * มาตลอด · เป็นรูปแบบเดียวกับ `listComments` ที่รับ viewer จาก `?view=`
+ * แล้วกลายเป็นช่องโหว่ในวันที่ระบบยืนยันตัวตนทำงาน (CLAUDE.md §9)
+ */
+export class VersionArchivedError extends Error {
+  constructor() {
+    super('รุ่นนี้อยู่ในคลังแล้ว — เอาออกจากคลังก่อนจึงจะแก้ได้');
+    this.name = 'VersionArchivedError';
+  }
+}
+
 export class NotReleasedYetError extends Error {
   constructor() {
     super('รุ่นนี้ยังไม่ได้ปล่อย จึงเปิดใหม่ไม่ได้');
@@ -98,18 +127,43 @@ export function versionStateOf(v: VersionRow, now: UtcDate): VersionState {
 }
 
 /**
+ * @throws {VersionArchivedError} อยู่ในคลัง
  * @throws {AlreadyReleasedError} ปล่อยไปแล้ว
  * @throws {UnfinishedItemsError} ยังมีงานที่ไม่อยู่ในหมวด DONE
  */
 export function assertCanRelease(v: VersionRow, items: readonly ReleaseItem[]): void {
+  if (v.archived) throw new VersionArchivedError();
   if (v.releasedAt !== null) throw new AlreadyReleasedError();
   const unfinished = items.filter((i) => !i.done).length;
   if (unfinished > 0) throw new UnfinishedItemsError(unfinished);
 }
 
-/** @throws {NotReleasedYetError} ยังไม่ได้ปล่อย */
+/** @throws {NotReleasedYetError} ยังไม่ได้ปล่อย · @throws {VersionArchivedError} อยู่ในคลัง */
 export function assertCanReopen(v: VersionRow): void {
+  if (v.archived) throw new VersionArchivedError();
   if (v.releasedAt === null) throw new NotReleasedYetError();
+}
+
+/**
+ * เก็บรุ่นเข้าคลัง — **ทำได้แม้ยังมีงานค้าง แต่ต้องบอกจำนวน**
+ *
+ * ปฏิเสธไม่ได้ เพราะรุ่นที่ถูกยกเลิกกลางทางคือรุ่นที่มีงานค้างเสมอ — นั่นคือ
+ * เหตุผลที่ต้องเก็บเข้าคลังตั้งแต่แรก · แต่เก็บเงียบ ๆ ทำให้งานที่ค้างหายไป
+ * จากแผนโดยไม่มีใครรู้ · กติกาเดียวกับบันทึกการปล่อยที่บอกจำนวนที่ยังไม่เสร็จเสมอ
+ *
+ * @throws {AlreadyArchivedError} อยู่ในคลังอยู่แล้ว
+ */
+export function planArchive(
+  v: VersionRow,
+  items: readonly ReleaseItem[],
+): { unfinished: number } {
+  if (v.archived) throw new AlreadyArchivedError();
+  return { unfinished: items.filter((i) => !i.done).length };
+}
+
+/** @throws {NotArchivedError} ไม่ได้อยู่ในคลัง */
+export function assertCanUnarchive(v: VersionRow): void {
+  if (!v.archived) throw new NotArchivedError();
 }
 
 /**

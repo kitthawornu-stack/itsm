@@ -22,7 +22,14 @@ import {
 import type { TenantContext } from '@itsm/types';
 
 import { Ctx } from '../../infrastructure/http/session.guard';
-import { AlreadyReleasedError, NotReleasedYetError, UnfinishedItemsError } from './release-plan';
+import {
+  AlreadyArchivedError,
+  AlreadyReleasedError,
+  NotArchivedError,
+  NotReleasedYetError,
+  UnfinishedItemsError,
+  VersionArchivedError,
+} from './release-plan';
 import { roadmapOf, type RoadmapView } from './roadmap.service';
 import {
   DuplicateVersionNameError,
@@ -36,6 +43,7 @@ import {
   releaseNote,
   releaseVersion,
   reopenVersion,
+  setVersionArchived,
   setItemVersion,
   versionsOfItem,
   type ReleaseNoteView,
@@ -56,7 +64,10 @@ function toHttp(e: unknown): never {
     e instanceof ItemFromOtherProjectError ||
     e instanceof AlreadyReleasedError ||
     e instanceof NotReleasedYetError ||
-    e instanceof UnfinishedItemsError
+    e instanceof UnfinishedItemsError ||
+    e instanceof AlreadyArchivedError ||
+    e instanceof NotArchivedError ||
+    e instanceof VersionArchivedError
   ) {
     /*
       422 ทั้งหมด — คำขอถูกต้องตามรูปแบบ แต่สภาพตอนนี้ทำไม่ได้ ·
@@ -170,6 +181,28 @@ export class VersionController {
     try {
       await reopenVersion(ctx, idOf(id));
       return { ok: true };
+    } catch (e) {
+      return toHttp(e);
+    }
+  }
+
+  /**
+   * เก็บเข้าคลัง / เอาออกจากคลัง
+   *
+   * **คืนจำนวนงานที่ยังไม่เสร็จเสมอ** แม้เป็นศูนย์ — หน้าจอต้องบอกได้ว่า
+   * เพิ่งพางานกี่ใบออกไปจากแผน · ถ้าไม่ส่งมา ผู้ใช้แยกไม่ออกระหว่าง
+   * "ไม่มีงานค้าง" กับ "ระบบไม่ได้บอก"
+   */
+  @Post(':id/archive')
+  @HttpCode(HttpStatus.OK)
+  async archive(
+    @Ctx() ctx: TenantContext,
+    @Param('id') id: string,
+    @Body() body: { archived?: unknown },
+  ): Promise<{ ok: true; unfinished: number }> {
+    try {
+      const r = await setVersionArchived(ctx, idOf(id), body.archived !== false);
+      return { ok: true, unfinished: r.unfinished };
     } catch (e) {
       return toHttp(e);
     }
