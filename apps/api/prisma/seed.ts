@@ -16,6 +16,7 @@ import type { Prisma} from '@prisma/client';
 import { PrismaClient, ProjectType, RuleKind, StatusCategory, FieldType, LinkType } from '@prisma/client';
 import { distribute } from '@itsm/lexorank';
 import { hashPassword } from '../src/modules/identity/password';
+import { applyHierarchy } from '../src/scripts/hierarchy-apply';
 
 const prisma = new PrismaClient();
 
@@ -716,6 +717,17 @@ async function main(): Promise<void> {
 
   await prisma.projectCounter.update({ where: { projectId: projectSd.id }, data: { lastValue: itilSeq - 1 } });
   await prisma.projectCounter.update({ where: { projectId: projectPlat.id }, data: { lastValue: TOTAL - SD_COUNT } });
+
+  /*
+    ---------- ผูกลำดับชั้น Epic → เรื่องหลัก → งานย่อย ----------
+
+    ทำ **หลังสุด** เพื่อไม่ขยับสายตัวสุ่มหลัก — ข้อมูลทุกแถวข้างบนจึงยังเล่นซ้ำ
+    ได้ค่าเดิมเป๊ะ ซึ่งเป็นทางเดียวที่ใช้กู้ค่าที่ถูกแก้ผิดกลับมาได้ (ดู CLAUDE.md §9)
+
+    เดิมไม่มีขั้นนี้เลย ผลคือ 0 จาก 10,000 แถวมีแม่ ทั้งที่มี Epic 616 ใบ
+    และ Sub-task 647 ใบอยู่จริง — ฟีเจอร์ที่อ่านสายแม่-ลูกจึงดูว่างเปล่าเสมอ
+  */
+  await applyHierarchy(prisma);
 
   // ---------- ยืนยันสิ่งที่ ADR-002 เตือน ----------
   // ลำดับที่ MySQL คืนด้วย ORDER BY rank ต้องตรงกับลำดับฝั่ง application เป๊ะ

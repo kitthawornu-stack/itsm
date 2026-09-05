@@ -22,6 +22,7 @@
     "loadtest:write": "dotenv -e ../../.env -- tsx src/scripts/loadtest-write.ts",
     "loadtest:upload": "dotenv -e ../../.env -- tsx src/scripts/loadtest-upload.ts",
     "orphans": "dotenv -e ../../.env -- tsx src/scripts/orphan-objects.ts",
+    "link-hierarchy": "dotenv -e ../../.env -- tsx src/scripts/link-hierarchy.ts",
     "verify:multitenant": "tsx src/scripts/verify-multitenant.ts"
   },
   "devDependencies": {
