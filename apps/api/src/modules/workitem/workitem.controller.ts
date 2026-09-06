@@ -36,7 +36,7 @@ import {
   summarize,
 } from '../permission';
 import { tenantScoped } from '../../infrastructure/prisma/tenant-scope';
-import type { TenantContext } from '@itsm/types';
+import type { RiskLevel, TenantContext } from '@itsm/types';
 
 import {
   RequiredFieldsMissingError,
@@ -122,6 +122,7 @@ import {
   voteOf,
   type VoteView,
 } from './vote.service';
+import { riskOf } from './change-risk.service';
 import {
   CrossProjectParentError,
   HierarchyCycleError,
@@ -340,6 +341,26 @@ function toTimeHttp(e: unknown): unknown {
     );
   }
   return e;
+}
+
+
+/**
+ * ประเมินความเสี่ยงให้ transition — คืน `undefined` เมื่อประเมินไม่ได้
+ *
+ * เรื่องที่ไม่ใช่ Change ไม่มี CI และไม่มีช่วงเวลา จึงได้ระดับต่ำตามนิยาม
+ * ของเอนจิน · ที่ต้องดักคือกรณีที่ **ประเมินไม่ได้จริง ๆ** ซึ่งต้องไม่ทำให้
+ * การกดปุ่มทั้งหมดล้ม — validator เป็นคนตัดสินว่าจะปฏิเสธหรือไม่ ไม่ใช่ที่นี่
+ */
+async function riskFor(
+  ctx: TenantContext,
+  itemKey: string,
+): Promise<{ level: RiskLevel; reasons: readonly string[] } | undefined> {
+  try {
+    const r = await riskOf(ctx, itemKey);
+    return { level: r.level, reasons: r.reasons.map((x) => x.detail) };
+  } catch {
+    return undefined;
+  }
 }
 
 @Controller('work-items')
@@ -1333,8 +1354,15 @@ export class WorkItemController {
     await assertCan(ctx, item.projectId, 'TRANSITION_ITEM');
 
     try {
+      /*
+        ประเมินความเสี่ยงที่นี่แล้วส่งเข้าไป — `workflow` ประเมินเองไม่ได้
+        เพราะข้อมูลอยู่ใน `workitem` กับ `cmdb` และการเรียกกลับจะเป็นวง
+        · ประเมินให้ทุกครั้งแม้ workflow นั้นจะไม่ได้ตั้งกฎไว้ เพราะการเลือก
+        ประเมินเฉพาะบางเส้นทางแปลว่ากฎจะเงียบในเส้นทางที่ลืม
+      */
       const result = await applyTransition(ctx, item.id, BigInt(transitionId), ctx.actorId, {
         resolutionName: body.resolution ?? null,
+        changeRisk: await riskFor(ctx, key),
       });
       const status = await db.workflowStatus.findFirst({
         where: { id: result.toStatusId },

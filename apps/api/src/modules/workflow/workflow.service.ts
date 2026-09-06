@@ -5,7 +5,7 @@
  * **ทุกการเปลี่ยนสถานะเขียน work_item_history ในทรานแซกชันเดียวกัน** (INVARIANT 2)
  * ซึ่งบังคับโดย `auditedTransaction` — ถ้าไม่คืน AuditEntry ฟังก์ชันจะโยน error
  */
-import { systemClock, type TenantContext } from '@itsm/types';
+import { systemClock, type RiskLevel, type TenantContext } from '@itsm/types';
 
 import { auditedTransaction, change, type AuditEntry } from '../../infrastructure/audit/audited-transaction';
 import { tenantScoped } from '../../infrastructure/prisma/tenant-scope';
@@ -161,6 +161,7 @@ async function buildContext(
   item: LoadedWorkItem,
   actorId: bigint,
   submitted: Record<string, unknown> = {},
+  input: TransitionInput = {},
 ): Promise<TransitionContext> {
   const db = tenantScoped(ctx);
   const memberships = await db.groupMember.findMany({
@@ -190,6 +191,7 @@ async function buildContext(
       หมวดคือความหมาย
     */
     children: await countChildren(db, item.id),
+    changeRisk: input.changeRisk,
     fields: {
       ...item.fieldSnapshot,
       // built-in field ที่ validator อ้างถึงได้เหมือน custom field
@@ -242,6 +244,16 @@ export async function availableTransitions(
 export interface TransitionInput {
   /** ผลการแก้ไขที่ผู้ใช้เลือกตอนกดปุ่ม — ใช้ชื่อ ไม่ใช่ id เพราะหน้าจอเห็นแต่ชื่อ */
   resolutionName?: string | null;
+  /**
+   * ผลประเมินความเสี่ยง — **ผู้เรียกเป็นคนประเมินมา**
+   *
+   * โมดูลนี้ประเมินเองไม่ได้ ข้อมูลที่ใช้อยู่ใน `workitem` กับ `cmdb`
+   * ส่วน `workitem` เรียกโมดูลนี้อยู่แล้ว การเรียกกลับจะเป็นวง (ADR-004)
+   *
+   * ไม่ส่งมา = validator `max-change-risk` ปฏิเสธพร้อมบอกว่าผู้เรียกไม่ได้ส่ง
+   * ไม่ใช่ปล่อยผ่านเงียบ ๆ
+   */
+  changeRisk?: { level: RiskLevel; reasons: readonly string[] };
 }
 
 export interface TransitionResult {
@@ -275,6 +287,7 @@ export async function applyTransition(
     item,
     actorId,
     submittedResolution === null ? {} : { resolution: submittedResolution.name },
+    input,
   );
 
   const definition = transitions.find((t) => t.id === transitionId);

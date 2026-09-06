@@ -23,12 +23,26 @@
  * `failed` พร้อมเหตุผล — **มองเห็นได้ ไม่ใช่เงียบ** ซึ่งต่างจากการให้มันข้าม
  * การตรวจสิทธิ์ไปเลย ที่จะทำให้กฎทำสิ่งที่ไม่มีใครมีสิทธิ์ทำ
  */
-import { systemClock, type TenantContext, type UtcDate } from '@itsm/types';
+import { systemClock, type RiskLevel, type TenantContext, type UtcDate } from '@itsm/types';
 
 import { tenantScoped } from '../../infrastructure/prisma/tenant-scope';
 import { notifyGroup } from '../notification';
 import { applyTransition, availableTransitions } from '../workflow';
-import { addComment, assignWorkItem, bulkEditLabels, labelFields } from '../workitem';
+import { addComment, assignWorkItem, bulkEditLabels, labelFields, riskOf } from '../workitem';
+
+/** ประเมินความเสี่ยงให้ transition — เหตุผลที่ผู้เรียกต้องประเมินเองอยู่ใน `workflow.service` */
+async function riskFor(
+  ctx: TenantContext,
+  itemKey: string,
+): Promise<{ level: RiskLevel; reasons: readonly string[] } | undefined> {
+  try {
+    const r = await riskOf(ctx, itemKey);
+    return { level: r.level, reasons: r.reasons.map((x) => x.detail) };
+  } catch {
+    return undefined;
+  }
+}
+
 import {
   plan,
   type AutomationEvent,
@@ -178,7 +192,9 @@ async function execute(
         const names = list.map((t) => t.name).join(', ');
         return `จากสถานะ "${e.item.statusName}" ไม่มีปุ่ม "${a.value}" (มี: ${names === '' ? 'ไม่มีเลย' : names})`;
       }
-      await applyTransition(ctx, item.id, target.id, actorId);
+      await applyTransition(ctx, item.id, target.id, actorId, {
+        changeRisk: await riskFor(ctx, e.item.itemKey),
+      });
       return null;
     }
 

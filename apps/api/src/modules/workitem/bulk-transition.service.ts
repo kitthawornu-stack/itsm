@@ -19,13 +19,34 @@
  * ปุ่ม "ปิดงาน" ของ Incident กับของ Service Request เป็นคนละแถวใน
  * `workflow_transition` · id เดียวใช้ทั้งชุดไม่ได้ตั้งแต่ต้น
  */
-import type { TenantContext } from '@itsm/types';
+import type { RiskLevel, TenantContext } from '@itsm/types';
 
 import { tenantScoped } from '../../infrastructure/prisma/tenant-scope';
 import { assertCan, browsableProjectIds } from '../permission';
 import { indexWorkItem } from '../search-index';
 import { applyTransition, availableTransitions } from '../workflow';
 import { BULK_MAX, BulkTooManyItemsError, NothingSelectedError } from './bulk-edit.service';
+import { riskOf } from './change-risk.service';
+
+/**
+ * ประเมินความเสี่ยงให้ transition — คืน `undefined` เมื่อประเมินไม่ได้
+ *
+ * `workflow` ประเมินเองไม่ได้ (ข้อมูลอยู่คนละโมดูล และการเรียกกลับจะเป็นวง)
+ * ผู้เรียกทุกทางจึงต้องประเมินมาเอง · ทางที่ไม่ส่งจะถูก validator
+ * `max-change-risk` ปฏิเสธพร้อมบอกเหตุ ไม่ใช่ปล่อยผ่านเงียบ ๆ
+ */
+async function riskFor(
+  ctx: TenantContext,
+  itemKey: string,
+): Promise<{ level: RiskLevel; reasons: readonly string[] } | undefined> {
+  try {
+    const r = await riskOf(ctx, itemKey);
+    return { level: r.level, reasons: r.reasons.map((x) => x.detail) };
+  } catch {
+    return undefined;
+  }
+}
+
 
 export interface BulkTransitionInput {
   /** ชื่อปุ่มบนหน้าจอ — ไม่ใช่ id เพราะปุ่มเดียวกันคนละ workflow คนละแถว */
@@ -226,6 +247,7 @@ export async function bulkTransitionWorkItems(
 
       const applied = await applyTransition(ctx, item.id, target.id, actorId, {
         resolutionName,
+        changeRisk: await riskFor(ctx, item.itemKey),
       });
 
       const after = await tenantScoped(ctx).workflowStatus.findUnique({

@@ -88,6 +88,16 @@ const needsChildrenDone: TransitionDefinition = {
   rules: [{ kind: 'VALIDATOR', ruleType: 'children-done', config: {}, position: 1 }],
 };
 
+/** transition ที่ห้ามกดเมื่อความเสี่ยงสูง — ใช้ทดสอบ `max-change-risk` */
+const needsLowRisk: TransitionDefinition = {
+  id: 905n,
+  name: 'เริ่มดำเนินการเปลี่ยนแปลง',
+  fromStatusId: STATUS.new.id,
+  toStatusId: STATUS.investigating.id,
+  position: 4,
+  rules: [{ kind: 'VALIDATOR', ruleType: 'max-change-risk', config: {}, position: 1 }],
+};
+
 const escalate: TransitionDefinition = {
   id: 902n,
   name: 'ยกระดับเป็น Major Incident',
@@ -445,5 +455,55 @@ describe('Workflow Engine · validator `children-done`', () => {
       (บทเรียนเดียวกับกลไกที่ไม่มีอะไรเรียกใช้)
     */
     expect(() => validateTransition(needsChildrenDone, at())).toThrow();
+  });
+});
+
+// ============================================================
+
+describe('validator · ความเสี่ยงของการเปลี่ยนแปลง', () => {
+  const risk = (level: 'LOW' | 'MEDIUM' | 'HIGH', reasons: string[] = []): TransitionContext =>
+    ctx({ currentStatusId: STATUS.new.id, changeRisk: { level, reasons } });
+
+  it('ความเสี่ยงต่ำและปานกลางผ่าน', () => {
+    expect(validateTransition(needsLowRisk, risk('LOW')).toStatusId).toBe(STATUS.investigating.id);
+    expect(validateTransition(needsLowRisk, risk('MEDIUM')).toStatusId).toBe(
+      STATUS.investigating.id,
+    );
+  });
+
+  /**
+   * **บอกเหตุผล ไม่ใช่บอกแค่ว่าเสี่ยงสูง** — คนกดต้องรู้ว่าต้องไปทำอะไร
+   * ข้อความว่า "ความเสี่ยงสูง" เฉย ๆ ส่งคนไปหาหน้าจอที่ไม่มีปุ่มให้แก้
+   */
+  it('**เสี่ยงสูงถูกปฏิเสธ พร้อมเหตุผลที่ทำให้สูง**', () => {
+    try {
+      validateTransition(needsLowRisk, risk('HIGH', ['ยังไม่ได้ผูก CI']));
+      throw new Error('ต้องโยน');
+    } catch (e) {
+      expect(String(e)).toContain('ยังไม่ได้ผูก CI');
+    }
+  });
+
+  it('เสี่ยงสูงแต่ไม่มีเหตุผลมา ยังต้องบอกอะไรสักอย่าง', () => {
+    try {
+      validateTransition(needsLowRisk, risk('HIGH'));
+      throw new Error('ต้องโยน');
+    } catch (e) {
+      expect(String(e)).toContain('ระดับสูง');
+    }
+  });
+
+  /**
+   * กติกาเดียวกับ `children-done` · ผู้เรียกที่ลืมประเมินต้องถูกปฏิเสธ
+   * ไม่ใช่ปล่อยผ่าน — กฎที่เงียบเมื่อข้อมูลขาด คือกฎที่หายไปเองในวันที่
+   * มีคนเพิ่มเส้นทางเรียกใหม่แล้วลืมส่งข้อมูล
+   */
+  it('**ผู้เรียกไม่ได้ส่งความเสี่ยงมา = ปฏิเสธ ไม่ใช่ปล่อยผ่าน**', () => {
+    try {
+      validateTransition(needsLowRisk, ctx({ currentStatusId: STATUS.new.id }));
+      throw new Error('ต้องโยน');
+    } catch (e) {
+      expect(String(e)).toContain('ผู้เรียกไม่ได้ส่งมา');
+    }
   });
 });

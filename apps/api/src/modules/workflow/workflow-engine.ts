@@ -13,6 +13,7 @@
  * โมดูลนี้เป็น pure function ทั้งหมด — ไม่แตะฐานข้อมูล ไม่มี side effect
  * จึงทดสอบเคสขอบได้ครบโดยไม่ต้องตั้ง fixture (ดู workflow-engine.spec.ts)
  */
+import type { RiskLevel } from '@itsm/types';
 
 export type RuleKind = 'CONDITION' | 'VALIDATOR' | 'POST_FUNCTION';
 
@@ -59,6 +60,16 @@ export interface TransitionContext {
    * มิฉะนั้นผู้เรียกที่ลืมนับจะได้ผลว่า "ไม่มีงานย่อย" แล้วปล่อยผ่านเงียบ ๆ
    */
   children?: { total: number; done: number };
+  /**
+   * ผลประเมินความเสี่ยงของการเปลี่ยนแปลงใบนี้
+   *
+   * ส่งเข้ามาจากผู้เรียกเหมือน `approval` และ `children` — เอนจินอ่านเองไม่ได้
+   * เพราะข้อมูลที่ใช้ประเมินอยู่คนละโมดูล และการให้ `workflow` เรียก `workitem`
+   * จะทำให้สองโมดูลพึ่งกันเป็นวง (ADR-004)
+   *
+   * `undefined` = ยังไม่ได้ประเมินมา ต่างจากระดับ `LOW` ที่แปลว่าประเมินแล้ว
+   */
+  changeRisk?: { level: RiskLevel; reasons: readonly string[] };
 }
 
 export interface TransitionOutcome {
@@ -209,6 +220,33 @@ const VALIDATORS: Record<string, ValidatorFn> = {
     return { ok: false, missingFields: [`งานย่อยที่ยังไม่เสร็จ ${String(left)} เรื่อง`] };
   },
 
+  /**
+   * ความเสี่ยงของการเปลี่ยนแปลงต้องไม่สูง
+   *
+   * ระดับความเสี่ยงถูกคำนวณและแสดงบนหน้าจอมานาน **แต่ไม่กั้นอะไรเลย** ·
+   * เอกสารเขียนไว้เองว่า "ระดับที่ดูเหมือนกั้นแต่ไม่กั้น อันตรายกว่าไม่มี
+   * ระดับเลย" เพราะคนอ่านป้ายว่า "เสี่ยงสูง" แล้วเชื่อว่ามีอะไรคอยกันอยู่
+   *
+   * **บอกเหตุผลที่ทำให้เสี่ยงสูง ไม่ใช่บอกแค่ว่าเสี่ยงสูง** — คนกดต้องรู้ว่า
+   * ต้องไปทำอะไร (ผูก CI · กำหนดช่วงเวลา · เลี่ยงเวลาที่ชนกับใบอื่น)
+   *
+   * `undefined` = ผู้เรียกยังไม่ได้ประเมินมา ซึ่ง **ต้องถูกปฏิเสธ ไม่ใช่ปล่อยผ่าน**
+   * กติกาเดียวกับ `children-done` · กฎที่เงียบเมื่อผู้เรียกลืมส่งข้อมูล
+   * คือกฎที่หายไปเองในวันที่มีคนเพิ่มเส้นทางเรียกใหม่
+   */
+  'max-change-risk': (_config, ctx) => {
+    if (ctx.changeRisk === undefined) {
+      return { ok: false, missingFields: ['การประเมินความเสี่ยง (ผู้เรียกไม่ได้ส่งมา)'] };
+    }
+    if (ctx.changeRisk.level !== 'HIGH') return { ok: true };
+    const why = ctx.changeRisk.reasons;
+    return {
+      ok: false,
+      missingFields:
+        why.length === 0 ? ['ความเสี่ยงอยู่ระดับสูง'] : why.map((r) => `ความเสี่ยงสูง: ${r}`),
+    };
+  },
+
   /** ฟิลด์ที่ระบุต้องมีค่าครบทุกตัว — รายงานที่ขาดทั้งหมดในครั้งเดียว */
   'required-fields': (config, ctx) => {
     const required = Array.isArray(config['fields'])
@@ -282,6 +320,13 @@ export const RULE_CATALOG: readonly RuleCatalogEntry[] = [
     ruleType: 'require-approval',
     label: 'ต้องได้รับอนุมัติก่อน',
     hint: 'กดปุ่มนี้ไม่ได้จนกว่าคำขออนุมัติจะผ่าน',
+    needsConfig: 'none',
+  },
+  {
+    kind: 'VALIDATOR',
+    ruleType: 'max-change-risk',
+    label: 'ความเสี่ยงต้องไม่อยู่ระดับสูง',
+    hint: 'ใช้กับปุ่มที่เริ่มลงมือเปลี่ยนแปลงจริง',
     needsConfig: 'none',
   },
   {

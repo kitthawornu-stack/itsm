@@ -17,7 +17,7 @@
  * ปฏิเสธ** — งานจะถูกปิดโดยไม่มีผลการแก้ไข นาฬิกา SLA ไม่หยุด และไม่มี error
  * สักบรรทัด (บทเรียนเดียวกับการเปลี่ยนสถานะเป็นชุด)
  */
-import type { CardField, IssueTypeIconKey, TenantContext } from '@itsm/types';
+import type { CardField, IssueTypeIconKey, RiskLevel, TenantContext } from '@itsm/types';
 import { normalizeIconKey } from '@itsm/types';
 import { between, needsRebalance, distribute, compareRank } from '@itsm/lexorank';
 
@@ -25,6 +25,21 @@ import { auditedTransaction, change } from '../../infrastructure/audit/audited-t
 import { tenantScoped } from '../../infrastructure/prisma/tenant-scope';
 import { assertCan, browsableProjectIds, can } from '../permission';
 import { applyTransition, availableTransitions } from '../workflow';
+import { riskOf } from '../workitem';
+
+/** ประเมินความเสี่ยงให้ transition — เหตุผลที่ผู้เรียกต้องประเมินเองอยู่ใน `workflow.service` */
+async function riskFor(
+  ctx: TenantContext,
+  itemKey: string,
+): Promise<{ level: RiskLevel; reasons: readonly string[] } | undefined> {
+  try {
+    const r = await riskOf(ctx, itemKey);
+    return { level: r.level, reasons: r.reasons.map((x) => x.detail) };
+  } catch {
+    return undefined;
+  }
+}
+
 
 import { cardPrefOf } from './card-pref.service';
 import { quickFilterClause } from './quick-filter.service';
@@ -476,6 +491,7 @@ export async function moveCard(
     }
     const applied = await applyTransition(ctx, item.id, target, actorId, {
       resolutionName: input.resolutionName ?? null,
+      changeRisk: await riskFor(ctx, item.itemKey),
     });
     const to = await db.workflowStatus.findUnique({
       where: { id: applied.toStatusId },
