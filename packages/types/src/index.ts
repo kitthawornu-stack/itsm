@@ -131,3 +131,4 @@ export * from './schedule';
 export * from './csv';
 export * from './permission-rules';
 export * from './issue-type-icon';
+export * from './change-risk';
