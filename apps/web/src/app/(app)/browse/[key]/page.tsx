@@ -31,6 +31,7 @@ import { ProblemImpactPanel } from '@/components/problem-impact-panel';
 import { WorkaroundPanel } from '@/components/workaround-panel';
 import { TimePanel } from '@/components/time-panel';
 import { WatchButton } from '@/components/watch-button';
+import { VoteButton } from '@/components/vote-button';
 import { TransitionButtons } from '@/components/transition-buttons';
 import { API_BASE, apiFetch } from '@/lib/api';
 
@@ -73,6 +74,8 @@ interface Detail {
   /** ผู้ใช้คนนี้เฝ้าดูเรื่องนี้อยู่ไหม */
   watching?: boolean;
   watchers?: Array<{ userId: string; displayName: string }>;
+  /** เสียงสนับสนุน — มากับรายละเอียดเสมอ ปุ่มจึงไม่ต้องยิงคำขอเพิ่มเพื่อรู้สถานะ */
+  vote?: { count: number; voted: boolean; ownItem: boolean };
   linkTypes?: Array<{ value: string; label: string }>;
   history: HistoryRow[];
 }
@@ -199,6 +202,13 @@ export default async function WorkItemDetail({
           itemKey={detail.itemKey}
           watching={detail.watching ?? false}
           count={detail.watchers?.length ?? 0}
+        />
+        <VoteButton
+          apiBase={API}
+          itemKey={detail.itemKey}
+          voted={detail.vote?.voted ?? false}
+          count={detail.vote?.count ?? 0}
+          ownItem={detail.vote?.ownItem ?? false}
         />
         <TransitionButtons
           itemKey={detail.itemKey}

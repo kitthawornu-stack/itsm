@@ -4172,3 +4172,17 @@ tr[data-state='completed'] td {
   color: var(--text-muted);
   overflow-wrap: anywhere;
 }
+
+/* ---------- เสียงสนับสนุน ---------- */
+
+.vote {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  line-height: var(--line-height-body);
+}
+
+.vote-count {
+  color: var(--text-muted);
+  font-size: 12.5px;
+}

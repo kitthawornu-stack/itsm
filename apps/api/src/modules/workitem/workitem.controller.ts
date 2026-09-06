@@ -116,6 +116,13 @@ import {
   watchersOf,
 } from './watcher.service';
 import {
+  CannotVoteOwnItemError,
+  VoteTargetNotFoundError,
+  toggleVote,
+  voteOf,
+  type VoteView,
+} from './vote.service';
+import {
   CrossProjectParentError,
   HierarchyCycleError,
   HierarchyTargetNotFoundError,
@@ -895,6 +902,9 @@ export class WorkItemController {
       // ผู้เฝ้าดู — ให้หน้าจอแสดงปุ่มที่ถูกด้าน และบอกว่ามีใครตามเรื่องนี้อยู่บ้าง
       watching: await isWatching(ctx, item.id),
       watchers: await watchersOf(ctx, item.id),
+      /* ส่งมากับรายละเอียดเสมอ — ปุ่มที่ต้องยิงคำขอเพิ่มเพื่อรู้สถานะตัวเอง
+         จะกะพริบทุกครั้งที่เปิดหน้า */
+      vote: await voteOf(ctx, item.id, ctx.actorId, item.reporterId),
       linkTypes: LINK_TYPES.map((t) => ({ value: t, label: LINK_TYPE_LABEL[t] })),
       createdAt: item.createdAt.toISOString(),
       updatedAt: item.updatedAt.toISOString(),
@@ -1682,6 +1692,30 @@ export class WorkItemController {
     } catch (e) {
       if (e instanceof WatchTargetNotFoundError) {
         throw new HttpException({ message: e.message }, HttpStatus.NOT_FOUND);
+      }
+      throw e;
+    }
+  }
+
+  /**
+   * โหวต / ถอนโหวต
+   *
+   * **ปุ่มเดียวสลับสองสถานะ** และคืนทั้งจำนวนและสถานะของตัวเองเสมอ —
+   * ส่งกลับแค่ "สำเร็จ" แล้วให้หน้าจอบวกเลขเอง จะเพี้ยนทันทีที่มีสองคน
+   * กดพร้อมกัน · `409` เมื่อเป็นเรื่องของตัวเอง เพราะเป็นข้อขัดแย้งกับ
+   * สภาพของข้อมูล ไม่ใช่คำขอที่ผิดรูปแบบ
+   */
+  @Post(':key/vote')
+  @HttpCode(HttpStatus.OK)
+  async setVote(@Ctx() ctx: TenantContext, @Param('key') key: string): Promise<VoteView> {
+    try {
+      return await toggleVote(ctx, key);
+    } catch (e) {
+      if (e instanceof VoteTargetNotFoundError) {
+        throw new HttpException({ message: e.message }, HttpStatus.NOT_FOUND);
+      }
+      if (e instanceof CannotVoteOwnItemError) {
+        throw new HttpException({ message: e.message }, HttpStatus.CONFLICT);
       }
       throw e;
     }
