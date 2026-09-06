@@ -277,6 +277,17 @@ async function main(): Promise<void> {
       */
       { tenantId, schemeId: schemeSw.id, permission: 'MANAGE_PROJECT', groupId: groupDev.id },
       { tenantId, schemeId: schemeSd.id, permission: 'MANAGE_PROJECT', groupId: groupIt.id },
+      /*
+        ลบไฟล์แนบและลบความเห็นของคนอื่น — ให้กลุ่มเดียวกับที่แก้งานได้
+
+        ทั้งสองคีย์บังคับใช้จริงแล้ว แต่ไม่มีกลุ่มไหนถืออยู่เลย · ผลคือหน้าจอ
+        แสดงปุ่มลบให้เจ้าของเท่านั้น และ **ไม่มีใครในองค์กรลบของที่ทิ้งไว้
+        โดยคนที่ลาออกไปแล้วได้** ซึ่งเป็นงานที่ผู้ดูแลต้องทำอยู่จริง
+      */
+      { tenantId, schemeId: schemeSd.id, permission: 'MANAGE_ATTACHMENT', groupId: groupIt.id },
+      { tenantId, schemeId: schemeSd.id, permission: 'DELETE_COMMENT', groupId: groupIt.id },
+      { tenantId, schemeId: schemeSw.id, permission: 'MANAGE_ATTACHMENT', groupId: groupDev.id },
+      { tenantId, schemeId: schemeSw.id, permission: 'DELETE_COMMENT', groupId: groupDev.id },
       { tenantId, schemeId: schemeSw.id, permission: 'LINK_ITEM', groupId: groupDev.id },
       { tenantId, schemeId: schemeSw.id, permission: 'VIEW_REPORT', groupId: groupDev.id },
       { tenantId, schemeId: schemeSw.id, permission: 'VIEW_INTERNAL_COMMENT', groupId: groupDev.id },
