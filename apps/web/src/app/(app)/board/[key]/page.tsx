@@ -4,6 +4,7 @@ import { Alert, PageHeader, TextLink } from '@itsm/ui';
 
 import { BoardView, type BoardColumn, type CardFieldKey } from '@/components/board-view';
 import { CardFieldPicker } from '@/components/card-field-picker';
+import { QuickFilterAdmin } from '@/components/quick-filter-admin';
 import { splitLanes, type LaneMode } from '@/lib/swimlanes';
 import { API_BASE, apiFetch } from '@/lib/api';
 
@@ -226,6 +227,15 @@ export default async function BoardPage({
         current={data.cardFields}
         isDefault={data.cardFieldsIsDefault}
       />
+
+      {/*
+        ปุ่มจัดการอยู่ **นอก** เงื่อนไข `filters.length === 0` โดยตั้งใจ —
+        ถ้าซ่อนตอนยังไม่มีตัวกรอง จะไม่มีทางสร้างอันแรกได้เลย ซึ่งเป็น
+        ทางตันที่มองไม่เห็นจนกว่าจะเจอโปรเจกต์ที่ยังว่าง
+      */}
+      {!data.canManage ? null : (
+        <QuickFilterAdmin apiBase={API_BASE} projectKey={data.projectKey} filters={filters} />
+      )}
 
       {filters.length === 0 ? null : (
         <p className="board-filters">

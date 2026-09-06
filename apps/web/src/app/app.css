@@ -4123,3 +4123,52 @@ tr[data-state='completed'] td {
   word-break: break-word;
   overflow-wrap: anywhere;
 }
+
+/* ---------- จัดการตัวกรองด่วน ---------- */
+
+.qf-admin {
+  margin: 0 0 var(--space-3);
+}
+
+.qf-admin-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+  max-width: 48rem;
+}
+
+.qf-admin-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.qf-admin-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2);
+  /* ภาษาไทยไม่มีช่องว่างระหว่างคำ — ชื่อยาวจะดันแถวล้นถ้าไม่ตัด */
+  overflow-wrap: anywhere;
+  line-height: var(--line-height-body);
+}
+
+.qf-admin-name {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.qf-admin-hql {
+  font-family: var(--font-mono);
+  /* ไฟล์นี้ยังไม่มี token ของขนาดตัวอักษร — ใช้ค่าเดียวกับข้อความรองที่อื่น */
+  font-size: 12.5px;
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
