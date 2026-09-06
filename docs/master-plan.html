@@ -768,7 +768,7 @@ footer .wrap{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;
     <p class="lead prose">ทุกเฟสมี <b>Exit Criteria</b> ที่วัดได้ ไม่ใช่ “เสร็จประมาณ 80%” — ถ้าเฟสไหนไม่ผ่านเกณฑ์ ห้ามเริ่มเฟสถัดไปโดยไม่ตัดสินใจอย่างเป็นทางการว่าจะยืดเวลาหรือตัดขอบเขต</p>
 
     <div class="card tint neutral" style="margin-top:16px">
-      <span class="k">สถานะจริง · ปรับปรุง 4 กันยายน 2569</span>
+      <span class="k">สถานะจริง · ปรับปรุง 6 กันยายน 2569</span>
       <h3 style="margin:4px 0 8px">โค้ดเดินหน้าถึงเฟส 4 · หมุดหมายที่ต้องมีคนใช้จริง ยังไม่ผ่านสักข้อ</h3>
       <p class="prose">นับจากซอร์สจริง ไม่ใช่จากคำประกาศ — <b>22 โมดูล · 36 หน้าจอ · 204 endpoint ·
       2,421 เทสต์ · 164 ไฟล์เทสต์ · 302 commit</b> · ตัวเลขเหล่านี้มีเทสต์ที่สแกนซอร์สมาเทียบ
@@ -818,8 +818,8 @@ footer .wrap{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;
         <ul class="tick"><li><b>Exit Criteria:</b> แอดมินสร้าง Issue Type ใหม่ + workflow 5 สถานะ + ฟิลด์ 3 ตัว ได้จาก UI โดยไม่แตะโค้ด</li><li>ผู้ใช้ 2 บทบาทเห็นปุ่ม transition ต่างกันตาม permission</li><li>ทุก transition ปรากฏใน history ครบถ้วน</li><li>Storybook มีคอมโพเนนต์ครบ 24 ตัวพร้อมสถานะ empty/loading/error</li><li>ทดสอบอัตโนมัติผ่าน ≥ 70% บนโมดูล core</li><li><b>ห้ามข้าม:</b> spike เอนจินทั้ง 4 ตัวต้องมีของจริงให้เห็น ไม่ใช่แค่เอกสาร</li></ul>
       </div>
       <div style="margin-top:12px;padding:10px 12px;border-radius:8px;background:var(--surface-2);border-left:3px solid var(--text-faint)"><b>สถานะจริง · <span class="pill ok">โค้ดครบ</span></b>
-      <p class="prose" style="margin:6px 0 0">โมดูล 22 ตัวมีโค้ดจริงทั้งหมด · Design System <b>26 คอมโพเนนต์ · 92 story</b> (แผนขอ 24) ·
-      เอนจินทั้งสี่มีของจริง: workflow · SLA (102 เคส) · HQL (แปลได้ทั้ง OpenSearch และ Prisma) · LexoRank ·
+      <p class="prose" style="margin:6px 0 0">โมดูล 22 ตัวมีโค้ดจริงทั้งหมด · Design System <b>27 คอมโพเนนต์ · 96 story</b> (แผนขอ 24) ·
+      เอนจินทั้งสี่มีของจริง: workflow · SLA (145 เคส) · HQL (แปลได้ทั้ง OpenSearch และ Prisma) · LexoRank ·
       <b>เกณฑ์ “ทดสอบผ่าน ≥ 70% บนโมดูล core” ผ่านแล้ว และตอนนี้วัดทุกครั้ง</b> —
       วัดครั้งแรกได้ <b>93.9% บรรทัด · 85.88% branch</b> · เกณฑ์เดิม 70/60 ถูกตั้งไว้ในไฟล์ตั้งค่า
       <u>แต่ไม่เคยถูกรัน</u> เพราะสคริปต์ทดสอบไม่ได้ส่ง <code>--coverage</code> —
@@ -854,8 +854,9 @@ footer .wrap{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;
       </div>
       <div style="margin-top:12px;padding:10px 12px;border-radius:8px;background:var(--surface-2);border-left:3px solid var(--text-faint)"><b>สถานะจริง · <span class="pill warn">โค้ดเกือบครบ · ยังไม่ dogfood</span></b>
       <p class="prose" style="margin:6px 0 0">Board ทั้ง Kanban และ Scrum · Backlog + วางแผน Sprint · Version/Release · HQL + Saved Filter ·
-      เลนตามผู้รับผิดชอบและความสำคัญ · เพดาน WIP · ตัวกรองด่วน · เลือกฟิลด์บนการ์ดได้ ·
-      <b>ยังขาด:</b> เลนตาม Epic · Roadmap แบบ Gantt ยังไม่ครบ ·
+      เลนตามผู้รับผิดชอบ ความสำคัญ และ Epic · เพดาน WIP · ตัวกรองด่วน · เลือกฟิลด์บนการ์ดได้ ·
+      <b>ตัวกรองด่วนสร้างและลบจากบนกระดานได้</b> · เก็บรุ่นเข้าคลังได้ ·
+      <b>ยังขาด:</b> Roadmap แบบ Gantt ยังไม่ครบ ·
       <b>เกณฑ์ “Board 500 การ์ด &lt; 800 ms” ผ่านแล้ว</b> — วัดบน production build จริง (ไม่ใช่ dev server
       ซึ่งคอมไพล์ตอนเรียกและให้ตัวเลขที่ไม่ตอบคำถาม) ด้วยการ์ด 500 ใบจากข้อมูลจริง 5 รอบ:
       <b>รวมทั้งการนำทาง 175 ms</b> (แย่สุด 292) · เซิร์ฟเวอร์ตอบ 125 ms · ส่วนเรนเดอร์เอง 46 ms ·
@@ -890,7 +891,7 @@ footer .wrap{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;
       </div>
       <div style="margin-top:12px;padding:10px 12px;border-radius:8px;background:var(--surface-2);border-left:3px solid var(--text-faint)"><b>สถานะจริง · <span class="pill warn">เกือบครบ · เหลือช่องทางแจ้งเตือน</span></b>
       <p class="prose" style="margin:6px 0 0">Dashboard + Gadget · รายงานสรุป · <b>Report Builder แบบ pivot</b> ·
-      <b>Scheduled export (CSV) ส่งได้จริงถึงกล่องอีเมล</b> · Automation Rule Builder · REST API v1 + OpenAPI 202 เส้นทาง + Webhook ·
+      <b>Scheduled export (CSV) ส่งได้จริงถึงกล่องอีเมล</b> · Automation Rule Builder · REST API v1 + OpenAPI 204 เส้นทาง + Webhook ·
       <b>ยังขาด:</b> LINE Messaging API (ติดที่ channel access token) · Email-to-Ticket (ติดที่กล่องจดหมาย IMAP) ·
       Scheduled export ยังเป็น CSV อย่างเดียว ยังไม่มี PDF/XLSX ·
       <b>Exit Criteria “API ผ่านการทดสอบจาก integration จริง 3 ระบบ” ยังไม่ผ่าน</b> — ยังไม่มีระบบภายนอกสักตัวที่ต่อเข้ามาจริง</p></div>
