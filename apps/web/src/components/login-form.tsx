@@ -48,9 +48,18 @@ export function LoginForm({ apiBase, next }: { apiBase: string; next: string }):
         void submit();
       }}
     >
+      {/*
+        `type="email"` ไม่ได้มีไว้ให้เบราว์เซอร์ตรวจรูปแบบ (เซิร์ฟเวอร์ตรวจอยู่แล้ว)
+        แต่มีไว้ให้ **คีย์บอร์ดบนมือถือขึ้นแป้นที่มี @** และให้ตัวจัดการรหัสผ่าน
+        รู้ว่าช่องนี้คือชื่อผู้ใช้ · `autoComplete="username"` ต้องคู่กับ
+        `current-password` ข้างล่าง มิฉะนั้นเบราว์เซอร์จะไม่เสนอให้บันทึกทั้งคู่
+        และคนที่ใช้ตัวจัดการรหัสผ่านจะต้องพิมพ์เองทุกครั้ง
+      */}
       <Field label="อีเมล" htmlFor="lg-email" required>
         <Input
           id="lg-email"
+          type="email"
+          autoComplete="username"
           value={email}
           onChange={setEmail}
           placeholder="ชื่อ@บริษัท.co.th"

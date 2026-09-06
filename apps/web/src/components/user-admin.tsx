@@ -215,6 +215,7 @@ export function UserAdmin({ apiBase }: { apiBase: string }): ReactNode {
               <Field label="อีเมล" htmlFor="ad-email" required>
                 <Input
                   id="ad-email"
+                  type="email"
                   value={email}
                   onChange={setEmail}
                   placeholder="ชื่อ@บริษัท.co.th"
