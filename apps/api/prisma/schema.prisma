@@ -100,6 +100,7 @@ model User {
   comments                WorkItemComment[]
   attachments             WorkItemAttachment[]
   watching                WorkItemWatcher[]
+  votes                   WorkItemVote[]
   historyEntries          WorkItemHistory[]
   auditLogs               AuditLog[]
   sessions                Session[]
@@ -677,6 +678,7 @@ model WorkItem {
   comments       WorkItemComment[]
   attachments    WorkItemAttachment[]
   watchers       WorkItemWatcher[]
+  votes          WorkItemVote[]
   history        WorkItemHistory[]
   keyAliases     WorkItemKeyAlias[]
   linksOut       WorkItemLink[]       @relation("LinkSource")
@@ -839,6 +841,25 @@ model WorkItemWatcher {
   @@id([workItemId, userId])
   @@index([tenantId, userId])
   @@map("work_item_watcher")
+}
+
+/// โหวตสนับสนุนเรื่อง — หนึ่งคนหนึ่งเสียงต่อหนึ่งเรื่อง
+///
+/// `@@id([workItemId, userId])` เป็นด่านสุดท้ายที่กันเสียงซ้ำ ไม่ใช่การเช็ก
+/// ในโค้ด · ทั้งสอง relation มี `onDelete: Cascade` เพราะเสียงของคนที่ถูกลบ
+/// ไม่ควรค้างเป็นแถวกำพร้าที่ยังนับอยู่ (ดูบทเรียนตาราง notification ใน §8)
+model WorkItemVote {
+  workItemId BigInt   @map("work_item_id")
+  userId     BigInt   @map("user_id")
+  tenantId   BigInt   @map("tenant_id")
+  votedAt    DateTime @default(now()) @map("voted_at") @db.DateTime(3)
+
+  workItem WorkItem @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([workItemId, userId])
+  @@index([tenantId, userId])
+  @@map("work_item_vote")
 }
 
 // append-only — เขียนในทรานแซกชันเดียวกับการแก้ข้อมูล (CLAUDE.md §1 invariant 2)

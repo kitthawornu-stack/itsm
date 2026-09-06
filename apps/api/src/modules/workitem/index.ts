@@ -12,6 +12,7 @@ export * from './edit.service';
 export * from './bulk-edit.service';
 export * from './bulk-transition.service';
 export * from './watcher.service';
+export * from './vote.service';
 export * from './comment-edit.service';
 export * from './satisfaction.service';
 export * from './mention';
