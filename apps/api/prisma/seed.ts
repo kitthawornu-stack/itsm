@@ -118,6 +118,17 @@ async function main(): Promise<void> {
     const t = existing.id;
     await prisma.workItemHistory.deleteMany({ where: { tenantId: t } });
     await prisma.workItem.deleteMany({ where: { tenantId: t } });
+    /*
+      บทความอ้างผู้เขียนด้วย `onDelete: Restrict` — ปล่อยให้ cascade ของ tenant
+      ไล่ลบ `user` จะชนกับมันแล้วได้ P2003 เหมือนกับดัก workflow_scheme ข้างบน
+      · CI กับเส้นพึ่งพาไม่ต้องลบเอง (cascade จาก tenant ตรง ๆ) แต่เขียนไว้
+      ให้ครบเพื่อไม่ต้องเดาว่าอะไรถูก cascade อะไรไม่ถูก
+    */
+    await prisma.workItemArticle.deleteMany({ where: { tenantId: t } });
+    await prisma.knowledgeArticle.deleteMany({ where: { tenantId: t } });
+    await prisma.workItemCi.deleteMany({ where: { tenantId: t } });
+    await prisma.ciDependency.deleteMany({ where: { tenantId: t } });
+    await prisma.configurationItem.deleteMany({ where: { tenantId: t } });
     await prisma.workflowScheme.deleteMany({ where: { tenantId: t } });
     await prisma.fieldConfig.deleteMany({ where: { tenantId: t } });
     await prisma.transitionRule.deleteMany({ where: { tenantId: t } });
@@ -553,6 +564,15 @@ async function main(): Promise<void> {
   // ---------- Work items · 10,000 ใบ ----------
   const TOTAL = 10_000;
   const SD_COUNT = 7_000; // service desk มีปริมาณมากกว่าตามความเป็นจริง
+  /*
+    rank ของงานตัวอย่าง ITIL — **ต้องเป็นรูปแบบ LexoRank จริง** `<bucket>|<base36>`
+
+    เดิมเขียนเป็น `zzz7001` ซึ่งไม่ผ่านตัวตรวจ แล้วทุกโค้ดที่ต้องแทรกการ์ด
+    ต่อจากใบสุดท้ายจะโยน error ทันทีที่มันเป็นเพื่อนบ้าน · ไม่มีใครเห็นมานาน
+    เพราะต้องมีคนสร้างงานใหม่ใน SD ต่อท้ายจริง ๆ ถึงจะเจอ
+    · `zz` เป็นค่ามากใน base36 จึงยังเรียงต่อท้ายงานอื่นเหมือนเดิม
+  */
+  const itilRank = (seq: number): string => `0|zz${seq.toString(36).padStart(4, '0')}`;
   const ranksSd = distribute(SD_COUNT);
   const ranksPlat = distribute(TOTAL - SD_COUNT);
 
@@ -671,7 +691,7 @@ async function main(): Promise<void> {
       resolutionId: st.category === StatusCategory.DONE ? resolutions[0]!.id : null,
       reporterId: pick(agents).id,
       assigneeId: pick(agents).id,
-      rank: `zzz${String(itilSeq)}`,
+      rank: itilRank(itilSeq),
       createdAt: created,
       updatedAt: created,
       resolvedAt: st.category === StatusCategory.DONE ? created : null,
@@ -692,7 +712,7 @@ async function main(): Promise<void> {
       resolutionId: st.category === StatusCategory.DONE ? resolutions[0]!.id : null,
       reporterId: pick(agents).id,
       assigneeId: pick(agents).id,
-      rank: `zzz${String(itilSeq)}`,
+      rank: itilRank(itilSeq),
       createdAt: created,
       updatedAt: created,
       resolvedAt: st.category === StatusCategory.DONE ? created : null,
@@ -723,6 +743,118 @@ async function main(): Promise<void> {
       sourceId: firstProblem.id,
       targetId: v.id,
       type: LinkType.CAUSES,
+    })),
+  });
+
+  /*
+    ---------- CMDB และคลังความรู้ ----------
+
+    ทั้งสองตารางเคยว่างเปล่าบนทุกเครื่อง เพราะ `seed.ts` ไม่เคยสร้างมัน ·
+    ฟีเจอร์ที่เช็กลิสต์กาว่าเสร็จ (ทะเบียน CI · เส้นพึ่งพา · แผงผลกระทบ ·
+    คลังความรู้ที่ผูกกับตั๋ว) จึงเปิดหน้าจอแล้วว่างเปล่าเสมอ และไม่มีใคร
+    เคยเห็นมันทำงาน — เป็นคนละเรื่องกับ "ยังไม่ได้เขียน" แต่ให้อาการเหมือนกัน
+
+    **โครงพึ่งพาต้องลึกพอที่ผลกระทบจะไม่เป็นศูนย์** · เส้นชั้นเดียวทำให้
+    แผงผลกระทบแสดงว่า "ไม่กระทบอะไร" ทุกใบ ซึ่งอ่านเหมือนฟีเจอร์พัง ·
+    ที่นี่จึงเป็นสามชั้น: เครือข่าย → เซิร์ฟเวอร์/ฐานข้อมูล → แอป → บริการ
+  */
+  const ciSpec = [
+    { key: 'NET-CORE-01', name: 'สวิตช์แกนหลัก ชั้น 3', kind: 'NETWORK', owner: groupIt.id },
+    { key: 'SRV-APP-01', name: 'เซิร์ฟเวอร์แอปพลิเคชัน 01', kind: 'SERVER', owner: groupDev.id },
+    { key: 'SRV-FILE-01', name: 'ไฟล์เซิร์ฟเวอร์ส่วนกลาง', kind: 'SERVER', owner: groupIt.id },
+    { key: 'DB-PROD-01', name: 'ฐานข้อมูลหลัก (production)', kind: 'DATABASE', owner: groupDev.id },
+    { key: 'APP-SAP', name: 'ระบบบัญชี SAP', kind: 'APPLICATION', owner: groupDev.id },
+    { key: 'APP-HELIX', name: 'ระบบแจ้งปัญหา Helix', kind: 'APPLICATION', owner: groupDev.id },
+    { key: 'APP-MAIL', name: 'ระบบอีเมลบริษัท', kind: 'APPLICATION', owner: groupIt.id },
+    { key: 'SVC-DESK', name: 'บริการศูนย์ช่วยเหลือไอที', kind: 'SERVICE', owner: groupIt.id },
+    { key: 'SVC-FINANCE', name: 'บริการงานบัญชีและการเงิน', kind: 'SERVICE', owner: groupIt.id },
+    { key: 'PRN-3F-01', name: 'เครื่องพิมพ์ชั้น 3 ฝั่งบัญชี', kind: 'OTHER', owner: groupIt.id },
+  ] as const;
+  await prisma.configurationItem.createMany({
+    data: ciSpec.map((c) => ({
+      tenantId,
+      key: c.key,
+      name: c.name,
+      kind: c.kind as never,
+      ownerGroupId: c.owner,
+    })),
+  });
+  const ciRows = await prisma.configurationItem.findMany({
+    where: { tenantId },
+    select: { id: true, key: true },
+  });
+  const ci = (key: string): bigint => ciRows.find((r) => r.key === key)!.id;
+
+  /* `dependent` พึ่งพา `dependsOn` — อ่านว่า "แถวซ้ายล้มเมื่อแถวขวาล้ม" */
+  await prisma.ciDependency.createMany({
+    data: (
+      [
+        ['SRV-APP-01', 'NET-CORE-01'],
+        ['SRV-FILE-01', 'NET-CORE-01'],
+        ['DB-PROD-01', 'SRV-APP-01'],
+        ['APP-SAP', 'DB-PROD-01'],
+        ['APP-HELIX', 'DB-PROD-01'],
+        ['APP-MAIL', 'SRV-APP-01'],
+        ['SVC-DESK', 'APP-HELIX'],
+        ['SVC-DESK', 'APP-MAIL'],
+        ['SVC-FINANCE', 'APP-SAP'],
+        ['SVC-FINANCE', 'SRV-FILE-01'],
+        ['PRN-3F-01', 'NET-CORE-01'],
+      ] as const
+    ).map(([dep, on]) => ({ tenantId, dependentId: ci(dep), dependsOnId: ci(on) })),
+  });
+
+  /*
+    ผูก CI เข้ากับเรื่องที่มีอยู่ — แผงผลกระทบต้องมีของจริงให้แสดง
+    เลือกจากเรื่องที่ยังเปิดอยู่ เพื่อให้ตัวเลข "ยังค้างอยู่" ไม่เป็นศูนย์
+  */
+  const ciTargets = await prisma.workItem.findMany({
+    where: { tenantId, projectId: projectSd.id, resolvedAt: null },
+    select: { id: true },
+    orderBy: { id: 'asc' },
+    take: 6,
+  });
+  await prisma.workItemCi.createMany({
+    data: ciTargets.map((w, i) => ({
+      tenantId,
+      workItemId: w.id,
+      ciId: ci(['APP-SAP', 'DB-PROD-01', 'APP-MAIL', 'PRN-3F-01', 'SRV-FILE-01', 'APP-HELIX'][i]!),
+    })),
+  });
+
+  /*
+    บทความ — สองสถานะจริง: เผยแพร่แล้ว (ผู้แจ้งเห็นได้) กับยังไม่เผยแพร่
+    (เห็นเฉพาะทีม) · ถ้ามีแต่ที่เผยแพร่แล้ว ความต่างนั้นไม่มีใครเห็นเลย
+  */
+  const now = new Date(NOW);
+  const articleSpec = [
+    ['วิธีรีเซ็ตรหัสผ่านเข้าระบบด้วยตัวเอง', 'เข้าหน้าเข้าสู่ระบบ กดลืมรหัสผ่าน กรอกอีเมลบริษัท แล้วทำตามลิงก์ที่ส่งไปในกล่องจดหมาย ลิงก์มีอายุ 30 นาที', true],
+    ['เครื่องพิมพ์ไม่ตอบสนอง ตรวจอะไรก่อนแจ้ง', 'ตรวจไฟหน้าเครื่อง สายแลน และคิวงานค้างในเครื่องคอมพิวเตอร์ ถ้าคิวค้างให้ล้างคิวแล้วสั่งพิมพ์ใหม่หนึ่งครั้ง', true],
+    ['ขอสิทธิ์เข้าใช้ระบบบัญชี SAP', 'ต้องมีหัวหน้าฝ่ายอนุมัติก่อน แจ้งผ่านแคตตาล็อกบริการหัวข้อขอสิทธิ์ แล้วแนบเหตุผลที่ต้องใช้', true],
+    ['ขั้นตอนกู้คืนฐานข้อมูลหลัก (ร่าง)', 'ยังไม่ผ่านการซ้อมจริง ห้ามใช้กับ production จนกว่าจะทดสอบบนฐานชั่วคราวครบสามรอบ', false],
+  ] as const;
+  await prisma.knowledgeArticle.createMany({
+    data: articleSpec.map(([title, text, published], i) => ({
+      tenantId,
+      title,
+      body: { text },
+      authorId: agents[i % agents.length]!.id,
+      isPublished: published,
+      publishedAt: published ? now : null,
+    })),
+  });
+  const articles = await prisma.knowledgeArticle.findMany({
+    where: { tenantId },
+    select: { id: true, title: true },
+    orderBy: { id: 'asc' },
+  });
+  /* ผูกบทความกับเรื่องที่เปิดอยู่ — คลังความรู้ที่ไม่เคยถูกแนบ อ่านเหมือนไม่มีใครใช้ */
+  await prisma.workItemArticle.createMany({
+    data: ciTargets.slice(0, 3).map((w, i) => ({
+      tenantId,
+      workItemId: w.id,
+      articleId: articles[i]!.id,
+      addedById: agents[0]!.id,
     })),
   });
 
