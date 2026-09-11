@@ -11,13 +11,17 @@
  *
  * ถ้าแดง: รัน `pnpm --filter @itsm/api seed`
  *
- * **ยังไม่ครอบ**: `change_window` · `automation_rule` · `dashboard`
- * ซึ่งยังไม่มีข้อมูลตัวอย่าง — เขียนไว้ตรงนี้เพราะด่านที่ไม่บอกขอบเขต
+ * **ยังไม่ครอบ**: ฐานข้อมูลที่เพิ่ง seed ยังมี **38 ตารางที่ว่างทั้งใบ**
+ * (นับจาก `information_schema` เมื่อ 2569-09-11) · ด่านนี้ครอบแค่ไม่กี่ใบ
+ * ที่เติมไปแล้ว — เช่น `change_window` · `automation_rule` · `dashboard`
+ * ยังไม่มีข้อมูลตัวอย่างเลย · เขียนไว้ตรงนี้เพราะด่านที่ไม่บอกขอบเขต
  * ของตัวเอง ทำให้คนเชื่อว่ามันครอบหมด
  */
-import { afterAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import type { TenantContext } from '@itsm/types';
 
 import { prismaClient as prisma } from '../src/infrastructure/prisma/client';
+import { listComments } from '../src/modules/workitem/comment.service';
 
 afterAll(async () => {
   await prisma.$disconnect();
@@ -121,5 +125,136 @@ describe('ข้อมูลตัวอย่างของรอบการ�
       where: { version: { releasedAt: null }, workItem: { resolvedAt: null } },
     });
     expect(pending).toBeGreaterThan(0);
+  });
+});
+
+/**
+ * บันทึกภายในของ **ข้อมูลตั้งต้น** ต้องไม่ถึงผู้แจ้ง
+ *
+ * `workitem-comment.spec.ts` พิสูจน์ตรรกะด้วยความเห็นที่มันสร้างเอง —
+ * ซึ่งพิสูจน์ได้ว่า *ถ้า* มีบันทึกภายในแบบนั้น การกรองจะถูก · ไฟล์นี้ถามอีกคำถาม:
+ * **ข้อมูลตั้งต้นมีบันทึกภายในให้ด่านนั้นจับจริงหรือยัง**
+ *
+ * ก่อนหน้านี้คำตอบคือไม่มีเลยสักข้อ จาก 10,010 ใบ · ทั้งคนที่มีสิทธิ์และ
+ * ไม่มีสิทธิ์จึงได้รายการว่างเหมือนกัน และ **เซ็ตว่างเท่ากับเซ็ตว่าง** —
+ * กับดักเดียวกับ `GET /config-items` ที่ดูเหมือนมีด่านเพราะตารางว่าง
+ *
+ * เทสต์นี้ **อ่านอย่างเดียว** จากข้อมูลตั้งต้น และสร้างผู้ใช้/กลุ่มของตัวเอง
+ * แล้วลบทิ้ง — ไม่แตะความเห็นของ seed สักแถว
+ */
+describe('บันทึกภายในในข้อมูลตั้งต้น', () => {
+  const STAMP = String(Date.now()).slice(-6);
+  let reporter: TenantContext;
+  let staff: TenantContext;
+  let itemKey: string;
+  let tenantId: bigint;
+  const madeUsers: bigint[] = [];
+  const madeGroups: bigint[] = [];
+  const madeGrants: bigint[] = [];
+
+  beforeAll(async () => {
+    tenantId = (await prisma.tenant.findFirstOrThrow({ where: { key: 'default' } })).id;
+    /* เรื่องที่ *มีบันทึกภายในอยู่จริง* — ถ้าหาไม่เจอ เคสข้างล่างต้องแดง ไม่ใช่ข้าม */
+    const withNote = await prisma.workItemComment.findFirstOrThrow({
+      where: { isInternal: true, deletedAt: null },
+      select: { workItem: { select: { itemKey: true, projectId: true } } },
+      orderBy: { id: 'asc' },
+    });
+    itemKey = withNote.workItem.itemKey;
+    const project = await prisma.project.findFirstOrThrow({
+      where: { id: withNote.workItem.projectId },
+      select: { permissionSchemeId: true },
+    });
+    const schemeId = project.permissionSchemeId;
+    if (schemeId === null) throw new Error('โปรเจกต์ของเรื่องนี้ไม่มี permission scheme');
+
+    const mk = async (role: string, perms: string[]): Promise<TenantContext> => {
+      const group = await prisma.userGroup.create({
+        data: { tenantId, name: `note-${role}-${STAMP}` },
+        select: { id: true },
+      });
+      madeGroups.push(group.id);
+      const user = await prisma.user.create({
+        data: {
+          tenantId,
+          email: `note-${role}-${STAMP}@example.test`,
+          displayName: `ผู้ทดสอบ ${role} ${STAMP}`,
+        },
+        select: { id: true },
+      });
+      madeUsers.push(user.id);
+      await prisma.groupMember.create({ data: { tenantId, groupId: group.id, userId: user.id } });
+      for (const permission of perms) {
+        const g = await prisma.permissionGrant.create({
+          data: { tenantId, schemeId, permission: permission as never, groupId: group.id },
+          select: { id: true },
+        });
+        madeGrants.push(g.id);
+      }
+      return { tenantId, actorId: user.id };
+    };
+    /** ผู้แจ้ง — เปิดดูโปรเจกต์ได้ แต่ไม่มีสิทธิ์เห็นบันทึกภายใน */
+    reporter = await mk('reporter', ['BROWSE_PROJECT']);
+    staff = await mk('staff', ['BROWSE_PROJECT', 'VIEW_INTERNAL_COMMENT']);
+  }, 120_000);
+
+  afterAll(async () => {
+    await prisma.permissionGrant.deleteMany({ where: { id: { in: madeGrants } } });
+    await prisma.groupMember.deleteMany({ where: { userId: { in: madeUsers } } });
+    await prisma.auditLog.deleteMany({ where: { actorId: { in: madeUsers } } });
+    await prisma.user.deleteMany({ where: { id: { in: madeUsers } } });
+    await prisma.userGroup.deleteMany({ where: { id: { in: madeGroups } } });
+    const left = await prisma.user.count({ where: { id: { in: madeUsers } } });
+    expect(left, 'เหลือผู้ใช้ของเทสต์ค้างอยู่').toBe(0);
+  });
+
+  it('**ข้อมูลตั้งต้นมีบันทึกภายในให้ด่านจับจริง**', async () => {
+    expect(
+      await prisma.workItemComment.count({ where: { isInternal: true, deletedAt: null } }),
+    ).toBeGreaterThan(50);
+  });
+
+  /** ถ้าคนที่มีสิทธิ์ก็ไม่เห็น แปลว่าเคสข้างล่างผ่านเพราะรายการว่าง ไม่ใช่เพราะด่าน */
+  it('คนที่มีสิทธิ์เห็นบันทึกภายในของเรื่องนี้', async () => {
+    const rows = await listComments(staff, itemKey);
+    expect(rows.some((r) => r.isInternal)).toBe(true);
+  });
+
+  /**
+   * **หัวใจของไฟล์นี้** — ผู้แจ้งต้องไม่ได้รับบันทึกภายในสักข้อ
+   *
+   * ตรวจสองชั้น: ไม่มีแถวที่ `isInternal` และ **ไม่มีข้อความของบันทึกภายใน
+   * ปนอยู่ในเนื้อความที่ส่งออกไป** · ชั้นหลังจับกรณีที่ธงถูกล้างแต่ข้อความ
+   * ยังหลุด ซึ่งเป็นความล้มเหลวที่ธงอย่างเดียวมองไม่เห็น
+   */
+  it('**ผู้แจ้งไม่เห็นบันทึกภายในสักข้อ**', async () => {
+    const notes = await prisma.workItemComment.findMany({
+      where: { isInternal: true, deletedAt: null },
+      select: { body: true },
+      take: 200,
+    });
+    const secret = new Set(
+      notes
+        .map((n) => (n.body as { text?: unknown }).text)
+        .filter((t): t is string => typeof t === 'string'),
+    );
+    expect(secret.size, 'อ่านข้อความของบันทึกภายในไม่ได้ — ตัวตรวจพัง').toBeGreaterThan(0);
+
+    const rows = await listComments(reporter, itemKey);
+    expect(rows.length, 'ผู้แจ้งต้องยังเห็นความเห็นสาธารณะ').toBeGreaterThan(0);
+    expect(rows.filter((r) => r.isInternal)).toEqual([]);
+    const leaked = rows.filter((r) => secret.has(r.body));
+    expect(leaked, `ข้อความของบันทึกภายในหลุดถึงผู้แจ้ง: ${JSON.stringify(leaked)}`).toEqual([]);
+  });
+
+  /** ความเห็นที่ถูกลบแบบ soft ต้องไม่กลับมาในรายการของใครเลย */
+  it('ความเห็นที่ถูกลบแล้ว ไม่กลับมาในรายการของคนที่มีสิทธิ์', async () => {
+    const deleted = await prisma.workItemComment.findFirstOrThrow({
+      where: { deletedAt: { not: null } },
+      select: { body: true, workItem: { select: { itemKey: true } } },
+    });
+    const text = (deleted.body as { text?: unknown }).text;
+    const rows = await listComments(staff, deleted.workItem.itemKey);
+    expect(rows.map((r) => r.body)).not.toContain(text);
   });
 });

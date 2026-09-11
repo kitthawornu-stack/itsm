@@ -117,6 +117,7 @@ async function main(): Promise<void> {
   if (existing !== null) {
     const t = existing.id;
     await prisma.workItemHistory.deleteMany({ where: { tenantId: t } });
+    await prisma.workItemComment.deleteMany({ where: { tenantId: t } });
     /*
       **ตาราง SLA ไม่มี foreign key ของ `tenant_id` สักตัว** — `tenant.delete`
       จึงไม่กวาดมันไปด้วย · ผลที่วัดได้จริงคือ seed ทุกรอบทิ้งปฏิทินของ
@@ -880,6 +881,102 @@ async function main(): Promise<void> {
       addedById: agents[0]!.id,
     })),
   });
+
+  /*
+    ---------- ความเห็นบนเรื่อง ----------
+
+    10,010 ใบ **ไม่มีความเห็นสักข้อ** · แผงกิจกรรมบนหน้ารายละเอียดจึงว่างเปล่า
+    ทุกใบ และที่สำคัญกว่านั้นคือ **ด่านของบันทึกภายในไม่เคยมีอะไรให้จับเลย**
+    — `listComments` กรอง `isInternal` ตามสิทธิ์จริง แต่เมื่อตารางว่าง
+    ทั้งคนที่มีสิทธิ์และไม่มีสิทธิ์ได้รายการว่างเหมือนกัน · เซ็ตว่างเท่ากับ
+    เซ็ตว่าง เป็นกับดักเดียวกับ `GET /config-items`
+
+    **ข้อความของบันทึกภายในเลือกให้รั่วแล้วเห็นทันที** — ถ้าวันหนึ่งมันโผล่
+    ในคำตอบของผู้แจ้ง จะไม่มีใครเถียงได้ว่า "อาจจะตั้งใจ" · ประโยคพวกนี้
+    มาจากเหตุการณ์จริงที่เคยเกิดขึ้นแล้วครั้งหนึ่ง (CLAUDE.md §8)
+
+    ไม่ใช้ตัวสุ่มหลัก — เลือกจากลำดับของแถวล้วน ๆ ข้อมูลทุกแถวข้างบนจึงยัง
+    เล่นซ้ำได้ค่าเดิมเป๊ะ ซึ่งเป็นทางเดียวที่ใช้กู้ค่าที่ถูกแก้ผิดกลับมาได้
+  */
+  const PUBLIC_REPLIES = [
+    'รับเรื่องแล้วครับ กำลังตรวจสอบให้ จะอัปเดตภายในวันนี้',
+    'รบกวนแจ้งหมายเลขเครื่องที่ติดปัญหาด้วยครับ จะได้เข้าไปดูถูกเครื่อง',
+    'แก้ไขเรียบร้อยแล้วครับ รบกวนลองใช้งานอีกครั้งแล้วแจ้งกลับด้วย',
+    'ขออภัยที่ล่าช้า ตอนนี้รอชิ้นส่วนจากผู้จำหน่าย คาดว่าได้ภายในสัปดาห์หน้า',
+  ] as const;
+  const REPORTER_REPLIES = [
+    'ลองแล้วยังเป็นเหมือนเดิมครับ',
+    'ใช้ได้แล้วครับ ขอบคุณมาก',
+    'ขอสอบถามความคืบหน้าหน่อยครับ เรื่องนี้แจ้งไว้หลายวันแล้ว',
+  ] as const;
+  /** บันทึกภายใน — ผู้แจ้งต้องไม่เห็นข้อความเหล่านี้เด็ดขาด */
+  const INTERNAL_NOTES = [
+    'อย่าเพิ่งบอกลูกค้าว่าเป็นที่เซิร์ฟเวอร์ รอยืนยันจากทีมโครงสร้างพื้นฐานก่อน',
+    'ลูกค้ารายนี้ค้างชำระอยู่ ถ้าจะเปลี่ยนอุปกรณ์ให้ถามฝ่ายบัญชีก่อน',
+    'เคสนี้เกิดจากที่เราตั้งค่าผิดเองเมื่อสัปดาห์ก่อน ไม่ต้องระบุในรายงาน',
+  ] as const;
+
+  const commentTargets = await prisma.workItem.findMany({
+    where: { tenantId, projectId: projectSd.id },
+    select: { id: true, reporterId: true, resolvedAt: true },
+    orderBy: { id: 'asc' },
+  });
+  const commentRows: Prisma.WorkItemCommentCreateManyInput[] = [];
+  /** ทุกใบที่ 15 — ราว 460 ใบจาก 7,000 · มากพอให้เห็นบนหน้าจอ ไม่มากจนอ่านไม่ออก */
+  for (let i = 0; i < commentTargets.length; i += 15) {
+    const item = commentTargets[i]!;
+    const n = i / 15;
+    const at = (hours: number): Date => new Date(NOW - (30 - (n % 25)) * DAY + hours * 3_600_000);
+
+    commentRows.push({
+      tenantId,
+      workItemId: item.id,
+      authorId: agents[n % agents.length]!.id,
+      body: { text: PUBLIC_REPLIES[n % PUBLIC_REPLIES.length]! },
+      isInternal: false,
+      createdAt: at(1),
+    });
+
+    /* หนึ่งในสามใบมีบันทึกภายในตามหลัง — เป็นจังหวะจริงของงานบริการ */
+    if (n % 3 === 0) {
+      commentRows.push({
+        tenantId,
+        workItemId: item.id,
+        authorId: agents[(n + 1) % agents.length]!.id,
+        body: { text: INTERNAL_NOTES[n % INTERNAL_NOTES.length]! },
+        isInternal: true,
+        createdAt: at(2),
+      });
+    }
+
+    /* ผู้แจ้งตอบกลับ — บทสนทนาที่มีข้างเดียวอ่านไม่เหมือนของจริง */
+    if (n % 2 === 0) {
+      commentRows.push({
+        tenantId,
+        workItemId: item.id,
+        authorId: item.reporterId,
+        body: { text: REPORTER_REPLIES[n % REPORTER_REPLIES.length]! },
+        isInternal: false,
+        createdAt: at(5),
+        /* ใบที่ 10 มีการแก้ไข — `editedAt` แยกจาก `updatedAt` ด้วยเหตุผลในสคีมา */
+        editedAt: n % 10 === 0 ? at(6) : null,
+      });
+    }
+
+    /* ใบที่ 20 มีความเห็นที่ถูกลบแบบ soft — ทางที่ audit ต้องยังตอบได้ว่าเคยมี */
+    if (n % 20 === 0) {
+      commentRows.push({
+        tenantId,
+        workItemId: item.id,
+        authorId: agents[n % agents.length]!.id,
+        body: { text: 'พิมพ์ผิดเคสครับ ขออภัย' },
+        isInternal: false,
+        createdAt: at(7),
+        deletedAt: at(8),
+      });
+    }
+  }
+  await prisma.workItemComment.createMany({ data: commentRows });
 
   /*
     ---------- Sprint และรุ่นของโปรเจกต์ ----------
