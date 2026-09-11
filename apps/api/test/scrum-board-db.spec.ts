@@ -12,6 +12,19 @@
  *   2. **ไม่มีรอบที่กำลังทำ แล้วได้กระดานเปล่าจริงไหม** — หรือตกไปแสดงทุกงาน
  *      ซึ่งเป็นความล้มเหลวที่อันตรายที่สุดของฟีเจอร์นี้
  *   3. โหมด kanban ยังเห็นทุกงานเหมือนเดิมไหม (ไม่ทำของเดิมพัง)
+ *
+ * ## ทำไมต้องสร้างโปรเจกต์ของตัวเอง
+ *
+ * เดิมไฟล์นี้ยืมโปรเจกต์ `PLAT` ของข้อมูลตั้งต้นมาใช้ แล้วยืนยันสมบัติ
+ * **ระดับโปรเจกต์** ที่ตัวเองไม่ได้เป็นเจ้าของ — "ยังไม่มีรอบที่กำลังทำ"
+ * และ "มีรอบที่กำลังทำอยู่รอบเดียว" · มันเขียวมาตลอดเพราะตาราง `sprint`
+ * **ว่างเปล่าทุกเครื่อง** ไม่ใช่เพราะข้อความนั้นเป็นจริง · วันที่ข้อมูล
+ * ตัวอย่างของรอบการทำงานถูกเติม มันแดงทันทีสามเคส (กระดานไม่เปล่า และ
+ * ขอบเขตกลายเป็น `ambiguous` เพราะมีรอบที่กำลังทำสองรอบ)
+ *
+ * เป็นอาการเดียวกับ `GET /config-items` ที่ดูเหมือนมีด่านเพราะตารางว่าง —
+ * ที่นั่นข้อมูลตัวอย่างเปิดโปงช่องโหว่จริง ที่นี่มันเปิดโปงเทสต์ที่ยืนยัน
+ * เกินสิ่งที่ตัวเองเป็นเจ้าของ (CLAUDE.md: เทสต์ยืนยันได้เฉพาะสิ่งที่ตัวเองเป็นเจ้าของ)
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { TenantContext } from '@itsm/types';
@@ -29,6 +42,7 @@ let projectKey: string;
 let ctx: TenantContext;
 let actorId: bigint;
 let groupId: bigint;
+let permissionSchemeId: bigint;
 let sprintId: bigint;
 const grantIds: bigint[] = [];
 /** คีย์ของงานที่อยู่ในรอบ · และที่อยู่นอกรอบ */
@@ -45,14 +59,39 @@ async function step(what: string, run: () => Promise<unknown>): Promise<void> {
 
 beforeAll(async () => {
   tenantId = (await prismaClient.tenant.findFirstOrThrow({ where: { key: 'default' } })).id;
-  const project = await prismaClient.project.findFirstOrThrow({ where: { key: 'PLAT' } });
+
+  /* ชนิดงานและ workflow ยืมของ PLAT ได้ — เป็นการ *อ่าน* ไม่ใช่การยืนยันสมบัติของมัน */
+  const plat = await prismaClient.project.findFirstOrThrow({ where: { key: 'PLAT' } });
+  const scheme = await prismaClient.workflowScheme.findFirstOrThrow({
+    where: { projectId: plat.id },
+    select: { issueTypeId: true, workflowId: true },
+  });
+
+  permissionSchemeId = (
+    await prismaClient.permissionScheme.create({
+      data: { tenantId, name: `ชุดสิทธิ์กระดาน ${STAMP}` },
+      select: { id: true },
+    })
+  ).id;
+  const project = await prismaClient.project.create({
+    data: {
+      tenantId,
+      key: `SCR${STAMP}`,
+      name: `โปรเจกต์ทดสอบกระดาน ${STAMP}`,
+      type: 'SOFTWARE',
+      permissionSchemeId,
+    },
+    select: { id: true, key: true },
+  });
   projectId = project.id;
   projectKey = project.key;
-  if (project.permissionSchemeId === null) throw new Error('โปรเจกต์ PLAT ไม่มี permission scheme');
-
-  const scheme = await prismaClient.workflowScheme.findFirstOrThrow({
-    where: { projectId },
-    select: { issueTypeId: true, workflowId: true },
+  await prismaClient.workflowScheme.create({
+    data: {
+      tenantId,
+      projectId,
+      issueTypeId: scheme.issueTypeId,
+      workflowId: scheme.workflowId,
+    },
   });
   const status = await prismaClient.workflowStatus.findFirstOrThrow({
     where: { workflowId: scheme.workflowId, isInitial: true },
@@ -79,7 +118,7 @@ beforeAll(async () => {
   ).id;
   for (const permission of ['BROWSE_PROJECT'] as PermissionKey[]) {
     const g = await prismaClient.permissionGrant.create({
-      data: { tenantId, schemeId: project.permissionSchemeId, permission, groupId },
+      data: { tenantId, schemeId: permissionSchemeId, permission, groupId },
       select: { id: true },
     });
     grantIds.push(g.id);
@@ -108,7 +147,7 @@ beforeAll(async () => {
         issueTypeId: scheme.issueTypeId,
         statusId: status.id,
         reporterId: actorId,
-        rank: `zzz${STAMP}${String(n)}`,
+        rank: `0|zz${String(n).padStart(4, '0')}`,
         ...(withSprint ? { sprintId } : {}),
       },
     });
@@ -125,6 +164,9 @@ afterAll(async () => {
     prismaClient.workItem.deleteMany({ where: { summary: { contains: MARK } } }),
   );
   await step('สปรินต์', () => prismaClient.sprint.deleteMany({ where: { id: sprintId } }));
+  await step('scheme ของ workflow', () =>
+    prismaClient.workflowScheme.deleteMany({ where: { projectId } }),
+  );
   await step('audit', () => prismaClient.auditLog.deleteMany({ where: { actorId } }));
   await step('สิทธิ์', () =>
     prismaClient.permissionGrant.deleteMany({ where: { id: { in: grantIds } } }),
@@ -134,12 +176,18 @@ afterAll(async () => {
     prismaClient.user.deleteMany({ where: { email: { endsWith: `-${STAMP}@example.test` } } }),
   );
   await step('กลุ่ม', () => prismaClient.userGroup.deleteMany({ where: { id: groupId } }));
+  await step('โปรเจกต์', () => prismaClient.project.deleteMany({ where: { id: projectId } }));
+  await step('ชุดสิทธิ์', () =>
+    prismaClient.permissionScheme.deleteMany({ where: { id: permissionSchemeId } }),
+  );
 
   const leftItems = await prismaClient.workItem.count({ where: { summary: { contains: MARK } } });
   const leftSprints = await prismaClient.sprint.count({ where: { id: sprintId } });
+  const leftProjects = await prismaClient.project.count({ where: { id: projectId } });
   await prismaClient.$disconnect();
   expect(leftItems, `เหลืองานของเทสต์ ${String(leftItems)} ใบ`).toBe(0);
   expect(leftSprints, 'เหลือสปรินต์ของเทสต์').toBe(0);
+  expect(leftProjects, 'เหลือโปรเจกต์ของเทสต์').toBe(0);
 });
 
 /** คีย์ทั้งหมดที่ปรากฏบนกระดาน */

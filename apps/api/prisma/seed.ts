@@ -129,6 +129,9 @@ async function main(): Promise<void> {
     await prisma.workItemCi.deleteMany({ where: { tenantId: t } });
     await prisma.ciDependency.deleteMany({ where: { tenantId: t } });
     await prisma.configurationItem.deleteMany({ where: { tenantId: t } });
+    await prisma.workItemVersion.deleteMany({ where: { tenantId: t } });
+    await prisma.projectVersion.deleteMany({ where: { tenantId: t } });
+    await prisma.sprint.deleteMany({ where: { tenantId: t } });
     await prisma.workflowScheme.deleteMany({ where: { tenantId: t } });
     await prisma.fieldConfig.deleteMany({ where: { tenantId: t } });
     await prisma.transitionRule.deleteMany({ where: { tenantId: t } });
@@ -857,6 +860,202 @@ async function main(): Promise<void> {
       addedById: agents[0]!.id,
     })),
   });
+
+  /*
+    ---------- Sprint และรุ่นของโปรเจกต์ ----------
+
+    สองตารางนี้ว่างเปล่ามาตลอดทุกเครื่อง ทั้งที่เอนจิน หน้าจอ และ endpoint
+    ครบแล้ว · หน้า `/backlog/[key]` กับหน้ารุ่นจึงเปิดมาว่างเปล่าเสมอ และ
+    **"ฟีเจอร์ยังไม่มี" กับ "ไม่เคยมีข้อมูลตัวอย่างเลย" ให้อาการเหมือนกัน**
+
+    ตัวเลขสรุปของ sprint **คำนวณจากแถวที่ผูกจริง ไม่ได้พิมพ์ลงไป** — ยอดที่
+    ตั้งขึ้นเองจะทำให้ burndown ขัดกับข้อมูล ซึ่งเป็นเกณฑ์ที่เฟส 2 ต้องผ่าน
+    และเป็นรูปแบบเดียวกับ "ตัวเลขที่ไม่มีใครวัด" ที่ CLAUDE.md เตือนไว้
+  */
+  const sprintPool = { types: ['Story', 'Task', 'Bug'] };
+  const platDone = await prisma.workItem.findMany({
+    where: {
+      tenantId,
+      projectId: projectPlat.id,
+      resolvedAt: { not: null },
+      issueType: { name: { in: sprintPool.types } },
+    },
+    select: { id: true, storyPoints: true },
+    orderBy: { id: 'asc' },
+    take: 60,
+  });
+  const platOpen = await prisma.workItem.findMany({
+    where: {
+      tenantId,
+      projectId: projectPlat.id,
+      resolvedAt: null,
+      issueType: { name: { in: sprintPool.types } },
+    },
+    select: { id: true, storyPoints: true },
+    orderBy: { id: 'asc' },
+    take: 40,
+  });
+  type PointRow = { id: bigint; storyPoints: Prisma.Decimal | null };
+  /** รวมแต้ม — `Decimal` ไม่ใช่ `number` แม้ชนิดที่ประกาศจะบอกอย่างนั้น (CLAUDE.md §4) */
+  const points = (rows: readonly PointRow[]): number =>
+    rows.reduce((sum, r) => sum + (r.storyPoints === null ? 0 : Number(r.storyPoints)), 0);
+
+  const sprintSpec = [
+    {
+      name: 'PLAT Sprint 1',
+      goal: 'ปิดงานค้างของแกนระบบให้หมด แล้วเปิดทางให้กระดานใช้งานได้จริง',
+      plannedStart: new Date(NOW - 84 * DAY),
+      plannedEnd: new Date(NOW - 70 * DAY),
+      startedAt: new Date(NOW - 84 * DAY),
+      completedAt: new Date(NOW - 70 * DAY),
+      state: 'completed',
+      /* ทำได้มากกว่าที่รับปาก เพราะดึงงานเพิ่มกลางรอบ — `addedAfterStart` คือตัวที่อธิบาย */
+      done: platDone.slice(0, 14),
+      open: [] as PointRow[],
+      committed: 12,
+      addedAfterStart: 2,
+    },
+    {
+      name: 'PLAT Sprint 2',
+      goal: 'ทำให้ backlog วางแผนได้จากหน้าจอเดียว ไม่ต้องสลับไปมา',
+      plannedStart: new Date(NOW - 70 * DAY),
+      plannedEnd: new Date(NOW - 56 * DAY),
+      startedAt: new Date(NOW - 70 * DAY),
+      completedAt: new Date(NOW - 56 * DAY),
+      state: 'completed',
+      /* ทำไม่ครบ — สองใบยกไปรอบถัดไป · ถ้ามีแต่รอบที่ทำครบ ความต่างนี้ไม่มีใครเห็น */
+      done: platDone.slice(14, 25),
+      open: platOpen.slice(0, 2),
+      committed: 13,
+      addedAfterStart: 0,
+    },
+    {
+      name: 'PLAT Sprint 3',
+      goal: 'ต่อรายงานความเร็วทีมเข้ากับข้อมูลจริง แล้วเลิกใช้ไฟล์ตาราง',
+      plannedStart: new Date(NOW - 7 * DAY),
+      plannedEnd: new Date(NOW + 7 * DAY),
+      startedAt: new Date(NOW - 7 * DAY),
+      completedAt: null,
+      state: 'active',
+      done: [] as PointRow[],
+      open: platOpen.slice(2, 14),
+      committed: 12,
+      addedAfterStart: 0,
+    },
+    {
+      /* รอบที่ยังไม่เริ่มและยังไม่มีงาน — สถานะว่างที่ต้องมีคนเคยเห็นเหมือนกัน */
+      name: 'PLAT Sprint 4',
+      goal: null,
+      plannedStart: new Date(NOW + 7 * DAY),
+      plannedEnd: new Date(NOW + 21 * DAY),
+      startedAt: null,
+      completedAt: null,
+      state: 'planned',
+      done: [] as PointRow[],
+      open: [] as PointRow[],
+      committed: null,
+      addedAfterStart: null,
+    },
+  ] as const;
+
+  for (const s of sprintSpec) {
+    const all = [...s.done, ...s.open];
+    const sprint = await prisma.sprint.create({
+      data: {
+        tenantId,
+        projectId: projectPlat.id,
+        name: s.name,
+        goal: s.goal,
+        plannedStart: s.plannedStart,
+        plannedEnd: s.plannedEnd,
+        startedAt: s.startedAt,
+        completedAt: s.completedAt,
+        state: s.state,
+        committedCount: s.committed,
+        committedPoints: s.committed === null ? null : points(all.slice(0, s.committed)),
+        completedCount: s.state === 'completed' ? s.done.length : null,
+        completedPoints: s.state === 'completed' ? points(s.done) : null,
+        addedAfterStart: s.addedAfterStart,
+      },
+      select: { id: true },
+    });
+    if (all.length > 0) {
+      await prisma.workItem.updateMany({
+        where: { id: { in: all.map((w) => w.id) } },
+        data: { sprintId: sprint.id },
+      });
+    }
+  }
+
+  /*
+    รุ่น — สี่สถานะที่ต่างกันจริง: ปล่อยแล้วและเก็บเข้าคลัง · ปล่อยแล้ว ·
+    ยังไม่ปล่อยแต่มีกำหนด · ยังไม่ปล่อยและยังไม่ตั้งกำหนด
+
+    **รุ่นที่ปล่อยแล้วต้องไม่มีงานค้าง** มิฉะนั้นข้อมูลตัวอย่างจะขัดกับกฎของ
+    ระบบเอง (ปล่อยรุ่นที่มีงานค้างไม่ได้) — ใบที่ยังเปิดอยู่จึงไปอยู่กับ 1.1
+    ซึ่งเป็นรุ่นที่บันทึกการปล่อยจะบอกว่า "ยังค้าง 6"
+  */
+  const versionSpec = [
+    {
+      name: '0.9',
+      description: 'รุ่นทดลองภายใน ก่อนเปิดให้ทีมอื่นใช้',
+      startDate: new Date(NOW - 140 * DAY),
+      releaseDate: new Date(NOW - 112 * DAY),
+      releasedAt: new Date(NOW - 112 * DAY),
+      archived: true,
+      items: platDone.slice(25, 33),
+    },
+    {
+      name: '1.0',
+      description: 'รุ่นแรกที่ทีมไอทีใช้งานจริง',
+      startDate: new Date(NOW - 112 * DAY),
+      releaseDate: new Date(NOW - 49 * DAY),
+      releasedAt: new Date(NOW - 49 * DAY),
+      archived: false,
+      items: platDone.slice(33, 43),
+    },
+    {
+      name: '1.1',
+      description: 'รอบรายงานและความเร็วทีม',
+      startDate: new Date(NOW - 49 * DAY),
+      releaseDate: new Date(NOW + 28 * DAY),
+      releasedAt: null,
+      archived: false,
+      items: [...platDone.slice(43, 47), ...platOpen.slice(14, 20)],
+    },
+    {
+      /* ยังไม่ตั้งกำหนด — `null` ตรงนี้แปลว่า "ยังไม่ได้ตั้ง" ไม่ใช่ "เลยกำหนด" */
+      name: '1.2',
+      description: null,
+      startDate: null,
+      releaseDate: null,
+      releasedAt: null,
+      archived: false,
+      items: [] as PointRow[],
+    },
+  ] as const;
+
+  for (const v of versionSpec) {
+    const version = await prisma.projectVersion.create({
+      data: {
+        tenantId,
+        projectId: projectPlat.id,
+        name: v.name,
+        description: v.description,
+        startDate: v.startDate,
+        releaseDate: v.releaseDate,
+        releasedAt: v.releasedAt,
+        archived: v.archived,
+        createdById: devs[0]!.id,
+      },
+      select: { id: true },
+    });
+    if (v.items.length > 0) {
+      await prisma.workItemVersion.createMany({
+        data: v.items.map((w) => ({ tenantId, workItemId: w.id, versionId: version.id })),
+      });
+    }
+  }
 
   await prisma.projectCounter.update({ where: { projectId: projectSd.id }, data: { lastValue: itilSeq - 1 } });
   await prisma.projectCounter.update({ where: { projectId: projectPlat.id }, data: { lastValue: TOTAL - SD_COUNT } });

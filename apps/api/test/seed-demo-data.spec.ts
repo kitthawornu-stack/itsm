@@ -11,9 +11,9 @@
  *
  * ถ้าแดง: รัน `pnpm --filter @itsm/api seed`
  *
- * **ยังไม่ครอบ**: `change_window` · `sprint` · `project_version` ·
- * `automation_rule` · `dashboard` ซึ่งยังไม่มีข้อมูลตัวอย่าง — เขียนไว้ตรงนี้
- * เพราะด่านที่ไม่บอกขอบเขตของตัวเอง ทำให้คนเชื่อว่ามันครอบหมด
+ * **ยังไม่ครอบ**: `change_window` · `automation_rule` · `dashboard`
+ * ซึ่งยังไม่มีข้อมูลตัวอย่าง — เขียนไว้ตรงนี้เพราะด่านที่ไม่บอกขอบเขต
+ * ของตัวเอง ทำให้คนเชื่อว่ามันครอบหมด
  */
 import { afterAll, describe, expect, it } from 'vitest';
 
@@ -59,5 +59,67 @@ describe('ข้อมูลตัวอย่างของฟีเจอร�
 
   it('มีบทความที่ถูกแนบกับเรื่องจริง — คลังที่ไม่เคยถูกแนบอ่านเหมือนไม่มีใครใช้', async () => {
     expect(await prisma.workItemArticle.count()).toBeGreaterThan(0);
+  });
+});
+
+describe('ข้อมูลตัวอย่างของรอบการทำงานและรุ่น', () => {
+  it('**มีทั้งรอบที่ปิดแล้ว รอบที่กำลังเดิน และรอบที่ยังไม่เริ่ม**', async () => {
+    const byState = async (state: string): Promise<number> =>
+      prisma.sprint.count({ where: { state } });
+    /* ความเร็วทีมต้องมีอย่างน้อยสองรอบที่ปิดแล้ว ไม่งั้นมันบอกได้แค่ตัวเลขเดียว */
+    expect(await byState('completed')).toBeGreaterThanOrEqual(2);
+    expect(await byState('active')).toBeGreaterThanOrEqual(1);
+    expect(await byState('planned')).toBeGreaterThanOrEqual(1);
+  });
+
+  it('มีงานผูกกับรอบจริง — backlog ที่ไม่มีงานในรอบไหนเลย อ่านเหมือนฟีเจอร์พัง', async () => {
+    expect(await prisma.workItem.count({ where: { sprintId: { not: null } } })).toBeGreaterThan(10);
+  });
+
+  /**
+   * **ตัวเลขสรุปต้องมาจากแถวที่ผูกจริง ไม่ใช่ค่าที่พิมพ์ลงไป**
+   *
+   * ยอดที่ตั้งขึ้นเองจะทำให้ burndown ขัดกับข้อมูล ซึ่งเป็นเกณฑ์ที่เฟส 2
+   * ต้องผ่าน · และเป็นรูปแบบเดียวกับ "ตัวเลขที่ไม่มีใครวัด" ที่เอกสารสถานะ
+   * เคยมีอยู่ — ถ้าวันหนึ่งมีคนแก้ข้อมูลตัวอย่างแล้วลืมแก้ยอด ข้อนี้แดง
+   */
+  it('**ยอดที่ทำเสร็จของรอบที่ปิดแล้ว ตรงกับจำนวนงานที่ปิดจริงในรอบนั้น**', async () => {
+    const closed = await prisma.sprint.findMany({
+      where: { state: 'completed' },
+      select: { id: true, name: true, completedCount: true },
+    });
+    expect(closed.length).toBeGreaterThanOrEqual(2);
+    for (const s of closed) {
+      const done = await prisma.workItem.count({
+        where: { sprintId: s.id, resolvedAt: { not: null } },
+      });
+      expect(s.completedCount, `รอบ ${s.name} ยอดที่บันทึกไว้ไม่ตรงกับแถวจริง`).toBe(done);
+    }
+  });
+
+  it('**มีรุ่นครบทั้งที่ปล่อยแล้ว ยังไม่ปล่อย และที่เก็บเข้าคลัง**', async () => {
+    expect(await prisma.projectVersion.count({ where: { releasedAt: { not: null } } })).toBeGreaterThan(0);
+    expect(await prisma.projectVersion.count({ where: { releasedAt: null } })).toBeGreaterThan(0);
+    expect(await prisma.projectVersion.count({ where: { archived: true } })).toBeGreaterThan(0);
+  });
+
+  /**
+   * **รุ่นที่ปล่อยแล้วต้องไม่มีงานค้าง** — ระบบห้ามปล่อยรุ่นที่ยังมีงานค้าง
+   * อยู่แล้ว · ข้อมูลตัวอย่างที่ขัดกับกฎของระบบเอง ทำให้คนที่เปิดดูสรุปว่า
+   * กฎนั้นไม่ทำงาน ทั้งที่มันทำงาน
+   */
+  it('**รุ่นที่ปล่อยแล้วไม่มีงานค้างสักใบ**', async () => {
+    const leaked = await prisma.workItemVersion.count({
+      where: { version: { releasedAt: { not: null } }, workItem: { resolvedAt: null } },
+    });
+    expect(leaked).toBe(0);
+  });
+
+  /** ถ้าทุกรุ่นที่ยังไม่ปล่อยมีงานค้างเป็นศูนย์ บันทึกการปล่อยจะบอก "ยังค้าง 0" เสมอ */
+  it('มีรุ่นที่ยังไม่ปล่อยและยังมีงานค้าง — บันทึกการปล่อยจึงมีอะไรให้เตือน', async () => {
+    const pending = await prisma.workItemVersion.count({
+      where: { version: { releasedAt: null }, workItem: { resolvedAt: null } },
+    });
+    expect(pending).toBeGreaterThan(0);
   });
 });
