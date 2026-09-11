@@ -250,7 +250,16 @@ beforeAll(async () => {
     ค่าจริงจากฐานข้อมูล — **ต้องเป็นของที่มีอยู่จริงเท่านั้น** ·
     ถ้าใส่ค่ามั่ว ทุกเส้นทางจะตอบ 404 แล้วเทสต์จะเขียวโดยไม่พิสูจน์อะไรเลย
   */
-  const project = await prismaClient.project.findFirstOrThrow({ select: { key: true, id: true } });
+  /*
+    **เลือกโปรเจกต์ที่มีของให้รั่วมากที่สุด ไม่ใช่ใบแรกที่เจอ**
+
+    `findFirst` ไม่มี `orderBy` คืนใบไหนก็ได้ · ถ้าบังเอิญได้ใบที่ไม่มีรอบ
+    การทำงานและไม่มีรุ่นเลย เส้นทางอย่าง `/projects/:key/sprints` จะคืน
+    รายการว่างให้ทุกคน แล้วด่านนี้เขียวเพราะ **เซ็ตว่างเท่ากับเซ็ตว่าง**
+    ไม่ใช่เพราะมีด่าน — อาการเดียวกับที่ `GET /config-items` ซ่อนตัวอยู่ได้
+    นานเพราะไม่มี CI สักตัวในฐานข้อมูล
+  */
+  const project = await pickRichestProject();
   const item = await prismaClient.workItem.findFirstOrThrow({
     where: { projectId: project.id },
     select: { itemKey: true, id: true },
@@ -301,10 +310,42 @@ afterAll(async () => {
   await prismaClient.$disconnect();
 });
 
+/**
+ * โปรเจกต์ที่มีข้อมูลของหลายฟีเจอร์มากที่สุด — เรียงด้วย id เสมอ จึงได้คำตอบเดิมทุกรอบ
+ */
+async function pickRichestProject(): Promise<{ key: string; id: bigint }> {
+  const all = await prismaClient.project.findMany({
+    select: { id: true, key: true, _count: { select: { sprints: true, versions: true } } },
+    orderBy: { id: 'asc' },
+  });
+  if (all.length === 0) throw new Error('ไม่มีโปรเจกต์เลย — seed ก่อน');
+  const best = [...all].sort(
+    (a, b) =>
+      b._count.sprints + b._count.versions - (a._count.sprints + a._count.versions) ||
+      Number(a.id - b.id),
+  )[0] as (typeof all)[number];
+  richness = best._count.sprints + best._count.versions;
+  return { key: best.key, id: best.id };
+}
+
+/** จำนวนแถวของสองฟีเจอร์นั้นในโปรเจกต์ที่เลือกมาตรวจ */
+let richness = 0;
+
 describe('ด่านสิทธิ์ของทุกเส้นทางอ่านข้อมูล', () => {
   const controllers = (
     Reflect.getMetadata('controllers', AppModule) as unknown[] | undefined
   ) ?? [];
+
+  /**
+   * **โปรเจกต์ที่ใช้ตรวจ ต้องมีของให้รั่วจริง**
+   *
+   * เทสต์ที่ยืนยันว่า "คนไม่มีสิทธิ์ได้เซ็ตว่าง" พิสูจน์อะไรไม่ได้เลย ถ้าตาราง
+   * นั้นว่างอยู่แล้ว (CLAUDE.md) · ข้อนี้จึงบังคับว่าโปรเจกต์ที่เลือกมา
+   * มีรอบการทำงานและรุ่นจริง — มิฉะนั้นเส้นทางของสองฟีเจอร์นี้ไม่ได้ถูกตรวจจริง
+   */
+  it('**โปรเจกต์ที่ใช้ตรวจมีรอบการทำงานและรุ่นจริง**', () => {
+    expect(richness, 'โปรเจกต์ที่เลือกไม่มี sprint หรือรุ่นเลย — รัน seed ก่อน').toBeGreaterThan(0);
+  });
 
   it('**ตัวสแกนหาเส้นทางเจอจริง** — ไม่ใช่ผ่านเพราะรายการว่าง', () => {
     const routes = collectGetRoutes(controllers);
