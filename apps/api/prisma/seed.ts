@@ -117,6 +117,26 @@ async function main(): Promise<void> {
   if (existing !== null) {
     const t = existing.id;
     await prisma.workItemHistory.deleteMany({ where: { tenantId: t } });
+    /*
+      **ตาราง SLA ไม่มี foreign key ของ `tenant_id` สักตัว** — `tenant.delete`
+      จึงไม่กวาดมันไปด้วย · ผลที่วัดได้จริงคือ seed ทุกรอบทิ้งปฏิทินของ
+      องค์กรที่ลบไปแล้วไว้ 2 ใบ พร้อมวันหยุดของมัน แล้วสะสมขึ้นเรื่อย ๆ
+      (พบ 8 ปฏิทิน · 64 วันหยุด · 6 แถว login_attempt ที่ชี้ไปหาองค์กร
+      ที่ไม่มีอยู่แล้ว) — อาการเดียวกับ 170 แถวใน `notification` ที่ §8 บันทึกไว้
+      ต่างกันแค่ว่าคราวนี้ตัวที่ทิ้งขยะคือ seed เอง
+
+      ลบตามลำดับพึ่งพา: เหตุการณ์ → นาฬิกา → เป้า → นโยบาย → วันหยุด →
+      การยืนยันรายปี → ปฏิทิน
+    */
+    await prisma.slaEvent.deleteMany({ where: { tenantId: t } });
+    await prisma.workItemSla.deleteMany({ where: { tenantId: t } });
+    await prisma.slaGoal.deleteMany({ where: { tenantId: t } });
+    await prisma.slaPolicy.deleteMany({ where: { tenantId: t } });
+    await prisma.slaHoliday.deleteMany({ where: { tenantId: t } });
+    await prisma.slaCalendarYear.deleteMany({ where: { tenantId: t } });
+    await prisma.slaCalendar.deleteMany({ where: { tenantId: t } });
+    await prisma.loginAttempt.deleteMany({ where: { tenantId: t } });
+    await prisma.session.deleteMany({ where: { tenantId: t } });
     await prisma.workItem.deleteMany({ where: { tenantId: t } });
     /*
       บทความอ้างผู้เขียนด้วย `onDelete: Restrict` — ปล่อยให้ cascade ของ tenant
